@@ -5,17 +5,17 @@ export type Theme = "dark" | "light";
 const KEY = "tilt.theme";
 
 /**
- * Dark is the default, not the system preference.
+ * Follows the system appearance until the user chooses otherwise, which is how
+ * a Mac app is expected to behave. Both themes are first-class: light is a
+ * bright neutral white, dark is true black with lifted surfaces.
  *
- * Tilt is a night-desk instrument and the palette is tuned for it; a light
- * system setting should not decide how the app looks the first time it opens.
- * Light is available and fully supported — it is just a choice you make rather
- * than one inherited from the OS.
+ * An explicit choice is sticky and always wins over the system setting.
  */
 export function useTheme(): [Theme, () => void] {
   const [theme, setTheme] = useState<Theme>(() => {
     const stored = localStorage.getItem(KEY);
-    return stored === "light" ? "light" : "dark";
+    if (stored === "dark" || stored === "light") return stored;
+    return window.matchMedia?.("(prefers-color-scheme: dark)").matches ? "dark" : "light";
   });
 
   useEffect(() => {

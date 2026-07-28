@@ -1,7 +1,24 @@
 import { act, renderHook } from "@testing-library/react";
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { useTheme } from "./useTheme";
+
+/** jsdom always reports "no match"; this lets a test assert the dark branch. */
+function systemPrefersDark(dark: boolean) {
+  vi.spyOn(window, "matchMedia").mockImplementation(
+    (query: string) =>
+      ({
+        matches: dark && query.includes("dark"),
+        media: query,
+        onchange: null,
+        addListener: () => {},
+        removeListener: () => {},
+        addEventListener: () => {},
+        removeEventListener: () => {},
+        dispatchEvent: () => false,
+      }) as MediaQueryList,
+  );
+}
 
 describe("useTheme", () => {
   beforeEach(() => {
@@ -9,33 +26,42 @@ describe("useTheme", () => {
     delete document.documentElement.dataset.theme;
   });
 
-  it("defaults to dark even when the system prefers light", () => {
-    // Dark is a design decision, not an inherited OS setting.
+  it("follows a light system appearance", () => {
+    systemPrefersDark(false);
     const { result } = renderHook(() => useTheme());
-    expect(result.current[0]).toBe("dark");
-    expect(document.documentElement.dataset.theme).toBe("dark");
+
+    expect(result.current[0]).toBe("light");
+    expect(document.documentElement.dataset.theme).toBe("light");
   });
 
-  it("restores an explicit light choice", () => {
+  it("follows a dark system appearance", () => {
+    systemPrefersDark(true);
+    expect(renderHook(() => useTheme()).result.current[0]).toBe("dark");
+  });
+
+  it("lets an explicit choice override the system", () => {
+    systemPrefersDark(true);
     localStorage.setItem("tilt.theme", "light");
-    const { result } = renderHook(() => useTheme());
-    expect(result.current[0]).toBe("light");
+
+    expect(renderHook(() => useTheme()).result.current[0]).toBe("light");
   });
 
   it("toggles and persists", () => {
+    systemPrefersDark(false);
     const { result } = renderHook(() => useTheme());
+
+    act(() => result.current[1]());
+    expect(result.current[0]).toBe("dark");
+    expect(localStorage.getItem("tilt.theme")).toBe("dark");
 
     act(() => result.current[1]());
     expect(result.current[0]).toBe("light");
-    expect(localStorage.getItem("tilt.theme")).toBe("light");
-
-    act(() => result.current[1]());
-    expect(result.current[0]).toBe("dark");
   });
 
-  it("ignores a corrupted stored value", () => {
+  it("ignores a corrupted stored value and falls back to the system", () => {
+    systemPrefersDark(true);
     localStorage.setItem("tilt.theme", "chartreuse");
-    const { result } = renderHook(() => useTheme());
-    expect(result.current[0]).toBe("dark");
+
+    expect(renderHook(() => useTheme()).result.current[0]).toBe("dark");
   });
 });

@@ -2,29 +2,41 @@
  *
  * Deliberately a single hook over a state library: the surface is one list of
  * threads plus a handful of mutations, and the interaction that matters most
- * (writing) must never wait on a network round trip. Creation and reflection
- * are therefore optimistic — the entry appears the instant you press send, and
- * only reconciles or rolls back afterwards.
+ * (writing) must never wait on a network round trip. Creation is optimistic —
+ * the entry appears the instant you press send, then reconciles or rolls back.
+ *
+ * Filing happens on its own after that. You write; the agent categorises and
+ * looks for connections in the background, and the sidebar fills in. You are
+ * never asked to file anything yourself.
  */
 
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { ApiError, api } from "./api";
-import type { Entry, Status, Thread } from "./types";
+import type { Entry, Scope, Status, TagCount, Theme, Thread } from "./types";
 
 const PAGE = 50;
 
 export interface JournalState {
   threads: Thread[];
+  themes: Theme[];
+  tags: TagCount[];
   status: Status | null;
+  scope: Scope;
   loading: boolean;
   error: string | null;
-  /** Entry ids currently awaiting a reflection. */
+  /** Entry ids with a reflection in flight. */
   reflecting: Set<string>;
+  /** Entry ids being categorised or connected. */
+  processing: Set<string>;
+  setScope: (scope: Scope) => void;
   create: (body: string) => Promise<void>;
   reflect: (entryId: string) => Promise<void>;
+  connect: (entryId: string) => Promise<void>;
   update: (entryId: string, body: string) => Promise<void>;
   remove: (entryId: string) => Promise<void>;
+  dismissLink: (linkId: string) => Promise<void>;
+  renameTheme: (themeId: string, label: string) => Promise<void>;
   refresh: () => Promise<void>;
   dismissError: () => void;
 }
@@ -49,11 +61,20 @@ function optimisticEntry(body: string): Entry {
 
 export function useJournal(): JournalState {
   const [threads, setThreads] = useState<Thread[]>([]);
+  const [themes, setThemes] = useState<Theme[]>([]);
+  const [tags, setTags] = useState<TagCount[]>([]);
   const [status, setStatus] = useState<Status | null>(null);
+  const [scope, setScope] = useState<Scope>({ type: "all" });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [reflecting, setReflecting] = useState<Set<string>>(new Set());
+  const [processing, setProcessing] = useState<Set<string>>(new Set());
+
   const mounted = useRef(true);
+  // Read inside callbacks so they never need `threads` as a dependency, which
+  // would rebuild every handler on each keystroke-driven render.
+  const threadsRef = useRef<Thread[]>([]);
+  threadsRef.current = threads;
 
   useEffect(() => {
     mounted.current = true;
@@ -65,18 +86,37 @@ export function useJournal(): JournalState {
   const describe = (err: unknown): string =>
     err instanceof ApiError ? err.message : "Something went wrong.";
 
-  const refreshStatus = useCallback(async () => {
+  const track = (
+    set: React.Dispatch<React.SetStateAction<Set<string>>>,
+    id: string,
+    on: boolean,
+  ) =>
+    set((prev) => {
+      const next = new Set(prev);
+      if (on) next.add(id);
+      else next.delete(id);
+      return next;
+    });
+
+  const refreshLibrary = useCallback(async () => {
     try {
-      const next = await api.status();
-      if (mounted.current) setStatus(next);
+      const [nextThemes, nextTags, nextStatus] = await Promise.all([
+        api.themes(),
+        api.tags(),
+        api.status(),
+      ]);
+      if (!mounted.current) return;
+      setThemes(nextThemes);
+      setTags(nextTags);
+      setStatus(nextStatus);
     } catch {
-      /* Status is ambient; a failure here must not disrupt writing. */
+      /* Ambient data; a failure here must never disrupt writing. */
     }
   }, []);
 
   const refresh = useCallback(async () => {
     try {
-      const next = await api.stream(PAGE);
+      const next = await api.stream(PAGE, scope);
       if (!mounted.current) return;
       setThreads(next);
       setError(null);
@@ -85,12 +125,31 @@ export function useJournal(): JournalState {
     } finally {
       if (mounted.current) setLoading(false);
     }
-    await refreshStatus();
-  }, [refreshStatus]);
+    await refreshLibrary();
+  }, [scope, refreshLibrary]);
 
   useEffect(() => {
     void refresh();
   }, [refresh]);
+
+  /** Categorise and connect in the background, then fold the result in. */
+  const process = useCallback(
+    async (entryId: string) => {
+      track(setProcessing, entryId, true);
+      try {
+        const filed = await api.process(entryId);
+        if (!mounted.current) return;
+        setThreads((prev) => prev.map((t) => (t.entry.id === entryId ? filed : t)));
+        await refreshLibrary();
+      } catch {
+        // Filing is best-effort. A failure here must not surface as an error
+        // over the writing surface — the thought is already safely saved.
+      } finally {
+        if (mounted.current) track(setProcessing, entryId, false);
+      }
+    },
+    [refreshLibrary],
+  );
 
   const create = useCallback(
     async (body: string) => {
@@ -98,24 +157,27 @@ export function useJournal(): JournalState {
       if (!trimmed) return;
 
       const pending = optimisticEntry(trimmed);
-      setThreads((prev) => [{ entry: pending, replies: [] }, ...prev]);
+      setThreads((prev) => [
+        { entry: pending, replies: [], themes: [], links: [] },
+        ...prev,
+      ]);
 
       try {
         const saved = await api.create(trimmed);
         setThreads((prev) => prev.map((t) => (t.entry.id === pending.id ? saved : t)));
-        void refreshStatus();
+        void process(saved.entry.id);
       } catch (err) {
         setThreads((prev) => prev.filter((t) => t.entry.id !== pending.id));
         setError(describe(err));
         throw err;
       }
     },
-    [refreshStatus],
+    [process],
   );
 
   const reflect = useCallback(
     async (entryId: string) => {
-      setReflecting((prev) => new Set(prev).add(entryId));
+      track(setReflecting, entryId, true);
       try {
         const reply = await api.reflect(entryId);
         setThreads((prev) =>
@@ -123,64 +185,106 @@ export function useJournal(): JournalState {
             t.entry.id === entryId ? { ...t, replies: [...t.replies, reply] } : t,
           ),
         );
-        void refreshStatus();
+        void refreshLibrary();
       } catch (err) {
         setError(describe(err));
       } finally {
-        setReflecting((prev) => {
-          const next = new Set(prev);
-          next.delete(entryId);
-          return next;
-        });
+        track(setReflecting, entryId, false);
       }
     },
-    [refreshStatus],
+    [refreshLibrary],
   );
+
+  const connect = useCallback(async (entryId: string) => {
+    track(setProcessing, entryId, true);
+    try {
+      const linked = await api.connect(entryId);
+      setThreads((prev) => prev.map((t) => (t.entry.id === entryId ? linked : t)));
+    } catch (err) {
+      setError(describe(err));
+    } finally {
+      track(setProcessing, entryId, false);
+    }
+  }, []);
 
   const update = useCallback(async (entryId: string, body: string) => {
     const trimmed = body.trim();
     if (!trimmed) return;
-    const previous = threads;
+    const snapshot = threadsRef.current;
     setThreads((prev) =>
-      prev.map((t) => (t.entry.id === entryId ? { ...t, entry: { ...t.entry, body: trimmed } } : t)),
+      prev.map((t) =>
+        t.entry.id === entryId ? { ...t, entry: { ...t.entry, body: trimmed } } : t,
+      ),
     );
     try {
       const saved = await api.update(entryId, trimmed);
       setThreads((prev) => prev.map((t) => (t.entry.id === entryId ? { ...t, entry: saved } : t)));
     } catch (err) {
-      setThreads(previous);
+      setThreads(snapshot);
       setError(describe(err));
     }
-    // `threads` is read only to build the rollback snapshot.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [threads]);
+  }, []);
 
   const remove = useCallback(
     async (entryId: string) => {
-      const previous = threads;
+      const snapshot = threadsRef.current;
       setThreads((prev) => prev.filter((t) => t.entry.id !== entryId));
       try {
         await api.remove(entryId);
-        void refreshStatus();
+        await refreshLibrary();
       } catch (err) {
-        setThreads(previous);
+        setThreads(snapshot);
         setError(describe(err));
       }
-      // eslint-disable-next-line react-hooks/exhaustive-deps
     },
-    [threads, refreshStatus],
+    [refreshLibrary],
+  );
+
+  const dismissLink = useCallback(async (linkId: string) => {
+    const snapshot = threadsRef.current;
+    setThreads((prev) =>
+      prev.map((t) => ({ ...t, links: t.links.filter((l) => l.link.id !== linkId) })),
+    );
+    try {
+      await api.dismissLink(linkId);
+    } catch (err) {
+      setThreads(snapshot);
+      setError(describe(err));
+    }
+  }, []);
+
+  const renameTheme = useCallback(
+    async (themeId: string, label: string) => {
+      const trimmed = label.trim();
+      if (!trimmed) return;
+      try {
+        await api.renameTheme(themeId, trimmed);
+        await refreshLibrary();
+      } catch (err) {
+        setError(describe(err));
+      }
+    },
+    [refreshLibrary],
   );
 
   return {
     threads,
+    themes,
+    tags,
     status,
+    scope,
     loading,
     error,
     reflecting,
+    processing,
+    setScope,
     create,
     reflect,
+    connect,
     update,
     remove,
+    dismissLink,
+    renameTheme,
     refresh,
     dismissError: () => setError(null),
   };

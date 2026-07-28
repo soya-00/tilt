@@ -76,11 +76,68 @@ class EntryUpdate(BaseModel):
     tags: list[str] | None = None
 
 
+class LinkKind(StrEnum):
+    """How two thoughts relate. Ordered loosely by how much it earns a mention."""
+
+    ECHO = "echo"
+    """You are circling the same idea again."""
+    ELABORATION = "elaboration"
+    """One develops the other."""
+    CONTRADICTION = "contradiction"
+    """You have changed your mind, or not noticed that you disagree."""
+    BRIDGE = "bridge"
+    """Two unrelated areas that turn out to touch."""
+
+
+class Link(BaseModel):
+    """A judged connection between two entries."""
+
+    id: str
+    src_id: str
+    dst_id: str
+    kind: LinkKind
+    rationale: str
+    created: datetime
+    dismissed: bool = False
+
+
+class Theme(BaseModel):
+    """A category the agent discovered and named. Browsed like a folder.
+
+    Themes are emergent: you never create one. They are named from the thoughts
+    that fall into them, and they can be renamed by you — at which point the
+    name is sticky and the agent stops overwriting it.
+    """
+
+    id: str
+    label: str
+    description: str = ""
+    created: datetime
+    updated: datetime
+    pinned_label: bool = False
+    """Set when the user renames it, so the agent never renames it back."""
+    count: int = 0
+
+
+class TagCount(BaseModel):
+    tag: str
+    count: int
+
+
+class LinkedEntry(BaseModel):
+    """A connection as the Stream renders it: the link plus what it points at."""
+
+    link: Link
+    entry: Entry
+
+
 class Thread(BaseModel):
     """An entry with its machine replies, which is how the Stream renders."""
 
     entry: Entry
     replies: list[Entry] = Field(default_factory=list)
+    themes: list[Theme] = Field(default_factory=list)
+    links: list[LinkedEntry] = Field(default_factory=list)
 
 
 class AgentRun(BaseModel):

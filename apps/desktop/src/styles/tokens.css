@@ -1,12 +1,22 @@
 /* Tilt design tokens.
  *
- * The organising idea: two voices, two typefaces. What you write is set in a
- * humanist face; what the machine says is set in mono. That single distinction
- * carries the hierarchy, so agent output needs no boxes, badges, or avatars to
- * read as non-you.
+ * Three influences, each doing a specific job:
  *
- * Everything else is restraint — one accent, no shadows, hierarchy from
- * contrast and spacing alone. */
+ *   Liquid Glass — surfaces are translucent and layered, with a specular top
+ *     edge and a saturating blur, so panels feel like material over a lit
+ *     backdrop rather than opaque rectangles. This needs something behind it to
+ *     refract, which is what the ambient gradient wash in app.css provides.
+ *
+ *   Twitter dark — the dark palette is the "dim" navy family rather than a
+ *     neutral grey, with its blue accent. Warmer and easier to sit in than
+ *     true black.
+ *
+ *   Threaded elevation — a machine reply is connected to its entry by a rail,
+ *     the way a reply sits under a post or a response nests in a mail thread.
+ *     Depth comes from connection, not from stacking cards.
+ *
+ * The structural constant is the two-voice type system: what you write is set
+ * in a humanist face, what the machine says is set in mono. */
 
 :root {
   /* ---- Type ------------------------------------------------------------ */
@@ -15,18 +25,18 @@
   --font-machine: ui-monospace, "SF Mono", SFMono-Regular, Menlo,
     "JetBrains Mono", monospace;
 
-  --text-xs: 0.6875rem;  /* 11px — metadata, the machine's smallest voice */
-  --text-sm: 0.8125rem;  /* 13px — machine prose, controls */
-  --text-md: 0.9375rem;  /* 15px — the writing surface */
-  --text-lg: 1.0625rem;  /* 17px — nothing shouts louder than this */
+  --text-xs: 0.6875rem;
+  --text-sm: 0.8125rem;
+  --text-md: 0.9375rem;
+  --text-lg: 1.0625rem;
+  --text-xl: 1.25rem;
 
-  --leading-prose: 1.62;
-  --leading-tight: 1.35;
+  --leading-prose: 1.6;
+  --leading-tight: 1.45;
   --tracking-mono: 0.01em;
-  --tracking-caps: 0.08em;
+  --tracking-caps: 0.06em;
+  --tracking-display: -0.015em;
 
-  /* Measure. Prose beyond ~68 characters is measurably harder to read, and a
-   * journal is read far more than it is written. */
   --measure: 68ch;
 
   /* ---- Space: 4pt grid ------------------------------------------------- */
@@ -39,80 +49,127 @@
   --s-7: 3rem;
   --s-8: 4rem;
 
-  --radius-sm: 4px;
-  --radius-md: 6px;
-  --radius-lg: 10px;
+  /* ---- Radii ----------------------------------------------------------- */
+  --radius-xs: 8px;
+  --radius-sm: 10px;
+  --radius-md: 16px;
+  --radius-lg: 22px;
+  --radius-xl: 30px;
+  --radius-pill: 999px;
+
+  /* ---- Glass ----------------------------------------------------------- */
+  /* Saturation lift is what separates glass from plain translucency: it pulls
+   * colour out of whatever sits behind the panel. */
+  --glass-blur: blur(30px) saturate(190%);
+  --glass-blur-heavy: blur(50px) saturate(200%);
+
+  /* Thread rail width, shared by the connector and its node. */
+  --rail: 2px;
 
   /* ---- Motion ---------------------------------------------------------- */
   --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
   --ease-spring: cubic-bezier(0.34, 1.42, 0.64, 1);
-  --dur-fast: 120ms;
-  --dur-base: 180ms;
-  --dur-slow: 260ms;
+  --dur-fast: 130ms;
+  --dur-base: 200ms;
+  --dur-slow: 300ms;
 
-  --titlebar-h: 38px;
-  --statusbar-h: 26px;
+  --titlebar-h: 42px;
+  --statusbar-h: 30px;
 }
 
-/* ---- Dark: the default ------------------------------------------------- */
+/* ---- Light: dim white, neutral. No colour cast ------------------------- */
 :root,
-:root[data-theme="dark"] {
-  color-scheme: dark;
-
-  /* Warm near-black. Never #000 — pure black on an OLED-ish panel makes text
-   * edges shimmer, and it reads as a terminal emulator rather than a surface. */
-  --bg: #0b0b0d;
-  --bg-raised: #121215;
-  --bg-overlay: #17171b;
-  --bg-input: #101013;
-
-  /* Off-white, not #fff. Full-contrast white on near-black is fatiguing for
-   * something you write in every day. */
-  --fg: rgba(237, 237, 240, 0.87);
-  --fg-strong: rgba(245, 245, 248, 0.96);
-  --fg-muted: rgba(237, 237, 240, 0.52);
-  --fg-faint: rgba(237, 237, 240, 0.32);
-
-  --rule: rgba(255, 255, 255, 0.08);
-  --rule-strong: rgba(255, 255, 255, 0.14);
-
-  /* One accent, phosphor amber, reserved exclusively for the machine.
-   * Your own writing is never accented — that restraint is what makes the
-   * accent mean something when it appears. */
-  --accent: #e8b04b;
-  --accent-dim: rgba(232, 176, 75, 0.55);
-  --accent-ghost: rgba(232, 176, 75, 0.09);
-
-  --danger: #d9695f;
-  --scrim: rgba(0, 0, 0, 0.55);
-  --vibrancy: rgba(18, 18, 21, 0.72);
-}
-
-/* ---- Light: supported, not an afterthought ----------------------------- */
 :root[data-theme="light"] {
   color-scheme: light;
 
-  --bg: #faf9f7;
-  --bg-raised: #ffffff;
-  --bg-overlay: #ffffff;
-  --bg-input: #ffffff;
+  --bg: #ececed;
+  /* Neutral greys, not tinted. The wash gives glass something to refract
+   * without staining the whole app blue. */
+  --glow-1: rgba(255, 255, 255, 0.95);
+  --glow-2: rgba(210, 210, 213, 0.55);
+  --glow-3: rgba(255, 255, 255, 0.7);
 
-  --fg: rgba(28, 28, 30, 0.88);
-  --fg-strong: rgba(16, 16, 18, 0.96);
-  --fg-muted: rgba(28, 28, 30, 0.55);
-  --fg-faint: rgba(28, 28, 30, 0.34);
+  --surface: rgba(255, 255, 255, 0.7);
+  --surface-strong: rgba(255, 255, 255, 0.86);
+  --surface-2: rgba(245, 245, 247, 0.7);
+  --surface-hover: rgba(255, 255, 255, 0.88);
 
-  --rule: rgba(0, 0, 0, 0.09);
-  --rule-strong: rgba(0, 0, 0, 0.16);
+  /* The specular top edge that makes a panel read as glass rather than paint. */
+  --glass-edge: inset 0 1px 0 rgba(255, 255, 255, 0.85);
+  --glass-border: rgba(255, 255, 255, 0.75);
 
-  /* Darkened so it still passes contrast on a light field. */
-  --accent: #a9752a;
-  --accent-dim: rgba(169, 117, 42, 0.6);
-  --accent-ghost: rgba(169, 117, 42, 0.08);
+  --fg: #0f1419;
+  --fg-strong: #000000;
+  --fg-muted: #536471;
+  --fg-faint: rgba(15, 20, 25, 0.42);
 
-  --danger: #b03a30;
-  --scrim: rgba(40, 38, 34, 0.28);
-  --vibrancy: rgba(255, 255, 255, 0.72);
+  --rule: rgba(15, 20, 25, 0.08);
+  --rule-strong: rgba(15, 20, 25, 0.14);
+
+  --accent: #007aff;
+  --accent-hover: #0069df;
+  --accent-soft: rgba(0, 122, 255, 0.12);
+  --accent-ghost: rgba(0, 122, 255, 0.07);
+  --accent-ring: rgba(0, 122, 255, 0.3);
+  --accent-rail: rgba(0, 122, 255, 0.35);
+  --on-accent: #ffffff;
+
+  --danger: #f4212e;
+  --danger-soft: rgba(244, 33, 46, 0.1);
+
+  --shadow-card: 0 1px 2px rgba(15, 20, 25, 0.04), 0 8px 24px rgba(15, 20, 25, 0.06);
+  --shadow-raised: 0 2px 8px rgba(15, 20, 25, 0.07), 0 18px 48px rgba(15, 20, 25, 0.1);
+  --shadow-overlay: 0 12px 32px rgba(15, 20, 25, 0.12), 0 40px 90px rgba(15, 20, 25, 0.18);
+
+  --scrim: rgba(15, 20, 25, 0.16);
+  --vibrancy: rgba(255, 255, 255, 0.6);
+}
+
+/* ---- Dark: dim neutral black. No blue cast ----------------------------- */
+:root[data-theme="dark"] {
+  color-scheme: dark;
+
+  --bg: #0d0d0e;
+  /* Neutral lift only — the glass reads as smoked glass over black rather
+   * than as a blue gradient. */
+  --glow-1: rgba(255, 255, 255, 0.055);
+  --glow-2: rgba(255, 255, 255, 0.03);
+  --glow-3: rgba(255, 255, 255, 0.022);
+
+  --surface: rgba(40, 40, 43, 0.55);
+  --surface-strong: rgba(46, 46, 49, 0.8);
+  --surface-2: rgba(58, 58, 62, 0.55);
+  --surface-hover: rgba(52, 52, 56, 0.72);
+
+  --glass-edge: inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  --glass-border: rgba(255, 255, 255, 0.1);
+
+  --fg: #f2f2f3;
+  --fg-strong: #ffffff;
+  --fg-muted: #9a9aa0;
+  --fg-faint: rgba(154, 154, 160, 0.68);
+
+  --rule: rgba(255, 255, 255, 0.1);
+  --rule-strong: rgba(255, 255, 255, 0.18);
+
+  /* The one colour in the app. Everything else is neutral. */
+  --accent: #1d9bf0;
+  --accent-hover: #3aabf5;
+  --accent-soft: rgba(29, 155, 240, 0.18);
+  --accent-ghost: rgba(29, 155, 240, 0.1);
+  --accent-ring: rgba(29, 155, 240, 0.45);
+  --accent-rail: rgba(29, 155, 240, 0.45);
+  --on-accent: #ffffff;
+
+  --danger: #f4212e;
+  --danger-soft: rgba(244, 33, 46, 0.18);
+
+  --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.5);
+  --shadow-raised: 0 6px 24px rgba(0, 0, 0, 0.6);
+  --shadow-overlay: 0 24px 80px rgba(0, 0, 0, 0.8);
+
+  --scrim: rgba(0, 0, 0, 0.62);
+  --vibrancy: rgba(22, 22, 24, 0.66);
 }
 
 @media (prefers-reduced-motion: reduce) {

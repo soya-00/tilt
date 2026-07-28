@@ -4,7 +4,7 @@
  * in development this falls back to the local dev server.
  */
 
-import type { AgentRun, Entry, Status, Thread } from "./types";
+import type { AgentRun, Entry, Scope, Status, TagCount, Theme, Thread } from "./types";
 
 declare global {
   interface Window {
@@ -64,13 +64,30 @@ async function readError(response: Response): Promise<string> {
   return response.statusText || `Request failed (${response.status})`;
 }
 
+function scopeQuery(scope: Scope): string {
+  if (scope.type === "theme") return `&theme_id=${encodeURIComponent(scope.id)}`;
+  if (scope.type === "tag") return `&tag=${encodeURIComponent(scope.tag)}`;
+  return "";
+}
+
 export const api = {
   status: () => request<Status>("/status"),
 
-  stream: (limit = 50, before?: string) =>
+  stream: (limit = 50, scope: Scope = { type: "all" }, before?: string) =>
     request<Thread[]>(
-      `/entries?limit=${limit}${before ? `&before=${encodeURIComponent(before)}` : ""}`,
+      `/entries?limit=${limit}` +
+        (before ? `&before=${encodeURIComponent(before)}` : "") +
+        scopeQuery(scope),
     ),
+
+  themes: () => request<Theme[]>("/themes"),
+
+  renameTheme: (id: string, label: string) =>
+    request<Theme>(`/themes/${id}`, { method: "PATCH", body: JSON.stringify({ label }) }),
+
+  tags: () => request<TagCount[]>("/tags"),
+
+  dismissLink: (id: string) => request<void>(`/links/${id}`, { method: "DELETE" }),
 
   thread: (id: string) => request<Thread>(`/entries/${id}`),
 
@@ -93,6 +110,19 @@ export const api = {
 
   reflect: (entryId: string) =>
     request<Entry>("/agent/reflect", {
+      method: "POST",
+      body: JSON.stringify({ entry_id: entryId }),
+    }),
+
+  /** Categorise then connect — what runs after an entry is kept. */
+  process: (entryId: string) =>
+    request<Thread>("/agent/process", {
+      method: "POST",
+      body: JSON.stringify({ entry_id: entryId }),
+    }),
+
+  connect: (entryId: string) =>
+    request<Thread>("/agent/connect", {
       method: "POST",
       body: JSON.stringify({ entry_id: entryId }),
     }),

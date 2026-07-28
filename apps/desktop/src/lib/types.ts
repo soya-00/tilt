@@ -19,10 +19,50 @@ export interface Entry {
   body: string;
 }
 
+export type LinkKind = "echo" | "elaboration" | "contradiction" | "bridge";
+
+export interface Link {
+  id: string;
+  src_id: string;
+  dst_id: string;
+  kind: LinkKind;
+  rationale: string;
+  created: string;
+  dismissed: boolean;
+}
+
+export interface LinkedEntry {
+  link: Link;
+  entry: Entry;
+}
+
+export interface Theme {
+  id: string;
+  label: string;
+  description: string;
+  created: string;
+  updated: string;
+  pinned_label: boolean;
+  count: number;
+}
+
+export interface TagCount {
+  tag: string;
+  count: number;
+}
+
 export interface Thread {
   entry: Entry;
   replies: Entry[];
+  themes: Theme[];
+  links: LinkedEntry[];
 }
+
+/** What the sidebar has selected. `null` means the whole journal. */
+export type Scope =
+  | { type: "all" }
+  | { type: "theme"; id: string; label: string }
+  | { type: "tag"; tag: string };
 
 export interface Status {
   ok: boolean;
