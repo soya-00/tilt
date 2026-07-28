@@ -206,6 +206,12 @@ function useWordReveal(text: string, active: boolean): number {
   return landed;
 }
 
+/** What the machine's contribution should be called under a bubble. */
+function attributionFor(entry: Entry): string {
+  if (entry.kind === "card") return entry.reply_kind === "question" ? "open question" : "idea";
+  return entry.reply_kind ?? "reflection";
+}
+
 interface ReplyRowProps {
   entry: Entry;
   fresh: boolean;
@@ -238,7 +244,7 @@ export function ReplyRow({ entry, fresh, connected }: ReplyRowProps) {
         </div>
         <div className="attribution">
           <Avatar icon="spark" size={20} />
-          <span>{entry.reply_kind ?? "reflection"}</span>
+          <span>{attributionFor(entry)}</span>
         </div>
       </div>
 

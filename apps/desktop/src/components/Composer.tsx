@@ -1,5 +1,6 @@
 import { forwardRef, useImperativeHandle, useLayoutEffect, useRef, useState } from "react";
 
+import { useLiquidGlass } from "../lib/useLiquidGlass";
 import { IconButton } from "./primitives";
 
 export interface ComposerHandle {
@@ -11,7 +12,12 @@ interface Props {
   placeholder?: string;
   autoFocus?: boolean;
   compact?: boolean;
+  /** Opens the source sheet, optionally pre-filled from a picked file. */
+  onAddSource?: (prefill?: { title: string; text: string }) => void;
 }
+
+/** Text-like files we can read in the browser without a parser. */
+const TEXT_TYPES = [".txt", ".md", ".markdown", ".srt", ".vtt", ".csv", ".json", ".log"];
 
 const MAX_LINES = 8;
 
@@ -27,12 +33,15 @@ const MAX_LINES = 8;
  * affordance.
  */
 export const Composer = forwardRef<ComposerHandle, Props>(function Composer(
-  { onSubmit, placeholder = "What are you thinking?", autoFocus, compact },
+  { onSubmit, placeholder = "What are you thinking?", autoFocus, compact, onAddSource },
   ref,
 ) {
   const [value, setValue] = useState("");
   const [busy, setBusy] = useState(false);
+  const [rejected, setRejected] = useState<string | null>(null);
   const area = useRef<HTMLTextAreaElement>(null);
+  const filePicker = useRef<HTMLInputElement>(null);
+  const glass = useLiquidGlass<HTMLDivElement>();
 
   useImperativeHandle(ref, () => ({ focus: () => area.current?.focus() }));
 
@@ -59,10 +68,34 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer(
     }
   };
 
+  const takeFile = async (file: File | undefined) => {
+    if (!file) return;
+    const named = file.name.toLowerCase();
+    if (!TEXT_TYPES.some((ext) => named.endsWith(ext)) && !file.type.startsWith("text/")) {
+      // Be explicit rather than silently doing nothing: PDFs and audio need a
+      // parser Tilt does not have yet.
+      setRejected(`${file.name} is not a text file. Paste its contents instead.`);
+      return;
+    }
+    setRejected(null);
+    const text = await file.text();
+    onAddSource?.({ title: file.name.replace(/\.[^.]+$/, ""), text });
+  };
+
   const ready = value.trim().length > 0;
 
   return (
-    <div className={"composer" + (compact ? " composer--compact" : "")}>
+    <div
+      ref={glass.ref}
+      className={"composer glass-live" + (compact ? " composer--compact" : "")}
+      onPointerMove={glass.onPointerMove}
+      onPointerLeave={glass.onPointerLeave}
+      onDragOver={(e) => e.preventDefault()}
+      onDrop={(e) => {
+        e.preventDefault();
+        void takeFile(e.dataTransfer.files?.[0]);
+      }}
+    >
       <textarea
         ref={area}
         className="composer__input"
@@ -85,11 +118,30 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer(
 
       <div className="composer__bar">
         <div className="composer__left">
-          <IconButton name="camera" label="Attach an image" outlined />
-          <IconButton name="paperclip" label="Attach a file" outlined />
+          <input
+            ref={filePicker}
+            type="file"
+            className="visually-hidden"
+            accept=".txt,.md,.markdown,.srt,.vtt,.csv,.json,.log,text/*"
+            onChange={(e) => {
+              void takeFile(e.target.files?.[0]);
+              e.target.value = "";
+            }}
+          />
+          <IconButton
+            name="paperclip"
+            label="Attach a text file"
+            outlined
+            onClick={() => filePicker.current?.click()}
+          />
+          <IconButton
+            name="folder"
+            label="Add source material"
+            outlined
+            onClick={() => onAddSource?.()}
+          />
         </div>
         <div className="composer__right">
-          <IconButton name="waveform" label="Dictate" />
           <IconButton
             name="arrow-up"
             label="Keep this entry"
@@ -100,6 +152,12 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer(
           />
         </div>
       </div>
+
+      {rejected && (
+        <p className="composer__reject" role="alert">
+          {rejected}
+        </p>
+      )}
     </div>
   );
 });

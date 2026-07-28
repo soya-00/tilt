@@ -13,7 +13,16 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { ApiError, api } from "./api";
-import type { Entry, Persona, Scope, Status, TagCount, Theme, Thread } from "./types";
+import type {
+  Entry,
+  Persona,
+  PublicSettings,
+  Scope,
+  Status,
+  TagCount,
+  Theme,
+  Thread,
+} from "./types";
 
 const PAGE = 50;
 
@@ -23,6 +32,7 @@ export interface JournalState {
   tags: TagCount[];
   status: Status | null;
   persona: Persona | null;
+  settings: PublicSettings | null;
   scope: Scope;
   loading: boolean;
   error: string | null;
@@ -41,6 +51,8 @@ export interface JournalState {
   dismissLink: (linkId: string) => Promise<void>;
   renameTheme: (themeId: string, label: string) => Promise<void>;
   savePersona: (payload: Partial<Persona>) => Promise<void>;
+  saveSettings: (payload: { gemini_api_key?: string; gemini_model?: string }) => Promise<void>;
+  ingest: (payload: { title: string; text: string; url?: string }) => Promise<void>;
   refresh: () => Promise<void>;
   dismissError: () => void;
 }
@@ -69,6 +81,7 @@ export function useJournal(): JournalState {
   const [tags, setTags] = useState<TagCount[]>([]);
   const [status, setStatus] = useState<Status | null>(null);
   const [persona, setPersona] = useState<Persona | null>(null);
+  const [settings, setSettings] = useState<PublicSettings | null>(null);
   const [scope, setScope] = useState<Scope>({ type: "all" });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -106,17 +119,19 @@ export function useJournal(): JournalState {
 
   const refreshLibrary = useCallback(async () => {
     try {
-      const [nextThemes, nextTags, nextStatus, nextPersona] = await Promise.all([
+      const [nextThemes, nextTags, nextStatus, nextPersona, nextSettings] = await Promise.all([
         api.themes(),
         api.tags(),
         api.status(),
         api.persona(),
+        api.settings(),
       ]);
       if (!mounted.current) return;
       setThemes(nextThemes);
       setTags(nextTags);
       setStatus(nextStatus);
       setPersona(nextPersona);
+      setSettings(nextSettings);
     } catch {
       /* Ambient data; a failure here must never disrupt writing. */
     }
@@ -289,12 +304,39 @@ export function useJournal(): JournalState {
     [],
   );
 
+  const saveSettings = useCallback(
+    async (payload: { gemini_api_key?: string; gemini_model?: string }) => {
+      try {
+        setSettings(await api.saveSettings(payload));
+        await refreshLibrary();
+      } catch (err) {
+        setError(describe(err));
+      }
+    },
+    [refreshLibrary],
+  );
+
+  const ingest = useCallback(
+    async (payload: { title: string; text: string; url?: string }) => {
+      try {
+        const source = await api.ingest(payload);
+        setThreads((prev) => [source, ...prev]);
+        await refreshLibrary();
+      } catch (err) {
+        setError(describe(err));
+        throw err;
+      }
+    },
+    [refreshLibrary],
+  );
+
   return {
     threads,
     themes,
     tags,
     status,
     persona,
+    settings,
     scope,
     loading,
     error,
@@ -310,6 +352,8 @@ export function useJournal(): JournalState {
     dismissLink,
     renameTheme,
     savePersona,
+    saveSettings,
+    ingest,
     refresh,
     dismissError: () => setError(null),
   };

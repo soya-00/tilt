@@ -57,8 +57,17 @@ async def test_echo_provider_is_grounded_in_the_prompt() -> None:
     result = await EchoProvider().complete(prompt)
 
     assert "attention" in result.text.lower()
-    assert "offline mode" in result.text.lower(), "must never pass as a real model"
+    assert "is offline" in result.text.lower(), "must never pass as a real model"
     assert result.tokens_in > 0
+
+
+async def test_echo_provider_signs_with_the_configured_agent_name() -> None:
+    """Offline mode cannot embody a personality, but renaming the agent must
+    still be visibly real before a key is added."""
+    result = await EchoProvider().complete(
+        "ENTRY:\nA thought.", system='Your name is "Neo".\n\nYour manner: terse.'
+    )
+    assert "Neo is offline" in result.text
 
 
 async def test_echo_provider_is_deterministic() -> None:

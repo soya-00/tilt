@@ -11,10 +11,12 @@ dependencies = [
     "python-frontmatter>=1.1",
     "python-ulid>=3.0",
     "httpx>=0.27",
+    # Not an extra: running Gemini is the point of the app, and making it
+    # optional meant saving an API key failed with an install error.
+    "google-genai>=1.0",
 ]
 
 [project.optional-dependencies]
-gemini = ["google-genai>=1.0"]
 dev = [
     "pytest>=8.3",
     "pytest-asyncio>=0.24",

@@ -85,6 +85,52 @@ class Journal:
         self.index.upsert(entry, path)
         return entry
 
+    def add_card(
+        self,
+        *,
+        source_id: str,
+        body: str,
+        anchor: str | None = None,
+        card_kind: str = "idea",
+    ) -> Entry:
+        """An atomic idea extracted from a source, nested beneath it.
+
+        Cards are children of the source so the Stream shows one item rather
+        than a flood, and they carry ``provenance=source`` so the connector can
+        always tell borrowed thinking from your own.
+        """
+        now = utcnow()
+        entry = Entry(
+            id=files.new_id(),
+            created=now,
+            updated=now,
+            kind=EntryKind.CARD,
+            provenance=Provenance.SOURCE,
+            parent=source_id,
+            source_id=source_id,
+            anchor=anchor,
+            reply_kind=ReplyKind.QUESTION if card_kind == "question" else None,
+            body=body.strip(),
+        )
+        path = files.write(entry, self.entries_root)
+        self.index.upsert(entry, path)
+        return entry
+
+    def write_source_text(self, source_id: str, text: str) -> Path:
+        """Keep the untruncated source beside the journal.
+
+        Only a bounded window is ever sent to a model, but the original must
+        survive intact — it is the thing the cards are anchored to.
+        """
+        path = self.data_dir / "sources" / f"{source_id}.txt"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(text, encoding="utf-8")
+        return path
+
+    def read_source_text(self, source_id: str) -> str | None:
+        path = self.data_dir / "sources" / f"{source_id}.txt"
+        return path.read_text(encoding="utf-8") if path.exists() else None
+
     def _from_disk(self, entry_id: str) -> Entry | None:
         """Load an entry from its file rather than the index.
 

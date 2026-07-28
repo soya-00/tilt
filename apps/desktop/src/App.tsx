@@ -4,10 +4,14 @@ import { CommandPalette, type Command } from "./components/CommandPalette";
 import { Composer, type ComposerHandle } from "./components/Composer";
 import { QuickCapture } from "./components/QuickCapture";
 import { SearchBar } from "./components/SearchBar";
+import { Settings } from "./components/Settings";
+import { SourceSheet } from "./components/SourceSheet";
 import { Sidebar } from "./components/Sidebar";
 import { Stream } from "./components/Stream";
+import { Icon } from "./components/Icon";
 import { api } from "./lib/api";
 import { useJournal } from "./lib/useJournal";
+import { useLiquidGlass } from "./lib/useLiquidGlass";
 import { useTheme } from "./lib/useTheme";
 
 /** Past this distance from the bottom, the user is reading history — never
@@ -16,14 +20,18 @@ const STICK_THRESHOLD = 120;
 
 export default function App() {
   const journal = useJournal();
-  const [, toggleTheme] = useTheme();
+  const [theme, toggleTheme] = useTheme();
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [captureOpen, setCaptureOpen] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [sourceOpen, setSourceOpen] = useState(false);
+  const [sourcePrefill, setSourcePrefill] = useState<{ title: string; text: string } | null>(null);
   const composer = useRef<ComposerHandle>(null);
   const scroller = useRef<HTMLDivElement>(null);
+  const paneGlass = useLiquidGlass<HTMLElement>();
   const atBottom = useRef(true);
 
-  const { scope, setScope, themes, tags, status, persona, threads } = journal;
+  const { scope, setScope, themes, tags, status, persona, settings, threads } = journal;
 
   const focusComposer = useCallback(() => composer.current?.focus(), []);
 
@@ -79,6 +87,15 @@ export default function App() {
         run: () => setScope({ type: "theme", id: theme.id, label: theme.label }),
       })),
       { id: "theme-toggle", label: "Toggle light and dark", run: toggleTheme },
+      { id: "settings", label: "Settings", hint: "⌘,", run: () => setSettingsOpen(true) },
+      {
+        id: "source",
+        label: "Add source material",
+        run: () => {
+          setSourcePrefill(null);
+          setSourceOpen(true);
+        },
+      },
       {
         id: "rebuild",
         label: "Rebuild the search index from disk",
@@ -97,6 +114,9 @@ export default function App() {
       } else if (mod && e.key.toLowerCase() === "n") {
         e.preventDefault();
         focusComposer();
+      } else if (mod && e.key === ",") {
+        e.preventDefault();
+        setSettingsOpen(true);
       } else if (e.altKey && e.code === "Space") {
         e.preventDefault();
         setCaptureOpen(true);
@@ -123,7 +143,12 @@ export default function App() {
         onSavePersona={journal.savePersona}
       />
 
-      <main className="pane">
+      <main
+        ref={paneGlass.ref}
+        className="pane glass-live"
+        onPointerMove={paneGlass.onPointerMove}
+        onPointerLeave={paneGlass.onPointerLeave}
+      >
         {/* Not a header: transparent, no border, scrolls nothing. */}
         <div className="pane__strip">
           <SearchBar scope={scope} onScope={setScope} />
@@ -138,6 +163,15 @@ export default function App() {
               {journal.error}
             </button>
           )}
+
+          <button
+            className="strip-btn"
+            aria-label="Settings"
+            title="Settings (⌘,)"
+            onClick={() => setSettingsOpen(true)}
+          >
+            <Icon name="settings" size={18} />
+          </button>
         </div>
 
         <div className="pane__scroll scroll" ref={scroller} onScroll={onScroll}>
@@ -160,7 +194,15 @@ export default function App() {
 
         <div className="pane__composer">
           <div className="pane__composer-inner">
-            <Composer ref={composer} autoFocus onSubmit={journal.create} />
+            <Composer
+              ref={composer}
+              autoFocus
+              onSubmit={journal.create}
+              onAddSource={(prefill) => {
+                setSourcePrefill(prefill ?? null);
+                setSourceOpen(true);
+              }}
+            />
           </div>
         </div>
       </main>
@@ -176,6 +218,22 @@ export default function App() {
         open={captureOpen}
         onSubmit={journal.create}
         onClose={() => setCaptureOpen(false)}
+      />
+
+      <Settings
+        open={settingsOpen}
+        settings={settings}
+        theme={theme}
+        onClose={() => setSettingsOpen(false)}
+        onSave={journal.saveSettings}
+        onToggleTheme={toggleTheme}
+      />
+
+      <SourceSheet
+        open={sourceOpen}
+        initial={sourcePrefill}
+        onClose={() => setSourceOpen(false)}
+        onIngest={journal.ingest}
       />
     </div>
   );

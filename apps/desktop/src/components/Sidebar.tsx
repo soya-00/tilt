@@ -2,6 +2,7 @@ import { useState } from "react";
 
 import { tagStyle } from "../lib/tagColor";
 import { useIsDark } from "../lib/useTheme";
+import { useLiquidGlass } from "../lib/useLiquidGlass";
 import type { Persona, Scope, Status, TagCount, Theme } from "../lib/types";
 import { AgentCard } from "./AgentCard";
 import { NavRow, SectionLabel } from "./primitives";
@@ -47,6 +48,7 @@ export function Sidebar({
   const [editing, setEditing] = useState<string | null>(null);
   const [draft, setDraft] = useState("");
   const dark = useIsDark();
+  const glass = useLiquidGlass<HTMLElement>();
 
   const commit = (id: string) => {
     if (draft.trim()) onRenameTheme(id, draft);
@@ -54,7 +56,12 @@ export function Sidebar({
   };
 
   return (
-    <aside className="sidebar scroll">
+    <aside
+      ref={glass.ref}
+      className="sidebar scroll glass-live"
+      onPointerMove={glass.onPointerMove}
+      onPointerLeave={glass.onPointerLeave}
+    >
       <div className="sidebar__section">
         <NavRow
           icon="home"

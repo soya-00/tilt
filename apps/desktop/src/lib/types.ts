@@ -63,6 +63,13 @@ export interface Persona {
   personality: string;
 }
 
+export interface PublicSettings {
+  has_key: boolean;
+  key_hint: string;
+  gemini_model: string;
+  monthly_cost_ceiling_usd: number;
+}
+
 /** What the view is currently showing. */
 export type Scope =
   | { type: "all" }

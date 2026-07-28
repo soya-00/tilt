@@ -8,6 +8,7 @@ import type {
   AgentRun,
   Entry,
   Persona,
+  PublicSettings,
   Scope,
   Status,
   TagCount,
@@ -146,6 +147,14 @@ export const api = {
       method: "PATCH",
       body: JSON.stringify(payload),
     }),
+
+  settings: () => request<PublicSettings>("/settings"),
+
+  saveSettings: (payload: { gemini_api_key?: string; gemini_model?: string }) =>
+    request<PublicSettings>("/settings", { method: "PATCH", body: JSON.stringify(payload) }),
+
+  ingest: (payload: { title: string; text: string; url?: string }) =>
+    request<Thread>("/ingest", { method: "POST", body: JSON.stringify(payload) }),
 
   rebuildIndex: () => request<{ indexed: number }>("/index/rebuild", { method: "POST" }),
 };

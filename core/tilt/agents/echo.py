@@ -72,8 +72,10 @@ class EchoProvider:
             text = _categorize(prompt)
         elif task == "connect":
             text = _connect(prompt)
+        elif task == "distill":
+            text = _distill(prompt)
         else:
-            text = _reflect(prompt)
+            text = _reflect(prompt, _persona_name(system))
 
         return Completion(
             text=text,
@@ -91,7 +93,20 @@ def _task_of(prompt: str) -> str:
 # ------------------------------------------------------------------- reflect
 
 
-def _reflect(prompt: str) -> str:
+def _persona_name(system: str | None) -> str:
+    """Pull the configured agent name out of the system prompt.
+
+    Offline mode cannot embody a personality — it has no model to do it with —
+    but it can at least sign with the name you chose, so renaming the agent is
+    visibly real before you add a key.
+    """
+    if not system:
+        return "Tilt"
+    match = re.search(r'Your name is "([^"]{1,32})"', system)
+    return match.group(1) if match else "Tilt"
+
+
+def _reflect(prompt: str, name: str = "Tilt") -> str:
     subject = _section(prompt, "ENTRY")
     context = _section(prompt, "EARLIER ENTRIES")
 
@@ -117,7 +132,10 @@ def _reflect(prompt: str) -> str:
         if terms
         else "What would have to be true for this to be wrong?"
     )
-    lines.append("[offline mode — no model configured; add a key in Settings]")
+    lines.append(
+        f"[{name} is offline — add a Gemini key in Settings for real reflection; "
+        "offline replies match keywords and cannot follow a personality]"
+    )
     return "\n\n".join(lines)
 
 
@@ -195,3 +213,38 @@ def _section(prompt: str, header: str) -> str:
     """Pull one labelled block out of the structured prompt."""
     match = re.search(rf"^{header}:?\s*\n(.*?)(?=\n[A-Z][A-Z ]{{2,}}:|\Z)", prompt, re.S | re.M)
     return match.group(1).strip() if match else ""
+
+
+# ------------------------------------------------------------------- distill
+
+
+def _distill(prompt: str) -> str:
+    """Offline distillation: the most repeated sentences, not comprehension.
+
+    Honest about its limits — these are extracted verbatim, not understood.
+    """
+    source = _section(prompt, "SOURCE")
+    title = _section(prompt, "TITLE")
+    sentences = [s.strip() for s in _SENTENCE.split(source) if 40 <= len(s.strip()) <= 300]
+
+    terms = set(_keywords(source, 12))
+    scored = sorted(
+        sentences,
+        key=lambda s: -len(terms & set(_keywords(s, 8))),
+    )
+
+    seen: list[str] = []
+    for sentence in scored:
+        if len(seen) >= 6:
+            break
+        if not any(sentence[:40] == s[:40] for s in seen):
+            seen.append(sentence)
+
+    return json.dumps(
+        {
+            "summary": f"Offline extract of {title or 'this source'}: "
+            f"{len(sentences)} candidate sentences, ranked by keyword overlap.",
+            "cards": [{"idea": s, "anchor": ""} for s in seen],
+            "questions": [],
+        }
+    )

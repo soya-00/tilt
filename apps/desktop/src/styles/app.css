@@ -1003,3 +1003,312 @@
 .icon-btn--ready {
   animation: pop-in var(--dur-base) var(--ease-spring) both;
 }
+
+
+/* ---- Dynamic liquid glass ----------------------------------------------- */
+/* A specular highlight that follows the pointer. --mx/--my are written by
+ * useLiquidGlass on pointermove; --lit fades the whole effect in and out so it
+ * glides off the edge rather than snapping. */
+.glass-live {
+  --mx: 50%;
+  --my: 50%;
+  --lit: 0;
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+}
+
+.glass-live::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  opacity: var(--lit);
+  background:
+    radial-gradient(
+      22rem 16rem at var(--mx) var(--my),
+      rgba(255, 255, 255, 0.16),
+      transparent 68%
+    ),
+    radial-gradient(
+      9rem 7rem at var(--mx) var(--my),
+      color-mix(in srgb, var(--accent) 22%, transparent),
+      transparent 72%
+    );
+  transition: opacity var(--dur-slow) var(--ease);
+}
+
+:root[data-theme="light"] .glass-live::after {
+  background:
+    radial-gradient(22rem 16rem at var(--mx) var(--my), rgba(255, 255, 255, 0.85), transparent 68%),
+    radial-gradient(
+      9rem 7rem at var(--mx) var(--my),
+      color-mix(in srgb, var(--accent) 14%, transparent),
+      transparent 72%
+    );
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .glass-live::after {
+    display: none;
+  }
+}
+
+/* ---- Strip button (settings) -------------------------------------------- */
+.strip-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  margin-left: auto;
+  border-radius: var(--r-pill);
+  color: var(--ink-secondary);
+  background: var(--bg-hover);
+  transition:
+    color var(--dur-fast) var(--ease),
+    background var(--dur-base) var(--ease),
+    transform var(--dur-slow) var(--ease-spring);
+}
+
+.strip-btn:hover {
+  color: var(--ink);
+  background: var(--bg-active);
+  transform: rotate(45deg) scale(1.06);
+}
+
+.strip-btn:active {
+  transform: rotate(45deg) scale(0.94);
+}
+
+/* ---- Sheets: settings and source ---------------------------------------- */
+.sheet-scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  padding: 10vh var(--s-4) var(--s-4);
+  background: var(--scrim);
+  backdrop-filter: blur(10px) saturate(140%);
+  -webkit-backdrop-filter: blur(10px) saturate(140%);
+}
+
+.sheet {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-5);
+  width: min(480px, 100%);
+  max-height: 78vh;
+  overflow-y: auto;
+  padding: var(--s-5);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--r-xl, 28px);
+  background: var(--glass-strong);
+  backdrop-filter: var(--glass-blur-heavy);
+  -webkit-backdrop-filter: var(--glass-blur-heavy);
+  box-shadow: var(--glass-edge);
+  animation: sheet-in var(--dur-slow) var(--ease-spring) both;
+}
+
+.sheet--wide {
+  width: min(680px, 100%);
+}
+
+@keyframes sheet-in {
+  from {
+    opacity: 0;
+    transform: translateY(14px) scale(0.97);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.sheet__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.sheet__title {
+  font-size: var(--t-entry);
+  font-weight: var(--w-semi);
+}
+
+.sheet__section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-2);
+}
+
+.sheet__section--grow {
+  flex: 1;
+  min-height: 0;
+}
+
+.sheet__label {
+  font-size: var(--t-meta);
+  font-weight: var(--w-semi);
+  color: var(--ink);
+}
+
+.sheet__note {
+  font-size: var(--t-meta);
+  color: var(--ink-secondary);
+  line-height: var(--lh-tight);
+}
+
+.sheet__note--quiet {
+  color: var(--ink-tertiary);
+}
+
+.sheet__note code {
+  font-family: var(--font-mono);
+  font-size: 0.9em;
+}
+
+.sheet__foot {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--s-2);
+}
+
+.field__input--source {
+  min-height: 240px;
+  resize: vertical;
+  font-family: var(--font-mono);
+  font-size: var(--t-meta);
+  line-height: 1.55;
+}
+
+/* ---- Switch -------------------------------------------------------------- */
+.switch {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s-3);
+  padding: var(--s-1);
+  border-radius: var(--r-pill);
+  color: var(--ink);
+  font-size: var(--t-body);
+}
+
+.switch__track {
+  position: relative;
+  width: 46px;
+  height: 28px;
+  border-radius: var(--r-pill);
+  background: var(--bg-active);
+  border: 1px solid var(--glass-border);
+  box-shadow: var(--glass-edge);
+  transition: background var(--dur-base) var(--ease);
+}
+
+.switch--on .switch__track {
+  background: var(--accent);
+}
+
+.switch__thumb {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 22px;
+  height: 22px;
+  border-radius: var(--r-pill);
+  background: var(--glass-strong);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.6);
+  /* Spring easing gives the thumb a little overshoot, like a physical toggle. */
+  transition: transform var(--dur-slow) var(--ease-spring);
+}
+
+.switch--on .switch__thumb {
+  transform: translateX(18px);
+}
+
+.switch__label {
+  color: var(--ink-secondary);
+}
+
+/* ---- Composer additions -------------------------------------------------- */
+.composer__reject {
+  margin-top: var(--s-2);
+  font-size: var(--t-meta);
+  color: var(--ink-secondary);
+  animation: expand var(--dur-base) var(--ease) both;
+}
+
+/* ---- Extra motion -------------------------------------------------------- */
+/* The agent banner pops rather than fades in. */
+.agent {
+  animation: sheet-in var(--dur-slow) var(--ease-spring) both;
+}
+
+.agent__head {
+  transition: transform var(--dur-base) var(--ease-spring);
+}
+
+.agent:hover .agent__head {
+  transform: translateY(-1px);
+}
+
+.avatar {
+  transition: transform var(--dur-slow) var(--ease-spring);
+}
+
+.agent:hover .avatar {
+  transform: scale(1.08) rotate(-6deg);
+}
+
+.section-label {
+  animation: slide-in var(--dur-slow) var(--ease) both;
+}
+
+.row__dot {
+  transition: transform var(--dur-base) var(--ease-spring), background var(--dur-base) var(--ease);
+}
+
+.row:hover .row__dot {
+  transform: scale(1.25);
+  background: var(--accent);
+}
+
+.date-rule__line {
+  transform-origin: left;
+  animation: rule-draw var(--dur-slow) var(--ease) both;
+}
+
+@keyframes rule-draw {
+  from {
+    transform: scaleX(0);
+  }
+  to {
+    transform: scaleX(1);
+  }
+}
+
+.search__input,
+.field__input {
+  transition: background var(--dur-base) var(--ease);
+}
+
+/* The sidebar and thread pane scroll, so they cannot inherit .glass-live's
+ * overflow:hidden — the highlight is clipped by their own bounds instead. */
+.sidebar.glass-live,
+.pane.glass-live {
+  overflow: visible;
+}
+
+.sidebar.glass-live {
+  overflow-y: auto;
+}
+
+.sidebar.glass-live::after,
+.pane.glass-live::after {
+  position: absolute;
+  inset: 0;
+}

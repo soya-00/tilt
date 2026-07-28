@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 
 import type { Persona, Status } from "../lib/types";
+import { useLiquidGlass } from "../lib/useLiquidGlass";
 import { Icon } from "./Icon";
 import { Avatar } from "./primitives";
 
@@ -22,6 +23,7 @@ export function AgentCard({ persona, status, onSave }: Props) {
   const [name, setName] = useState(persona?.name ?? "Tilt");
   const [personality, setPersonality] = useState(persona?.personality ?? "");
   const area = useRef<HTMLTextAreaElement>(null);
+  const glass = useLiquidGlass<HTMLDivElement>();
 
   useEffect(() => {
     if (open) return;
@@ -38,7 +40,12 @@ export function AgentCard({ persona, status, onSave }: Props) {
   const subtitle = status?.offline ? "Offline — no model" : (status?.model ?? "Ready");
 
   return (
-    <div className={"agent" + (open ? " agent--open" : "")}>
+    <div
+      ref={glass.ref}
+      className={"agent glass-live" + (open ? " agent--open" : "")}
+      onPointerMove={glass.onPointerMove}
+      onPointerLeave={glass.onPointerLeave}
+    >
       <button
         className="agent__head"
         onClick={() => setOpen((o) => !o)}
