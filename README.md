@@ -117,16 +117,46 @@ export TILT_DATA_DIR=~/Tilt         # where your journal lives
 
 See `core/.env.example` for the full set.
 
+## Trying the MVP
+
+With both processes running, open http://localhost:5173 and walk this path:
+
+1. **Write.** Type a thought, `⌘↵`. It appears instantly — the save happens
+   behind it, and a failed save puts the text back rather than losing it.
+2. **Watch it get filed.** A `filing…` marker appears, then tags and a folder
+   attach themselves. The folder shows up in the sidebar. You did nothing.
+3. **Write a second thought on the same subject.** Once it is filed, a
+   connection threads underneath it pointing back at the first, labelled
+   `echoes` with a one-line reason.
+4. **Write something unrelated** — the classic test. It should connect to
+   *nothing*. A connector that links everything is worthless, so silence here is
+   the result that matters.
+5. **Click a folder or tag** in the sidebar to scope the Stream. Double-click a
+   folder to rename it, which pins the name against future agent edits.
+6. **`⌘K`** searches commands and journal content together. **`⌥Space`** is
+   quick capture. **`reflect`** on any entry for a threaded response.
+7. **Check the files.** `ls ~/Tilt/entries/**/*.md` — your thoughts are plain
+   Markdown with YAML frontmatter. Delete `~/Tilt/.tilt/index.db`, restart, and
+   everything comes back; the database is only a cache.
+
+Offline mode is lexical, not intelligent: it matches on repeated keywords, so
+tags are decent and connections are conservative. Add a Gemini key for real
+judgement — particularly for `contradiction`, which keyword overlap cannot find.
+
 ## Tests
 
 ```bash
 cd core && .venv/bin/python -m pytest && .venv/bin/python -m ruff check tilt tests
-cd apps/desktop && pnpm test && pnpm build
+cd apps/desktop && pnpm test && pnpm typecheck && pnpm build
 ```
 
-The load-bearing test writes entries, deletes the database, rebuilds from disk,
-and asserts nothing was lost. That guarantee is what the file-as-truth design
-rests on.
+115 tests: 73 backend, 42 frontend.
+
+The load-bearing one writes entries, deletes the database, rebuilds from disk,
+and asserts nothing was lost — that guarantee is what the file-as-truth design
+rests on. Others worth knowing about: a dismissed connection is never proposed
+again from either direction; a failed submit preserves what you typed; and the
+connector stays silent on unrelated entries.
 
 ## Roadmap
 
