@@ -1,15 +1,21 @@
 import { useEffect, useRef, useState } from "react";
 
 import { precise, stamp } from "../lib/time";
-import type { Thread } from "../lib/types";
+import type { Scope, Thread } from "../lib/types";
+import { Connection } from "./Connection";
 import { Reply, ReplyPending } from "./Reply";
 
 interface Props {
   thread: Thread;
   reflecting: boolean;
+  processing: boolean;
   onReflect: (id: string) => void;
+  onConnect: (id: string) => void;
   onUpdate: (id: string, body: string) => void;
   onDelete: (id: string) => void;
+  onDismissLink: (linkId: string) => void;
+  onOpenEntry: (entryId: string) => void;
+  onScope: (scope: Scope) => void;
 }
 
 /**
@@ -19,8 +25,19 @@ interface Props {
  * on a dark field and nothing else — no toolbars, no icon rows, no chrome
  * competing with what you wrote.
  */
-export function EntryItem({ thread, reflecting, onReflect, onUpdate, onDelete }: Props) {
-  const { entry, replies } = thread;
+export function EntryItem({
+  thread,
+  reflecting,
+  processing,
+  onReflect,
+  onConnect,
+  onUpdate,
+  onDelete,
+  onDismissLink,
+  onOpenEntry,
+  onScope,
+}: Props) {
+  const { entry, replies, themes, links } = thread;
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(entry.body);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
@@ -61,6 +78,25 @@ export function EntryItem({ thread, reflecting, onReflect, onUpdate, onDelete }:
           {stamp(entry.created)}
         </time>
 
+        {themes.map((theme) => (
+          <button
+            key={theme.id}
+            className="micro entry__folder"
+            onClick={() => onScope({ type: "theme", id: theme.id, label: theme.label })}
+            title={theme.description || `Show everything in ${theme.label}`}
+          >
+            {theme.label}
+          </button>
+        ))}
+
+        {/* Filing runs on its own after an entry is kept; this says so
+            without demanding attention. */}
+        {processing && (
+          <span className="micro entry__filing" aria-live="polite">
+            filing<span className="cursor" aria-hidden="true">▍</span>
+          </span>
+        )}
+
         {!pending && (
           <div className="entry__actions">
             <button
@@ -69,6 +105,13 @@ export function EntryItem({ thread, reflecting, onReflect, onUpdate, onDelete }:
               disabled={reflecting}
             >
               {reflecting ? "reflecting" : "reflect"}
+            </button>
+            <button
+              className="micro entry__action"
+              onClick={() => onConnect(entry.id)}
+              disabled={processing}
+            >
+              connect
             </button>
             <button
               className="micro entry__action"
@@ -125,15 +168,28 @@ export function EntryItem({ thread, reflecting, onReflect, onUpdate, onDelete }:
       {entry.tags.length > 0 && (
         <ul className="entry__tags">
           {entry.tags.map((tag) => (
-            <li key={tag} className="micro entry__tag">
-              {tag}
+            <li key={tag}>
+              <button
+                className="micro entry__tag"
+                onClick={() => onScope({ type: "tag", tag })}
+              >
+                {tag}
+              </button>
             </li>
           ))}
         </ul>
       )}
 
-      {(replies.length > 0 || reflecting) && (
+      {(replies.length > 0 || reflecting || links.length > 0) && (
         <div className="entry__replies">
+          {links.map((linked) => (
+            <Connection
+              key={linked.link.id}
+              linked={linked}
+              onOpen={onOpenEntry}
+              onDismiss={onDismissLink}
+            />
+          ))}
           {replies.map((reply) => (
             <Reply key={reply.id} entry={reply} />
           ))}

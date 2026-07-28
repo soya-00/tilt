@@ -1,0 +1,267 @@
+"""Themes, tags, and links — the structures the sidebar navigates."""
+
+from __future__ import annotations
+
+import pytest
+
+from tilt.agents.categorize import categorize
+from tilt.agents.connect import connect
+from tilt.agents.ledger import MeteredProvider
+from tilt.agents.parsing import clean_label, clean_tags, extract_json
+from tilt.journal import Journal
+from tilt.models import EntryCreate, Link, LinkKind, Theme, utcnow
+from tilt.store.files import new_id
+from tilt.store.index import Index, pair_key
+
+
+def _theme(label: str) -> Theme:
+    now = utcnow()
+    return Theme(id=new_id(), label=label, created=now, updated=now)
+
+
+# ------------------------------------------------------------------- parsing
+
+
+def test_extract_json_from_a_fenced_response() -> None:
+    """Models wrap JSON in fences no matter how the prompt is worded."""
+    raw = 'Sure!\n```json\n{"tags": ["memory"], "theme": "Memory"}\n```\nHope that helps.'
+    assert extract_json(raw) == {"tags": ["memory"], "theme": "Memory"}
+
+
+def test_extract_json_handles_braces_inside_strings() -> None:
+    assert extract_json('{"rationale": "uses a { brace"}') == {"rationale": "uses a { brace"}
+
+
+def test_extract_json_returns_none_when_absent() -> None:
+    assert extract_json("no json here at all") is None
+    assert extract_json("") is None
+
+
+def test_clean_tags_lowercases_and_deduplicates() -> None:
+    # "Attention" and "attention" arriving on different days must not split
+    # one idea across two sidebar rows.
+    assert clean_tags(["Attention", "#attention", "  MEMORY  "]) == ["attention", "memory"]
+
+
+def test_clean_tags_rejects_non_lists_and_caps_length() -> None:
+    assert clean_tags("attention") == []
+    assert len(clean_tags([f"tag{i}" for i in range(20)])) == 5
+
+
+def test_clean_label_titlecases() -> None:
+    assert clean_label("  attention and focus ") == "Attention And Focus"
+    assert clean_label("") == ""
+    assert clean_label(None) == ""
+
+
+# -------------------------------------------------------------------- themes
+
+
+def test_upsert_theme_reuses_an_existing_label_case_insensitively(index: Index) -> None:
+    first = index.upsert_theme(_theme("Attention"))
+    second = index.upsert_theme(_theme("attention"))
+
+    assert first.id == second.id
+    assert len(index.themes()) == 1
+
+
+def test_renaming_a_theme_pins_it_against_the_agent(index: Index) -> None:
+    theme = index.upsert_theme(_theme("Attention"))
+    index.rename_theme(theme.id, "How I Pay Attention")
+
+    # The agent proposing the old label again must not undo the rename.
+    index.upsert_theme(_theme("Attention"))
+    assert index.get_theme(theme.id).label == "How I Pay Attention"
+
+
+def test_theme_counts_reflect_membership(journal: Journal) -> None:
+    theme = journal.index.upsert_theme(_theme("Memory"))
+    for i in range(3):
+        entry = journal.create(EntryCreate(body=f"Thought {i}."))
+        journal.index.set_entry_themes(entry.id, [theme.id])
+
+    assert journal.index.themes()[0].count == 3
+
+
+def test_prune_removes_empty_themes(index: Index) -> None:
+    index.upsert_theme(_theme("Orphan"))
+    assert index.prune_empty_themes() == 1
+    assert index.themes() == []
+
+
+# ---------------------------------------------------------------------- tags
+
+
+def test_tag_histogram_excludes_replies(journal: Journal) -> None:
+    from tilt.models import EntryUpdate, ReplyKind
+
+    a = journal.create(EntryCreate(body="One.", tags=["memory", "attention"]))
+    journal.create(EntryCreate(body="Two.", tags=["memory"]))
+    reply = journal.add_reply(a.id, "A reflection.", ReplyKind.REFLECTION)
+    journal.update(reply.id, EntryUpdate(tags=["memory"]))
+
+    counts = {t.tag: t.count for t in journal.index.tags()}
+    assert counts == {"memory": 2, "attention": 1}
+
+
+# --------------------------------------------------------------------- links
+
+
+def test_pair_key_is_order_independent() -> None:
+    assert pair_key("a", "b") == pair_key("b", "a")
+
+
+def test_a_pair_can_only_be_judged_once(journal: Journal) -> None:
+    a = journal.create(EntryCreate(body="First."))
+    b = journal.create(EntryCreate(body="Second."))
+
+    def link(src: str, dst: str) -> Link:
+        return Link(
+            id=new_id(), src_id=src, dst_id=dst, kind=LinkKind.ECHO,
+            rationale="r", created=utcnow(),
+        )
+
+    assert journal.index.add_link(link(a.id, b.id)) is True
+    # The reverse direction is the same pair and must be refused.
+    assert journal.index.add_link(link(b.id, a.id)) is False
+
+
+def test_links_surface_on_both_entries(journal: Journal) -> None:
+    a = journal.create(EntryCreate(body="First."))
+    b = journal.create(EntryCreate(body="Second."))
+    journal.index.add_link(
+        Link(id=new_id(), src_id=a.id, dst_id=b.id, kind=LinkKind.ECHO,
+             rationale="shared idea", created=utcnow())
+    )
+
+    links = journal.index.links_for([a.id, b.id])
+    assert links[a.id][0][1].id == b.id, "a should point at b"
+    assert links[b.id][0][1].id == a.id, "and b back at a"
+
+
+def test_link_fields_survive_the_join(journal: Journal) -> None:
+    """`SELECT l.*, e.*` would let the entry's id and created overwrite the
+    link's; every link column is aliased to prevent that."""
+    a = journal.create(EntryCreate(body="First."))
+    b = journal.create(EntryCreate(body="Second."))
+    link_id = new_id()
+    journal.index.add_link(
+        Link(id=link_id, src_id=a.id, dst_id=b.id, kind=LinkKind.BRIDGE,
+             rationale="a real rationale", created=utcnow())
+    )
+
+    link, other = journal.index.links_for([a.id])[a.id][0]
+    assert link.id == link_id
+    assert link.id != other.id
+    assert link.kind is LinkKind.BRIDGE
+    assert link.rationale == "a real rationale"
+
+
+def test_dismissed_links_are_hidden_but_still_block_reproposal(journal: Journal) -> None:
+    a = journal.create(EntryCreate(body="First."))
+    b = journal.create(EntryCreate(body="Second."))
+    link_id = new_id()
+    journal.index.add_link(
+        Link(id=link_id, src_id=a.id, dst_id=b.id, kind=LinkKind.ECHO,
+             rationale="r", created=utcnow())
+    )
+
+    assert journal.index.dismiss_link(link_id) is True
+    assert journal.index.links_for([a.id])[a.id] == []
+    assert b.id in journal.index.judged_pairs(a.id), "a dismissal must be permanent"
+
+
+# ----------------------------------------------------------- agents, offline
+
+
+async def test_categorize_assigns_tags_and_a_theme(
+    journal: Journal, provider: MeteredProvider
+) -> None:
+    entry = journal.create(
+        EntryCreate(body="Attention behaves like a filter. Attention discards most input.")
+    )
+    updated = await categorize(journal, provider, entry.id)
+
+    assert updated.tags, "tags should be assigned"
+    thread = journal.thread(entry.id)
+    assert len(thread.themes) == 1
+
+
+async def test_categorize_reuses_an_existing_theme(
+    journal: Journal, provider: MeteredProvider
+) -> None:
+    first = journal.create(EntryCreate(body="Attention is a filter on attention."))
+    await categorize(journal, provider, first.id)
+    second = journal.create(EntryCreate(body="More on attention and how attention works."))
+    await categorize(journal, provider, second.id)
+
+    assert len(journal.index.themes()) == 1, "should file into the existing theme"
+
+
+async def test_categorize_on_missing_entry_returns_none(
+    journal: Journal, provider: MeteredProvider
+) -> None:
+    assert await categorize(journal, provider, "nope") is None
+
+
+async def test_connect_links_entries_sharing_concepts(
+    journal: Journal, provider: MeteredProvider
+) -> None:
+    journal.create(
+        EntryCreate(body="Memory is reconstructive; every recall rewrites the memory.")
+    )
+    later = journal.create(
+        EntryCreate(body="Recall rewrites memory, so memory is reconstructive rather than stored.")
+    )
+
+    links = await connect(journal, provider, later.id)
+    assert len(links) == 1
+    assert links[0].rationale
+
+
+async def test_connect_stays_silent_on_unrelated_entries(
+    journal: Journal, provider: MeteredProvider
+) -> None:
+    """Silence is the correct and common answer; a noisy connector is the
+    fastest way to lose trust."""
+    journal.create(EntryCreate(body="Sourdough needs a wetter starter in winter."))
+    later = journal.create(EntryCreate(body="Kestrels hover by pinning their heads still."))
+
+    assert await connect(journal, provider, later.id) == []
+
+
+async def test_connect_never_repeats_a_judged_pair(
+    journal: Journal, provider: MeteredProvider
+) -> None:
+    journal.create(EntryCreate(body="Memory is reconstructive; recall rewrites memory."))
+    later = journal.create(EntryCreate(body="Recall rewrites memory; memory is reconstructive."))
+
+    assert len(await connect(journal, provider, later.id)) == 1
+    assert await connect(journal, provider, later.id) == [], "already judged"
+
+
+async def test_connect_on_an_empty_journal_is_a_noop(
+    journal: Journal, provider: MeteredProvider
+) -> None:
+    only = journal.create(EntryCreate(body="The very first thought."))
+    assert await connect(journal, provider, only.id) == []
+
+
+@pytest.mark.parametrize("bad", ["", "not json", '{"links": "nope"}'])
+async def test_connect_survives_unusable_model_output(
+    journal: Journal, index: Index, bad: str
+) -> None:
+    from tilt.agents.base import Completion, Pricing
+
+    class Garbage:
+        name = "garbage"
+        pricing = Pricing(0.0, 0.0)
+
+        async def complete(self, prompt: str, *, system: str | None = None) -> Completion:
+            return Completion(text=bad, model="garbage")
+
+    journal.create(EntryCreate(body="An earlier thought about memory."))
+    entry = journal.create(EntryCreate(body="A later thought about memory."))
+    metered = MeteredProvider(Garbage(), index, ceiling_usd=1.0)
+
+    assert await connect(journal, metered, entry.id) == []

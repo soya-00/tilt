@@ -3,6 +3,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { CommandPalette, type Command } from "./components/CommandPalette";
 import { Composer, type ComposerHandle } from "./components/Composer";
 import { QuickCapture } from "./components/QuickCapture";
+import { Sidebar } from "./components/Sidebar";
 import { StatusBar } from "./components/StatusBar";
 import { Stream } from "./components/Stream";
 import { api } from "./lib/api";
@@ -27,6 +28,8 @@ export default function App() {
     setTimeout(() => el.classList.remove("entry--highlight"), 1600);
   }, []);
 
+  const { scope, setScope, themes, tags, status } = journal;
+
   const commands = useMemo<Command[]>(
     () => [
       { id: "write", label: "Write an entry", hint: "⌘N", run: focusComposer },
@@ -46,7 +49,14 @@ export default function App() {
           }
         },
       },
-      { id: "theme", label: "Toggle light and dark", run: toggleTheme },
+      { id: "all", label: "Show everything", run: () => setScope({ type: "all" }) },
+      ...themes.map((theme) => ({
+        id: `theme-${theme.id}`,
+        label: `Open ${theme.label}`,
+        hint: `${theme.count}`,
+        run: () => setScope({ type: "theme", id: theme.id, label: theme.label }),
+      })),
+      { id: "theme-toggle", label: "Toggle light and dark", run: toggleTheme },
       {
         id: "rebuild",
         label: "Rebuild the search index from disk",
@@ -56,13 +66,12 @@ export default function App() {
       },
       { id: "refresh", label: "Reload the stream", run: () => void journal.refresh() },
     ],
-    [focusComposer, journal, toggleTheme],
+    [focusComposer, journal, setScope, themes, toggleTheme],
   );
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const mod = e.metaKey || e.ctrlKey;
-
       if (mod && e.key.toLowerCase() === "k") {
         e.preventDefault();
         setPaletteOpen((open) => !open);
@@ -78,35 +87,66 @@ export default function App() {
     return () => window.removeEventListener("keydown", onKey);
   }, [focusComposer]);
 
-  // Keep the newest entry in view when one is added.
+  // Return to the top when the scope changes or an entry is added.
   const count = journal.threads.length;
   useEffect(() => {
     scroller.current?.scrollTo({ top: 0, behavior: "smooth" });
-  }, [count]);
+  }, [count, scope]);
+
+  const scopeLabel =
+    scope.type === "theme" ? scope.label : scope.type === "tag" ? `#${scope.tag}` : null;
 
   return (
     <div className="app">
-      {/* Drag region standing in for the hidden titlebar; traffic lights inset. */}
       <div className="titlebar" data-tauri-drag-region>
         <span className="micro titlebar__mark">tilt</span>
       </div>
 
-      <main className="main scroll" ref={scroller}>
-        <div className="column">
-          <Composer ref={composer} autoFocus onSubmit={journal.create} />
-          <Stream
-            threads={journal.threads}
-            loading={journal.loading}
-            reflecting={journal.reflecting}
-            onReflect={journal.reflect}
-            onUpdate={journal.update}
-            onDelete={journal.remove}
-          />
-        </div>
-      </main>
+      <div className="body">
+        <Sidebar
+          themes={themes}
+          tags={tags}
+          scope={scope}
+          entryCount={status?.entries ?? 0}
+          onScope={setScope}
+          onRenameTheme={journal.renameTheme}
+        />
+
+        <main className="main scroll" ref={scroller}>
+          <div className="column">
+            {/* The composer is hidden inside a filtered view: writing there
+                would imply the entry joins that folder, which it may not. */}
+            {scope.type === "all" ? (
+              <Composer ref={composer} autoFocus onSubmit={journal.create} />
+            ) : (
+              <header className="scope-head">
+                <h1 className="scope-head__title">{scopeLabel}</h1>
+                <button className="micro scope-head__clear" onClick={() => setScope({ type: "all" })}>
+                  show everything
+                </button>
+              </header>
+            )}
+
+            <Stream
+              threads={journal.threads}
+              loading={journal.loading}
+              scope={scope}
+              reflecting={journal.reflecting}
+              processing={journal.processing}
+              onReflect={journal.reflect}
+              onConnect={journal.connect}
+              onUpdate={journal.update}
+              onDelete={journal.remove}
+              onDismissLink={journal.dismissLink}
+              onOpenEntry={highlight}
+              onScope={setScope}
+            />
+          </div>
+        </main>
+      </div>
 
       <StatusBar
-        status={journal.status}
+        status={status}
         error={journal.error}
         onDismissError={journal.dismissError}
       />

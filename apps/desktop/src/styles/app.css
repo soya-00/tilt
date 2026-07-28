@@ -1,28 +1,46 @@
 /* Layout shell: titlebar, the single writing column, status bar. */
 
 .app {
+  position: relative;
   display: grid;
   grid-template-rows: var(--titlebar-h) 1fr var(--statusbar-h);
   height: 100%;
+  background: var(--bg);
+  isolation: isolate;
+}
+
+/* The lit backdrop. Glass has nothing to refract over a flat fill, so soft
+ * colour fields sit behind everything and every translucent panel picks them
+ * up as it passes over. Fixed, so the wash stays put while the Stream scrolls
+ * across it. */
+.app::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background:
+    radial-gradient(58rem 42rem at 12% -12%, var(--glow-1), transparent 62%),
+    radial-gradient(52rem 40rem at 112% 8%, var(--glow-2), transparent 60%),
+    radial-gradient(46rem 38rem at 50% 118%, var(--glow-3), transparent 62%);
 }
 
 /* ---- Titlebar ----------------------------------------------------------- */
-/* Hidden native titlebar with inset traffic lights. The app content runs to
- * the window edge; this strip exists to be dragged and to hold one quiet mark. */
 .titlebar {
   display: flex;
   align-items: center;
   justify-content: center;
   background: var(--vibrancy);
-  backdrop-filter: saturate(180%) blur(20px);
-  -webkit-backdrop-filter: saturate(180%) blur(20px);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
   border-bottom: 1px solid var(--rule);
+  box-shadow: var(--glass-edge);
   user-select: none;
 }
 
 .titlebar__mark {
   color: var(--fg-faint);
-  letter-spacing: 0.24em;
+  letter-spacing: 0.28em;
   text-transform: lowercase;
   transition: color var(--dur-slow) var(--ease-out);
 }
@@ -31,10 +49,228 @@
   color: var(--fg-muted);
 }
 
+/* ---- Body: sidebar + writing column ------------------------------------- */
+.body {
+  display: grid;
+  grid-template-columns: 232px 1fr;
+  min-height: 0;
+}
+
+/* ---- Sidebar ------------------------------------------------------------ */
+/* Navigation over structure the agent produced. Everything in here was
+ * discovered, not authored. */
+.sidebar {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-3);
+  min-height: 0;
+  padding: var(--s-4) var(--s-3);
+  /* A distinctly lifted pane. Matching --vibrancy to the canvas left the
+   * sidebar visually merged with the Stream. */
+  background: var(--surface);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+  border-right: 1px solid var(--glass-border);
+  box-shadow: var(--glass-edge);
+}
+
+.sidebar__row,
+.sidebar__all {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+  width: 100%;
+  padding: var(--s-2) var(--s-3);
+  border-radius: var(--radius-sm);
+  color: var(--fg-muted);
+  font-size: var(--text-sm);
+  text-align: left;
+  transition:
+    background var(--dur-fast) var(--ease-out),
+    color var(--dur-fast) var(--ease-out);
+}
+
+/* :not() keeps the selected row selected under the cursor. A bare
+ * `.sidebar__row:hover` outranks `.sidebar__row--active` on specificity, which
+ * repainted the active row as unselected while its label stayed white. */
+.sidebar__row:not(.sidebar__row--active):hover,
+.sidebar__all:not(.sidebar__row--active):hover {
+  background: var(--surface-2);
+  color: var(--fg);
+}
+
+.sidebar__row--active,
+.sidebar__all.sidebar__row--active {
+  background: var(--accent);
+  color: var(--on-accent);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.2);
+}
+
+.sidebar__row--active .sidebar__count {
+  color: var(--on-accent);
+  opacity: 0.75;
+}
+
+.sidebar__label {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sidebar__count {
+  flex-shrink: 0;
+  color: var(--fg-faint);
+}
+
+/* A folder mark drawn in CSS — no icon set to ship or keep consistent. */
+.sidebar__glyph {
+  flex-shrink: 0;
+  width: 13px;
+  height: 10px;
+  border-radius: 2px 3px 3px 3px;
+  background: currentColor;
+  opacity: 0.55;
+  position: relative;
+}
+
+.sidebar__glyph::after {
+  content: "";
+  position: absolute;
+  top: -3px;
+  left: 0;
+  width: 6px;
+  height: 3px;
+  border-radius: 2px 2px 0 0;
+  background: currentColor;
+}
+
+/* Segmented control, iOS-style. */
+.segmented {
+  display: flex;
+  gap: 2px;
+  padding: 2px;
+  border-radius: var(--radius-pill);
+  background: var(--surface-2);
+}
+
+.segmented__option {
+  flex: 1;
+  padding: var(--s-1) var(--s-2);
+  border-radius: var(--radius-pill);
+  font-size: var(--text-xs);
+  color: var(--fg-muted);
+  transition:
+    background var(--dur-fast) var(--ease-out),
+    color var(--dur-fast) var(--ease-out);
+}
+
+.segmented__option--on {
+  background: var(--surface-strong);
+  color: var(--fg-strong);
+  box-shadow: var(--shadow-card);
+}
+
+.sidebar__list {
+  flex: 1;
+  min-height: 0;
+}
+
+.sidebar__items,
+.sidebar__tags {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.sidebar__tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-1);
+  padding: var(--s-1);
+}
+
+.sidebar__tag {
+  display: inline-flex;
+  align-items: baseline;
+  gap: var(--s-1);
+  padding: 3px var(--s-2);
+  border-radius: var(--radius-pill);
+  background: var(--surface-2);
+  color: var(--fg-muted);
+  font-family: var(--font-machine);
+  font-size: var(--text-xs);
+  transition:
+    background var(--dur-fast) var(--ease-out),
+    color var(--dur-fast) var(--ease-out);
+}
+
+.sidebar__tag:hover {
+  color: var(--fg);
+}
+
+.sidebar__tag--active {
+  background: var(--accent);
+  color: var(--on-accent);
+}
+
+.sidebar__tag-count {
+  opacity: 0.55;
+}
+
+.sidebar__empty {
+  margin: var(--s-3) var(--s-2);
+  color: var(--fg-faint);
+  text-transform: none;
+  letter-spacing: 0;
+  line-height: var(--leading-tight);
+}
+
+.sidebar__rename {
+  width: 100%;
+  padding: var(--s-2) var(--s-3);
+  border-radius: var(--radius-sm);
+  background: var(--surface-strong);
+  color: var(--fg-strong);
+  font-size: var(--text-sm);
+  box-shadow: 0 0 0 2px var(--accent-ring);
+}
+
 /* ---- Writing column ----------------------------------------------------- */
 .main {
   min-height: 0;
   padding: var(--s-6) var(--s-5) var(--s-8);
+}
+
+/* ---- Scope header (shown instead of the composer in a filtered view) ----- */
+.scope-head {
+  display: flex;
+  align-items: baseline;
+  gap: var(--s-4);
+  margin-bottom: var(--s-5);
+  padding-left: var(--s-2);
+}
+
+.scope-head__title {
+  margin: 0;
+  font-size: var(--text-xl);
+  letter-spacing: var(--tracking-display);
+  color: var(--fg-strong);
+}
+
+.scope-head__clear {
+  color: var(--fg-faint);
+  padding: var(--s-1) var(--s-3);
+  border-radius: var(--radius-pill);
+  transition:
+    color var(--dur-fast) var(--ease-out),
+    background var(--dur-fast) var(--ease-out);
+}
+
+.scope-head__clear:hover {
+  color: var(--accent);
+  background: var(--accent-soft);
 }
 
 .column {
@@ -43,17 +279,50 @@
   margin: 0 auto;
 }
 
+/* ---- Glass primitive ---------------------------------------------------- */
+.glass {
+  background: var(--surface);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+  border: 1px solid var(--glass-border);
+  box-shadow: var(--shadow-card), var(--glass-edge);
+}
+
 /* ---- Composer ----------------------------------------------------------- */
 .composer {
-  padding-bottom: var(--s-5);
-  border-bottom: 1px solid var(--rule);
+  background: var(--surface-strong);
+  backdrop-filter: var(--glass-blur-heavy);
+  -webkit-backdrop-filter: var(--glass-blur-heavy);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-card), var(--glass-edge);
+  padding: var(--s-5) var(--s-5) var(--s-4);
   margin-bottom: var(--s-6);
+  transition:
+    box-shadow var(--dur-base) var(--ease-out),
+    border-color var(--dur-base) var(--ease-out);
+}
+
+.composer:focus-within {
+  border-color: transparent;
+  box-shadow:
+    var(--shadow-raised),
+    var(--glass-edge),
+    0 0 0 3px var(--accent-ring);
 }
 
 .composer--compact {
-  padding-bottom: 0;
-  border-bottom: none;
+  box-shadow: none;
+  border: none;
+  background: transparent;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  padding: 0;
   margin-bottom: 0;
+}
+
+.composer--compact:focus-within {
+  box-shadow: none;
 }
 
 .composer__input {
@@ -62,7 +331,8 @@
   resize: none;
   overflow-y: auto;
   font-family: var(--font-human);
-  font-size: var(--text-lg);
+  font-size: var(--text-xl);
+  letter-spacing: var(--tracking-display);
   line-height: var(--leading-prose);
   color: var(--fg-strong);
   background: transparent;
@@ -73,8 +343,8 @@
   color: var(--fg-faint);
 }
 
-/* No focus ring on the writing surfaces. A blinking caret already says "type
- * here", and an outlined box turns the Stream into a web form. */
+/* The caret is the affordance; an outline on top of the card's focus ring
+ * would be a second, competing signal. */
 .composer__input:focus-visible,
 .entry__editor:focus-visible {
   outline: none;
@@ -84,12 +354,11 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-top: var(--s-3);
+  margin-top: var(--s-4);
   opacity: 0;
   transition: opacity var(--dur-base) var(--ease-out);
 }
 
-/* The affordances appear once you engage, not before. */
 .composer:hover .composer__footer,
 .composer:focus-within .composer__footer {
   opacity: 1;
@@ -99,24 +368,38 @@
   color: var(--fg-faint);
 }
 
+/* Filled pill — the one primary action in the app. */
 .composer__send {
+  font-family: var(--font-human);
   font-size: var(--text-sm);
-  color: var(--fg-muted);
-  padding: var(--s-1) var(--s-3);
-  border: 1px solid var(--rule);
-  border-radius: var(--radius-sm);
+  font-weight: 600;
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--on-accent);
+  background: var(--accent);
+  padding: var(--s-2) var(--s-5);
+  border-radius: var(--radius-pill);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.25);
   transition:
-    color var(--dur-fast) var(--ease-out),
-    border-color var(--dur-fast) var(--ease-out);
+    background var(--dur-fast) var(--ease-out),
+    transform var(--dur-fast) var(--ease-spring);
 }
 
 .composer__send:hover:not(:disabled) {
-  color: var(--accent);
-  border-color: var(--accent-dim);
+  background: var(--accent-hover);
 }
 
+.composer__send:active:not(:disabled) {
+  transform: scale(0.96);
+}
+
+/* Must stay legibly *off*. A translucent white fill disappears against the
+ * white composer, leaving bold dark text that reads as an enabled button. */
 .composer__send:disabled {
-  opacity: 0.35;
+  background: var(--rule);
+  color: var(--fg-faint);
+  font-weight: 500;
+  box-shadow: none;
   cursor: default;
 }
 
@@ -126,7 +409,8 @@
 }
 
 .stream__empty {
-  padding-top: var(--s-6);
+  padding: var(--s-6) var(--s-2);
+  text-align: center;
 }
 
 .stream__empty-line {
@@ -141,25 +425,39 @@
 }
 
 .stream__day + .stream__day {
-  margin-top: var(--s-7);
+  margin-top: var(--s-6);
 }
 
 .stream__day-heading {
-  margin: 0 0 var(--s-5);
-  padding-bottom: var(--s-2);
-  border-bottom: 1px solid var(--rule);
+  margin: 0 0 var(--s-3);
+  padding-left: var(--s-4);
   color: var(--fg-faint);
 }
 
 /* ---- Entry -------------------------------------------------------------- */
 .entry {
-  padding: var(--s-4) 0 var(--s-5);
-  border-radius: var(--radius-md);
+  position: relative;
+  background: var(--surface);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-card), var(--glass-edge);
+  padding: var(--s-4) var(--s-5) var(--s-5);
+  margin-bottom: var(--s-4);
   animation: rise var(--dur-slow) var(--ease-out) both;
+  transition:
+    background var(--dur-base) var(--ease-out),
+    box-shadow var(--dur-base) var(--ease-out);
+}
+
+.entry:hover {
+  background: var(--surface-hover);
+  box-shadow: var(--shadow-raised), var(--glass-edge);
 }
 
 .entry--pending {
-  opacity: 0.5;
+  opacity: 0.55;
 }
 
 .entry--highlight {
@@ -169,30 +467,28 @@
 @keyframes highlight {
   0%,
   70% {
-    background: var(--accent-ghost);
+    box-shadow: var(--shadow-card), var(--glass-edge), 0 0 0 3px var(--accent-ring);
   }
   100% {
-    background: transparent;
+    box-shadow: var(--shadow-card), var(--glass-edge);
   }
 }
 
 .entry__meta {
   display: flex;
   align-items: center;
-  gap: var(--s-3);
-  margin-bottom: var(--s-2);
-  min-height: 1.25rem;
+  gap: var(--s-2);
+  margin-bottom: var(--s-3);
+  min-height: 1.5rem;
 }
 
 .entry__stamp {
   color: var(--fg-faint);
 }
 
-/* Actions are invisible at rest. The Stream should be text and nothing else
- * until you reach for something. */
 .entry__actions {
   display: flex;
-  gap: var(--s-3);
+  gap: var(--s-1);
   opacity: 0;
   transition: opacity var(--dur-base) var(--ease-out);
 }
@@ -204,11 +500,16 @@
 
 .entry__action {
   color: var(--fg-faint);
-  transition: color var(--dur-fast) var(--ease-out);
+  padding: var(--s-1) var(--s-3);
+  border-radius: var(--radius-pill);
+  transition:
+    color var(--dur-fast) var(--ease-out),
+    background var(--dur-fast) var(--ease-out);
 }
 
 .entry__action:hover:not(:disabled) {
   color: var(--accent);
+  background: var(--accent-soft);
 }
 
 .entry__action:disabled {
@@ -219,6 +520,7 @@
 .entry__action--danger,
 .entry__action--danger:hover {
   color: var(--danger);
+  background: var(--danger-soft);
 }
 
 .entry__body p {
@@ -241,24 +543,31 @@
   font-size: var(--text-md);
   line-height: var(--leading-prose);
   color: var(--fg-strong);
-  background: var(--bg-input);
-  border: 1px solid var(--rule-strong);
-  border-radius: var(--radius-sm);
-  padding: var(--s-3);
+  background: var(--surface-2);
+  border-radius: var(--radius-md);
+  padding: var(--s-3) var(--s-4);
   caret-color: var(--accent);
+  box-shadow: 0 0 0 2px var(--accent-ring);
 }
 
 .entry__tags {
   display: flex;
   flex-wrap: wrap;
-  gap: var(--s-3);
+  gap: var(--s-2);
   list-style: none;
-  margin: var(--s-3) 0 0;
+  margin: var(--s-4) 0 0;
   padding: 0;
 }
 
+/* Tags are stored lowercase and read as words, not labels. The uppercase
+ * treatment inherited from .micro made them shout. */
 .entry__tag {
-  color: var(--fg-faint);
+  color: var(--accent);
+  background: var(--accent-soft);
+  padding: var(--s-1) var(--s-3);
+  border-radius: var(--radius-pill);
+  text-transform: none;
+  letter-spacing: var(--tracking-mono);
 }
 
 .entry__tag::before {
@@ -266,23 +575,182 @@
   opacity: 0.6;
 }
 
-/* ---- Reply: the machine's voice ---------------------------------------- */
+.entry__tag:hover {
+  background: var(--accent);
+  color: var(--on-accent);
+}
+
+/* The agent's folder, shown inline on the entry and clickable into the
+ * sidebar scope. */
+.entry__folder {
+  padding: 2px var(--s-2);
+  border-radius: var(--radius-pill);
+  background: var(--surface-2);
+  color: var(--fg-muted);
+  text-transform: none;
+  letter-spacing: 0;
+  transition:
+    background var(--dur-fast) var(--ease-out),
+    color var(--dur-fast) var(--ease-out);
+}
+
+.entry__folder:hover {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.entry__filing {
+  color: var(--fg-faint);
+}
+
+/* ---- Connections -------------------------------------------------------- */
+.connection {
+  position: relative;
+  background: var(--surface-2);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--glass-edge);
+  padding: var(--s-3) var(--s-4);
+}
+
+/* The node where the thread rail meets this card. */
+.connection::before {
+  content: "";
+  position: absolute;
+  left: calc(var(--s-5) * -1 + 1px);
+  top: var(--s-4);
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 0 0 3px var(--bg);
+}
+
+/* A contradiction is the one connection worth a different colour: noticing a
+ * changed mind matters more than noticing a repetition. */
+.connection--contradiction::before {
+  background: var(--danger);
+}
+
+.connection--contradiction .connection__kind {
+  color: var(--danger);
+}
+
+.connection__head {
+  display: flex;
+  align-items: baseline;
+  gap: var(--s-3);
+  margin-bottom: var(--s-2);
+}
+
+.connection__kind {
+  color: var(--accent);
+}
+
+.connection__stamp {
+  color: var(--fg-faint);
+}
+
+.connection__dismiss {
+  margin-left: auto;
+  color: var(--fg-faint);
+  padding: 2px var(--s-2);
+  border-radius: var(--radius-pill);
+  opacity: 0;
+  transition:
+    opacity var(--dur-base) var(--ease-out),
+    color var(--dur-fast) var(--ease-out);
+}
+
+.connection:hover .connection__dismiss,
+.connection:focus-within .connection__dismiss {
+  opacity: 1;
+}
+
+.connection__dismiss:hover {
+  color: var(--danger);
+  background: var(--danger-soft);
+}
+
+.connection__body {
+  display: block;
+  width: 100%;
+  text-align: left;
+  color: var(--fg-muted);
+  font-size: var(--text-sm);
+  line-height: var(--leading-tight);
+}
+
+.connection__body:hover .connection__quote {
+  color: var(--fg);
+}
+
+.connection__quote {
+  transition: color var(--dur-fast) var(--ease-out);
+}
+
+.connection__rationale {
+  margin: var(--s-2) 0 0;
+  color: var(--fg-faint);
+  font-size: var(--text-xs);
+  line-height: var(--leading-tight);
+}
+
+/* ---- Replies: threaded, not stacked ------------------------------------- */
+/* A rail runs from the entry down through its replies, the way a reply hangs
+ * off a post or nests in a mail thread. Depth reads as connection rather than
+ * as another floating card. */
 .entry__replies {
+  position: relative;
   margin-top: var(--s-4);
+  padding-left: var(--s-5);
   display: flex;
   flex-direction: column;
-  gap: var(--s-4);
+  gap: var(--s-3);
+}
+
+.entry__replies::before {
+  content: "";
+  position: absolute;
+  left: 5px;
+  top: calc(var(--s-4) * -1);
+  bottom: var(--s-4);
+  width: var(--rail);
+  border-radius: var(--rail);
+  background: linear-gradient(
+    to bottom,
+    var(--accent-rail) 0%,
+    var(--accent-rail) 65%,
+    transparent 100%
+  );
 }
 
 .reply {
-  padding-left: var(--s-4);
-  border-left: 1px solid var(--accent-dim);
+  position: relative;
+  background: var(--accent-ghost);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--glass-edge);
+  padding: var(--s-3) var(--s-4);
+}
+
+/* The node where the rail meets the reply. */
+.reply::before {
+  content: "";
+  position: absolute;
+  left: calc(var(--s-5) * -1 + 1px);
+  top: var(--s-4);
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 0 0 3px var(--bg);
 }
 
 .reply__label {
   display: block;
   margin-bottom: var(--s-2);
-  color: var(--accent-dim);
+  color: var(--accent);
 }
 
 .reply__body {
@@ -304,7 +772,6 @@
   font-size: var(--text-xs);
 }
 
-/* Slow block-cursor pulse instead of a spinner. */
 .cursor {
   display: inline-block;
   color: var(--accent);
@@ -315,11 +782,11 @@
 .statusbar {
   display: flex;
   align-items: center;
-  gap: var(--s-4);
-  padding: 0 var(--s-4);
+  gap: var(--s-3);
+  padding: 0 var(--s-5);
   background: var(--vibrancy);
-  backdrop-filter: saturate(180%) blur(20px);
-  -webkit-backdrop-filter: saturate(180%) blur(20px);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
   border-top: 1px solid var(--rule);
   user-select: none;
 }
@@ -333,7 +800,7 @@
 }
 
 .statusbar__item--muted {
-  opacity: 0.7;
+  opacity: 0.75;
 }
 
 .statusbar__item--warn {
@@ -342,6 +809,7 @@
 
 .statusbar--error {
   border-top-color: var(--danger);
+  background: var(--danger-soft);
 }
 
 .statusbar__error {
@@ -356,8 +824,11 @@
 .statusbar__dismiss {
   margin-left: auto;
   color: var(--fg-muted);
+  padding: var(--s-1) var(--s-3);
+  border-radius: var(--radius-pill);
 }
 
 .statusbar__dismiss:hover {
   color: var(--fg);
+  background: var(--surface-2);
 }

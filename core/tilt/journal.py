@@ -14,6 +14,7 @@ from tilt.models import (
     EntryCreate,
     EntryKind,
     EntryUpdate,
+    LinkedEntry,
     Provenance,
     ReplyKind,
     Thread,
@@ -99,16 +100,41 @@ class Journal:
     def get(self, entry_id: str) -> Entry | None:
         return self.index.get(entry_id)
 
-    def stream(self, *, limit: int = 50, before: str | None = None) -> list[Thread]:
-        roots = self.index.roots(limit=limit, before=before)
-        replies = self.index.children([r.id for r in roots])
-        return [Thread(entry=r, replies=replies.get(r.id, [])) for r in roots]
+    def stream(
+        self,
+        *,
+        limit: int = 50,
+        before: str | None = None,
+        theme_id: str | None = None,
+        tag: str | None = None,
+    ) -> list[Thread]:
+        roots = self.index.roots(limit=limit, before=before, theme_id=theme_id, tag=tag)
+        return self._hydrate(roots)
 
     def thread(self, entry_id: str) -> Thread | None:
         entry = self.index.get(entry_id)
         if entry is None:
             return None
-        return Thread(entry=entry, replies=self.index.children([entry_id]).get(entry_id, []))
+        return self._hydrate([entry])[0]
+
+    def _hydrate(self, entries: list[Entry]) -> list[Thread]:
+        """Attach replies, themes, and connections in three batched queries
+        rather than per-entry lookups."""
+        ids = [e.id for e in entries]
+        replies = self.index.children(ids)
+        themes = self.index.themes_for(ids)
+        links = self.index.links_for(ids)
+        return [
+            Thread(
+                entry=e,
+                replies=replies.get(e.id, []),
+                themes=themes.get(e.id, []),
+                links=[
+                    LinkedEntry(link=link, entry=other) for link, other in links.get(e.id, [])
+                ],
+            )
+            for e in entries
+        ]
 
     def search(self, query: str, *, limit: int = 20) -> list[Entry]:
         return search.search(self.index, query, limit=limit)

@@ -16,12 +16,23 @@ it, by design.
 
 ## What exists today
 
+The three core loops are in: **inputting, categorising, connecting.**
+
 - **The Stream** — one reverse-chronological column. Write, press `⌘↵`, done.
-- **Reflection** — ask any entry for a reflection and it threads underneath as a
-  reply, grounded in your related earlier writing.
-- **Search** — full-text across the journal, reachable from the command palette.
-- **Command palette** (`⌘K`) — the only navigation surface. Commands and journal
-  content in one list.
+- **Categorising** — after you keep an entry, the agent tags it and files it
+  under a theme, reusing an existing theme when one fits. You never tag or file
+  anything by hand.
+- **Connecting** — the agent looks for meaningful relationships with earlier
+  entries and threads them under the entry as `echoes`, `builds on`,
+  `contradicts`, or `bridges to`, each with a one-line reason. Dismiss in one
+  click; a dismissed pair is never proposed again.
+- **Sidebar** — navigate folders and tags the agent produced. Rename a folder to
+  pin its name against future agent edits; there is deliberately no way to
+  create one by hand.
+- **Reflection** — ask any entry for a reflection and it threads underneath,
+  grounded in your related earlier writing.
+- **Search** and **command palette** (`⌘K`) — the only navigation surface, with
+  commands and journal content in one list.
 - **Quick capture** (`⌥Space`) — a small window for one thought.
 - **Cost ledger** — every model call is priced and recorded; spend is always
   visible in the status bar.
@@ -31,15 +42,34 @@ deleted and rebuilt at any time.
 
 ## Design
 
-Two voices, two typefaces. What you write is set in a humanist face; what the
-machine says is set in mono behind a hairline accent rule. That distinction
-carries the hierarchy, so agent output needs no boxes, badges, or "AI" labels to
-read as not-you.
+Three influences, each doing a specific job.
 
-Everything else is restraint: dark-first, one accent colour reserved exclusively
-for the machine, hierarchy from contrast and spacing rather than shadows or
-cards, no toolbars, no spinners. At rest the Stream is text on a dark field and
-nothing else.
+**Liquid glass.** Surfaces are translucent and layered, with a specular top edge
+and a saturating blur, so panels read as material over a lit backdrop rather
+than opaque rectangles. Glass has nothing to refract over a flat fill, so a
+fixed ambient gradient wash sits behind everything and each panel picks it up as
+it scrolls past.
+
+**Threaded elevation.** A machine reply is connected to its entry by a rail with
+a node where the two meet — the way a reply hangs off a post or nests in a mail
+thread. Depth reads as connection rather than as another floating card.
+
+**Dim and neutral, in both modes.** Dark is a dim neutral black; light is a dim
+neutral white. Neither carries a colour cast — the ambient wash behind the glass
+is greyscale, so panels read as smoked or frosted glass rather than as a tinted
+gradient. Blue is the single accent and the only colour in the app. Theme
+follows the system appearance until you choose otherwise.
+
+The structural constant underneath all of it is **two voices, two typefaces**:
+what you write is set in a humanist face, what the machine says is set in mono.
+That distinction carries the hierarchy, so agent output needs no badge, avatar,
+or "AI" label to read as not-you.
+
+Restraint still governs the rest. One accent colour, reserved for the machine
+and the single primary action. No toolbars and no sidebar — `⌘K` is the only
+navigation surface. Entry actions stay invisible until hover or focus. Background
+work shows a slow block-cursor pulse rather than a spinner, which reads as
+composing without implying a deadline.
 
 ## Architecture
 

@@ -9,7 +9,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from tilt.agents import build_provider
 from tilt.agents.ledger import MeteredProvider
-from tilt.api.routes import agent, entries, system
+from tilt.api.routes import agent, entries, library, system
 from tilt.config import Settings, get_settings
 from tilt.journal import Journal
 from tilt.store.index import Index
@@ -56,6 +56,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     app.include_router(system.router)
     app.include_router(entries.router)
+    app.include_router(library.router)
     app.include_router(agent.router)
     return app
 

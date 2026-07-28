@@ -15,9 +15,11 @@ router = APIRouter(prefix="/entries", tags=["entries"])
 def list_stream(
     limit: int = Query(50, ge=1, le=200),
     before: str | None = Query(None, description="ISO timestamp for keyset pagination"),
+    theme_id: str | None = Query(None, description="Scope to one agent-created theme"),
+    tag: str | None = Query(None, description="Scope to one tag"),
     journal: Journal = Depends(get_journal),
 ) -> list[Thread]:
-    return journal.stream(limit=limit, before=before)
+    return journal.stream(limit=limit, before=before, theme_id=theme_id, tag=tag)
 
 
 @router.post("", response_model=Thread, status_code=status.HTTP_201_CREATED)
