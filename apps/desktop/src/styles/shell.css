@@ -1,0 +1,87 @@
+/* What changes when Tilt is a Mac app rather than a page.
+ *
+ * Everything here is gated on markers `main.tsx` sets from the injected shell
+ * bridge, so the browser build is byte-for-byte the design as written. */
+
+/* The titlebar is hidden and content runs to the window edge, so the traffic
+ * lights float over the top-left of the sidebar. Inset it rather than reserving
+ * a strip: a strip would be a header, and this app does not have one. */
+:root[data-shell="tauri"] .sidebar {
+  padding-top: 30px;
+}
+
+/* Nothing else is draggable — there is no titlebar left to grab — so the empty
+ * band above the sidebar becomes the handle. */
+:root[data-shell="tauri"] .sidebar::before {
+  content: "";
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 30px;
+  -webkit-app-region: drag;
+  app-region: drag;
+  z-index: 40;
+}
+
+/* Controls sitting inside that band must still be clickable. */
+:root[data-shell="tauri"] .strip-btn,
+:root[data-shell="tauri"] .search {
+  -webkit-app-region: no-drag;
+  app-region: no-drag;
+}
+
+/* ── Quick capture ─────────────────────────────────────────────────────────
+ * Its window is transparent and macOS supplies the blur underneath, so the
+ * page must not paint a background of its own over the top of it. */
+:root[data-window="capture"],
+:root[data-window="capture"] body {
+  background: transparent;
+}
+
+.capture-window {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-2);
+  height: 100dvh;
+  padding: var(--s-4);
+  border-radius: 14px; /* matches the radius the shell rounds the window to */
+  border: 1px solid var(--glass-border);
+  box-shadow: var(--glass-edge);
+  /* Faint, not opaque: the vibrancy behind it is doing most of the work. */
+  background: var(--glass);
+  animation: capture-in var(--dur-slow) var(--ease) both;
+}
+
+/* Outside the shell the same view has no vibrant window under it, so it falls
+ * back to the app's own glass over the ambient wash. */
+:root:not([data-shell="tauri"]) .capture-window {
+  background: var(--glass-strong);
+  backdrop-filter: var(--glass-blur-heavy);
+  -webkit-backdrop-filter: var(--glass-blur-heavy);
+}
+
+.capture-window__error {
+  margin: 0;
+  padding: 0 var(--s-2);
+  font-family: var(--font-mono);
+  font-size: var(--t-meta);
+  color: var(--ink-secondary);
+}
+
+@keyframes capture-in {
+  from {
+    opacity: 0;
+    transform: scale(0.985);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .capture-window {
+    animation: none;
+  }
+}

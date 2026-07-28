@@ -31,7 +31,33 @@ class Settings(BaseSettings):
     monthly_cost_ceiling_usd: float = 20.0
     """Scheduled agent work stops at 80% of this. User-initiated calls continue."""
 
-    cors_origins: list[str] = Field(default_factory=lambda: ["http://localhost:5173"])
+    cors_origins: list[str] = Field(
+        default_factory=lambda: [
+            "http://localhost:5173",
+            # The webview serves the UI from a custom scheme, so every call it
+            # makes to the sidecar is cross-origin. The bearer token, not the
+            # origin list, is what actually guards the journal.
+            "tauri://localhost",
+            "http://tauri.localhost",
+        ]
+    )
+
+    host: str = "127.0.0.1"
+    """Loopback only. The journal is not a network service and never should be."""
+
+    port: int = 8765
+    """0 asks the operating system for a free port — what the desktop shell does,
+    so two copies of Tilt never fight over a fixed number."""
+
+    auth_token: str | None = None
+    """When set, every request but ``/health`` must present it as a bearer token.
+    The shell mints a fresh one per launch; running by hand leaves it unset."""
+
+    exit_with_parent: bool = False
+    """Shut down when stdin closes. The desktop shell sets this so a crash on
+    its side cannot leave the journal served by a process nobody can see. Off by
+    default: run from a terminal, stdin never closes, and this would do nothing
+    — run with stdin redirected from /dev/null and it would exit immediately."""
 
     @property
     def entries_dir(self) -> Path:

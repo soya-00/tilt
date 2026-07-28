@@ -10,6 +10,7 @@ import { Sidebar } from "./components/Sidebar";
 import { Stream } from "./components/Stream";
 import { Icon } from "./components/Icon";
 import { api } from "./lib/api";
+import { onCaptured } from "./lib/shell";
 import { useJournal } from "./lib/useJournal";
 import { useLiquidGlass } from "./lib/useLiquidGlass";
 import { useTheme } from "./lib/useTheme";
@@ -125,6 +126,11 @@ export default function App() {
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [focusComposer]);
+
+  // A thought captured in the ⌥Space panel is written by a different window;
+  // without this the journal would not show it until something else reloaded.
+  const { refresh } = journal;
+  useEffect(() => onCaptured(() => void refresh()), [refresh]);
 
   const scopeLabel =
     scope.type === "theme" ? scope.label : scope.type === "tag" ? `#${scope.tag}` : null;

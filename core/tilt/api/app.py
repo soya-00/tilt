@@ -9,6 +9,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from tilt.agents import build_provider
 from tilt.agents.ledger import MeteredProvider
+from tilt.api.auth import TokenAuthMiddleware
 from tilt.api.routes import agent, entries, ingest, library, system
 from tilt.api.routes import settings as settings_routes
 from tilt.config import Settings, get_settings
@@ -59,6 +60,12 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         summary="A thinking instrument, not a productivity tool.",
         lifespan=lifespan,
     )
+
+    # Order matters: middleware added last runs outermost, and a 401 that never
+    # passes back through CORS reaches the webview as an unreadable network
+    # error instead of a message.
+    if settings.auth_token:
+        app.add_middleware(TokenAuthMiddleware, token=settings.auth_token)
 
     app.add_middleware(
         CORSMiddleware,

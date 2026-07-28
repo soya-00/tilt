@@ -1,0 +1,40 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "Tilt",
+  "version": "0.1.0",
+  "identifier": "id.tilt.app",
+  "build": {
+    "beforeDevCommand": "npm run dev",
+    "devUrl": "http://localhost:5173",
+    "beforeBuildCommand": "npm run build",
+    "frontendDist": "../dist"
+  },
+  "app": {
+    "windows": [],
+    "macOSPrivateApi": true,
+    "security": {
+      "csp": "default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self' ipc: http://ipc.localhost http://127.0.0.1:* http://localhost:*"
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": ["dmg", "app"],
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.icns",
+      "icons/icon.ico"
+    ],
+    "resources": {
+      "binaries/tilt-core": "tilt-core"
+    },
+    "copyright": "",
+    "category": "Productivity",
+    "shortDescription": "A thinking instrument",
+    "longDescription": "Tilt is a journal that notices things — it tags, files, and connects what you write, so your thinking compounds instead of scattering.",
+    "macOS": {
+      "minimumSystemVersion": "12.0"
+    }
+  }
+}

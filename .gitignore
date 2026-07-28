@@ -6,6 +6,7 @@ __pycache__/
 venv/
 .pytest_cache/
 .ruff_cache/
+core/build/
 .mypy_cache/
 htmlcov/
 .coverage
@@ -19,7 +20,11 @@ dist-ssr/
 
 # Tauri
 apps/desktop/src-tauri/target/
-apps/desktop/src-tauri/bin/
+apps/desktop/src-tauri/gen/schemas/
+# The packaged sidecar is a build output; the directory is tracked because the
+# bundler will not build against a resource path that does not exist.
+apps/desktop/src-tauri/binaries/tilt-core/*
+!apps/desktop/src-tauri/binaries/tilt-core/README.md
 
 # Tilt runtime data — never commit a journal
 .tilt-data/

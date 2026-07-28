@@ -82,12 +82,15 @@ word rather than pasted whole. Every transition respects
 ## Architecture
 
 ```
-apps/desktop/   React + TypeScript UI (Tauri v2 shell to follow)
-core/           Python service: Markdown store, SQLite index, agent layer
+apps/desktop/            React + TypeScript UI
+apps/desktop/src-tauri/  Tauri v2 shell: windows, hotkey, tray, sidecar lifetime
+core/                    Python service: Markdown store, SQLite index, agents
+scripts/                 Packaging the sidecar, rendering the icon
 ```
 
-The Python service owns all product logic. The desktop shell will own only
-window management, the global hotkey, the tray, and notifications.
+The Python service owns all product logic. The shell owns four things and no
+more: the windows, the global hotkey, the tray, and the lifetime of the Python
+process behind them.
 
 | Concern | Choice | Why |
 |---|---|---|
@@ -136,6 +139,50 @@ See `core/.env.example` for the full set.
 > On Windows the venv paths are `.venv\Scripts\python` instead of
 > `.venv/bin/python`.
 
+## Running it as a Mac app
+
+The two-terminal setup above is the browser path. The desktop shell wraps the
+same two pieces into one application: it starts the Python service itself, on a
+port the operating system picks, and stops it again when you quit.
+
+```bash
+cd apps/desktop
+npm run tauri dev
+```
+
+Requires [Rust](https://rustup.rs) and Xcode command line tools. Nothing else
+changes — the shell runs the Python in `core/` straight from the checkout, so
+edits on either side reload as usual.
+
+To build the app itself:
+
+```bash
+./scripts/build-sidecar.sh     # freeze the Python service into the bundle
+cd apps/desktop && npm run tauri build
+```
+
+The first command produces `Tilt.app`'s copy of the service with PyInstaller;
+the second produces `Tilt.app` and a `.dmg` in
+`apps/desktop/src-tauri/target/release/bundle/`.
+
+> **The `.dmg` can only be built on macOS.** Apple's linker and code-signing
+> tools have no equivalent elsewhere, so there is no cross-compile: the two
+> commands above must run on the Mac the app is for.
+
+### What the shell adds
+
+| | |
+|---|---|
+| **⌥Space, anywhere** | A small always-on-top panel that takes one thought and disappears. It sits on real macOS vibrancy rather than the app's own glass, and it is built at launch and kept hidden so the first press is instant. |
+| **Menu bar** | Open Tilt, quick capture, quit. Closing the window hides it rather than quitting, the way a Mac app should. |
+| **No visible chrome** | The titlebar is hidden and content runs to the window edge; the sidebar insets itself around the traffic lights. |
+| **One process pair** | The service listens on loopback, on a port the OS assigns, behind a bearer token minted fresh each launch. It never touches disk, and nothing else on your machine can read the journal. |
+| **No leftovers** | The shell kills the service on quit — and the service also watches the pipe between them, so even a crash or a `kill -9` cannot leave a server running with your journal open and no window attached. |
+
+Both windows load the same bundle; a query string decides which is which. In a
+browser every shell-specific path is inert, so `npm run dev` still renders the
+design exactly as written.
+
 ## Trying the MVP
 
 With both processes running, open http://localhost:5173 and walk this path:
@@ -172,9 +219,10 @@ judgement — particularly for `contradiction`, which keyword overlap cannot fin
 ```bash
 cd core && .venv/bin/python -m pytest && .venv/bin/python -m ruff check tilt tests
 cd apps/desktop && npm test && npm run typecheck && npm run build
+cd apps/desktop/src-tauri && cargo build
 ```
 
-121 tests: 75 backend, 46 frontend.
+160 tests: 104 backend, 56 frontend.
 
 The load-bearing one writes entries, deletes the database, rebuilds from disk,
 and asserts nothing was lost — that guarantee is what the file-as-truth design
@@ -182,17 +230,29 @@ rests on. Others worth knowing about: a dismissed connection is never proposed
 again from either direction; a failed submit preserves what you typed; and the
 connector stays silent on unrelated entries.
 
+On the shell side the load-bearing ones are the two halves of the boundary
+between the app and the service: that the journal answers nobody without the
+launch token, and that the service reports the port it actually got rather than
+the one anyone assumed.
+
 ## Roadmap
 
 | Phase | Scope | State |
 |---|---|---|
 | 0 | Store, index, search, the Stream | done |
-| 1 | Tauri shell, global hotkey, `.dmg` | next |
+| 1 | Tauri shell, global hotkey, `.dmg` | done |
 | 2 | Connection surfacing, emergent themes | designed |
 | 3 | Source distillation — video, transcript, PDF, article | designed |
 | 4 | Constellation graph, on-demand diagrams | designed |
 | 5 | Research scout, daily brief | designed |
 | 6 | Weekly synthesis, growth timeline | designed |
+
+Two pieces of Phase 1 are deliberately still open. The API key lives in
+`~/Tilt/.tilt/settings.json` at mode 600 rather than in the macOS Keychain —
+moving it there means the key stops travelling through the settings API, which
+is a change to how the app is configured and not just to where a string is
+kept. And there are no notifications yet, because nothing runs unattended for
+them to be about; that arrives with the scheduled agents in Phase 2.
 
 Every proposed feature answers one question: does its output make you *do*
 something, or *understand* something? Only the second ships.

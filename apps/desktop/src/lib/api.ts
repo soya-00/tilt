@@ -16,9 +16,11 @@ import type {
   Thread,
 } from "./types";
 
+import type { ShellBridge } from "./shell";
+
 declare global {
   interface Window {
-    __TILT__?: { baseUrl?: string; token?: string };
+    __TILT__?: ShellBridge;
   }
 }
 
@@ -52,8 +54,9 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     });
   } catch {
     // A dead sidecar is the most likely failure in the desktop shell, and it
-    // deserves a human sentence rather than "Failed to fetch".
-    throw new ApiError("Cannot reach the Tilt service.", 0);
+    // deserves a human sentence rather than "Failed to fetch". When the shell
+    // already knows why it never started, that reason beats any guess here.
+    throw new ApiError(window.__TILT__?.error ?? "Cannot reach the Tilt service.", 0);
   }
 
   if (!response.ok) {

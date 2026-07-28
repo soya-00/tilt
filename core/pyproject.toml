@@ -16,11 +16,19 @@ dependencies = [
     "google-genai>=1.0",
 ]
 
+[project.scripts]
+# The name the desktop shell spawns, both from source and once bundled.
+tilt-core = "tilt.serve:main"
+
 [project.optional-dependencies]
 dev = [
     "pytest>=8.3",
     "pytest-asyncio>=0.24",
     "ruff>=0.7",
+]
+package = [
+    # Only needed to build the sidecar binary, never at runtime.
+    "pyinstaller>=6.11",
 ]
 
 [build-system]

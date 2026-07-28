@@ -1,0 +1,14 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "default",
+  "description": "What the webview is allowed to ask the shell for. Deliberately short: the UI talks to the Python core over HTTP, not through the shell, so the only shell capability it needs is dismissing the quick-capture window.",
+  "windows": ["main", "capture"],
+  "permissions": [
+    "core:default",
+    "core:window:allow-hide",
+    "core:window:allow-show",
+    "core:window:allow-set-focus",
+    "core:window:allow-start-dragging",
+    "global-shortcut:default"
+  ]
+}
