@@ -240,6 +240,58 @@ async def test_connect_never_repeats_a_judged_pair(
     assert await connect(journal, provider, later.id) == [], "already judged"
 
 
+async def test_folders_and_links_survive_a_rebuild(
+    journal: Journal, provider: MeteredProvider
+) -> None:
+    """The bug this exists to prevent: rebuild() ran on every boot, and
+    entry_themes/links cascade from entries, so restarting the app silently
+    destroyed every folder assignment and connection the agent had made."""
+    first = journal.create(
+        EntryCreate(body="Memory is reconstructive; every recall rewrites the memory.")
+    )
+    await categorize(journal, provider, first.id)
+    second = journal.create(
+        EntryCreate(body="Recall rewrites memory, so memory is reconstructive not stored.")
+    )
+    await categorize(journal, provider, second.id)
+    assert await connect(journal, provider, second.id) != []
+
+    themes_before = {t.label: t.count for t in journal.index.themes()}
+    links_before = len(journal.index.all_links())
+    assert links_before > 0
+
+    journal.rebuild()
+
+    assert {t.label: t.count for t in journal.index.themes()} == themes_before
+    assert len(journal.index.all_links()) == links_before
+
+
+async def test_structure_returns_after_the_index_is_deleted(
+    settings, journal: Journal, provider: MeteredProvider
+) -> None:
+    """Frontmatter is the durable copy: throw the database away entirely and
+    folders and connections still come back."""
+    a = journal.create(EntryCreate(body="Attention is a filter that discards most input."))
+    await categorize(journal, provider, a.id)
+    b = journal.create(EntryCreate(body="Attention discards; the filter model of attention."))
+    await categorize(journal, provider, b.id)
+    await connect(journal, provider, b.id)
+
+    expected_themes = {t.label for t in journal.index.themes()}
+    expected_links = len(journal.index.all_links())
+
+    journal.index.close()
+    settings.index_path.unlink()
+
+    fresh = Index(settings.index_path)
+    rebuilt = Journal(settings.data_dir, fresh)
+    rebuilt.rebuild()
+
+    assert {t.label for t in fresh.themes()} == expected_themes
+    assert len(fresh.all_links()) == expected_links
+    fresh.close()
+
+
 async def test_connect_on_an_empty_journal_is_a_noop(
     journal: Journal, provider: MeteredProvider
 ) -> None:

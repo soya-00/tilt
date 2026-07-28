@@ -29,3 +29,23 @@ export function useTheme(): [Theme, () => void] {
 
   return [theme, toggle];
 }
+
+/** Read-only view of the active theme, for code that must pick a palette. */
+export function useIsDark(): boolean {
+  const [dark, setDark] = useState(
+    () => document.documentElement.dataset.theme !== "light",
+  );
+
+  useEffect(() => {
+    const observer = new MutationObserver(() =>
+      setDark(document.documentElement.dataset.theme !== "light"),
+    );
+    observer.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ["data-theme"],
+    });
+    return () => observer.disconnect();
+  }, []);
+
+  return dark;
+}

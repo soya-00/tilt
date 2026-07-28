@@ -12,6 +12,7 @@ from tilt.agents.ledger import MeteredProvider
 from tilt.api.routes import agent, entries, library, system
 from tilt.config import Settings, get_settings
 from tilt.journal import Journal
+from tilt.persona import PersonaStore
 from tilt.store.index import Index
 
 
@@ -31,6 +32,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         app.state.settings = settings
         app.state.index = index
         app.state.journal = journal
+        app.state.persona = PersonaStore(settings.internal_dir / "agent.json")
         app.state.provider = MeteredProvider(
             build_provider(settings), index, settings.monthly_cost_ceiling_usd
         )

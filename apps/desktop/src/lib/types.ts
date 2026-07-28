@@ -58,11 +58,17 @@ export interface Thread {
   links: LinkedEntry[];
 }
 
-/** What the sidebar has selected. `null` means the whole journal. */
+export interface Persona {
+  name: string;
+  personality: string;
+}
+
+/** What the view is currently showing. */
 export type Scope =
   | { type: "all" }
   | { type: "theme"; id: string; label: string }
-  | { type: "tag"; tag: string };
+  | { type: "tag"; tag: string }
+  | { type: "search"; q: string };
 
 export interface Status {
   ok: boolean;

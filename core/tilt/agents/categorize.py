@@ -86,5 +86,8 @@ async def categorize(
         )
         if theme:
             journal.index.set_entry_themes(entry_id, [theme.id])
+            # Also written to the entry's frontmatter, so folder membership
+            # survives losing the index.
+            journal.set_themes(entry_id, [theme.label])
 
     return journal.get(entry_id)

@@ -26,16 +26,29 @@ const base = {
   ],
   scope: { type: "all" } as Scope,
   entryCount: 6,
+  status: {
+    ok: true,
+    provider: "echo",
+    offline: true,
+    model: "offline",
+    entries: 6,
+    spend_this_month_usd: 0,
+    cost_ceiling_usd: 20,
+    data_dir: "/tmp/journal",
+  },
+  persona: { name: "Tilt", personality: "Direct and unsentimental." },
   onScope: vi.fn(),
   onRenameTheme: vi.fn(),
+  onSavePersona: vi.fn(),
 };
 
 describe("Sidebar", () => {
   it("lists agent-created folders with their counts", () => {
     render(<Sidebar {...base} />);
 
-    expect(screen.getByText("Attention")).toBeInTheDocument();
-    expect(screen.getByText("4")).toBeInTheDocument();
+    const row = screen.getByText("Attention").closest("button")!;
+    expect(row).toHaveTextContent("Attention");
+    expect(row.querySelector(".nav-row__count")).toHaveTextContent("4");
   });
 
   it("scopes the stream to a folder", async () => {
@@ -51,14 +64,12 @@ describe("Sidebar", () => {
     });
   });
 
-  it("switches to tags and scopes by tag", async () => {
+  it("scopes by tag", async () => {
     const user = userEvent.setup();
     const onScope = vi.fn();
     render(<Sidebar {...base} onScope={onScope} />);
 
-    await user.click(screen.getByRole("tab", { name: "Tags" }));
     await user.click(screen.getByText("memory"));
-
     expect(onScope).toHaveBeenCalledWith({ type: "tag", tag: "memory" });
   });
 
@@ -88,7 +99,7 @@ describe("Sidebar", () => {
 
   it("explains that folders are discovered, not created", () => {
     render(<Sidebar {...base} themes={[]} />);
-    expect(screen.getByText(/appear as Tilt finds themes/i)).toBeInTheDocument();
+    expect(screen.getByText(/appear here as Tilt finds themes/i)).toBeInTheDocument();
   });
 
   it("offers no way to create a folder by hand", () => {
@@ -101,6 +112,6 @@ describe("Sidebar", () => {
 
   it("marks the active scope", () => {
     render(<Sidebar {...base} scope={{ type: "theme", id: "Memory", label: "Memory" }} />);
-    expect(screen.getByText("Memory").closest("button")).toHaveClass("sidebar__row--active");
+    expect(screen.getByText("Memory").closest("button")).toHaveClass("nav-row--selected");
   });
 });

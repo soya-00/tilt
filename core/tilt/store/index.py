@@ -18,6 +18,8 @@ from collections.abc import Iterator
 from contextlib import contextmanager
 from pathlib import Path
 
+from pydantic import ValidationError
+
 from tilt.models import AgentRun, Entry, Link, TagCount, Theme, utcnow
 from tilt.store import files
 
@@ -541,15 +543,71 @@ class Index:
     # ---------------------------------------------------------------- rebuild
 
     def rebuild(self, entries_root: Path) -> int:
-        """Drop the projection and rebuild it from Markdown. The escape hatch."""
-        with self.tx() as conn:
-            conn.execute("DELETE FROM entries_fts")
-            conn.execute("DELETE FROM entries")
-        n = 0
+        """Reconcile the projection against Markdown on disk.
+
+        Deliberately a reconcile, not a drop-and-reload. ``entry_themes`` and
+        ``links`` cascade from ``entries``, so deleting every row would destroy
+        the agent's folder assignments and connections on every boot. Instead we
+        upsert what is on disk and delete only what has vanished from it.
+
+        Themes and links are then restored from each entry's own frontmatter, so
+        a genuinely empty index still comes back whole.
+        """
+        parsed: list[tuple[Entry, Path]] = []
         for path in files.walk(entries_root):
-            self.upsert(files.parse(path), path)
-            n += 1
-        return n
+            entry = files.parse(path)
+            self.upsert(entry, path)
+            parsed.append((entry, path))
+
+        on_disk = {entry.id for entry, _ in parsed}
+        stale = [
+            row["id"]
+            for row in self._conn.execute("SELECT id FROM entries")
+            if row["id"] not in on_disk
+        ]
+        for entry_id in stale:
+            self.delete(entry_id)
+
+        self._restore_structure(parsed)
+        return len(parsed)
+
+    def _restore_structure(self, parsed: list[tuple[Entry, Path]]) -> None:
+        """Re-derive themes and links from frontmatter.
+
+        Only fills gaps: an entry whose membership is already present is left
+        alone, so this is safe to run on every boot.
+        """
+        by_label: dict[str, str] = {t.label.lower(): t.id for t in self.themes()}
+
+        for entry, _ in parsed:
+            if entry.theme_labels:
+                theme_ids: list[str] = []
+                for label in entry.theme_labels:
+                    theme_id = by_label.get(label.lower())
+                    if theme_id is None:
+                        now = utcnow()
+                        theme = self.upsert_theme(
+                            Theme(id=files.new_id(), label=label, created=now, updated=now)
+                        )
+                        theme_id = theme.id
+                        by_label[label.lower()] = theme_id
+                    theme_ids.append(theme_id)
+                self.set_entry_themes(entry.id, theme_ids)
+
+            for record in entry.links:
+                try:
+                    link = Link(
+                        id=files.new_id(),
+                        src_id=entry.id,
+                        dst_id=record.to,
+                        kind=record.kind,
+                        rationale=record.why,
+                        created=entry.updated,
+                        dismissed=record.dismissed,
+                    )
+                except ValidationError:
+                    continue  # hand-edited frontmatter; skip, never crash
+                self.add_link(link)
 
 
 def _row_to_theme(row: sqlite3.Row) -> Theme:

@@ -8,9 +8,10 @@ what you were actually circling, where today echoes something from March, what
 you now contradict. There are no todos, no boards, and no due dates anywhere in
 it, by design.
 
-> Status: early. The writing surface and one agent job are implemented end to
-> end. The connection graph, source distillation, research scout, and synthesis
-> jobs are designed but not yet built — see the roadmap below.
+> Status: early but real. Writing, categorising, and connecting all work end to
+> end, offline, with no API key. Source distillation, the constellation graph,
+> the research scout, and weekly synthesis are designed but unbuilt — see the
+> roadmap.
 
 ---
 
@@ -18,7 +19,8 @@ it, by design.
 
 The three core loops are in: **inputting, categorising, connecting.**
 
-- **The Stream** — one reverse-chronological column. Write, press `⌘↵`, done.
+- **The Stream** — one column, oldest to newest, anchored at the bottom so the
+  newest thought sits by your hands. Write, press Enter, done.
 - **Categorising** — after you keep an entry, the agent tags it and files it
   under a theme, reusing an existing theme when one fits. You never tag or file
   anything by hand.
@@ -29,10 +31,13 @@ The three core loops are in: **inputting, categorising, connecting.**
 - **Sidebar** — navigate folders and tags the agent produced. Rename a folder to
   pin its name against future agent edits; there is deliberately no way to
   create one by hand.
+- **Search** — full-text from the bar at the top; results arrive as whole
+  threads, folders and connections intact.
+- **One agent, yours** — a single reflective voice with a name and a personality
+  you write. Not a roster to assemble; what is configurable is who it *is*.
 - **Reflection** — ask any entry for a reflection and it threads underneath,
-  grounded in your related earlier writing.
-- **Search** and **command palette** (`⌘K`) — the only navigation surface, with
-  commands and journal content in one list.
+  grounded in your related earlier writing, arriving word by word.
+- **Command palette** (`⌘K`) — commands and journal content in one list.
 - **Quick capture** (`⌥Space`) — a small window for one thought.
 - **Cost ledger** — every model call is priced and recorded; spend is always
   visible in the status bar.
@@ -60,16 +65,19 @@ is greyscale, so panels read as smoked or frosted glass rather than as a tinted
 gradient. Blue is the single accent and the only colour in the app. Theme
 follows the system appearance until you choose otherwise.
 
-The structural constant underneath all of it is **two voices, two typefaces**:
-what you write is set in a humanist face, what the machine says is set in mono.
-That distinction carries the hierarchy, so agent output needs no badge, avatar,
-or "AI" label to read as not-you.
+**Content is the interface.** No header, no footer, no toolbar. Structure comes
+from whitespace, one hairline, and one accent used once per screen. Your own
+words are plain text; only the agent's replies sit in an outlined bubble, so the
+two voices are separated by containment rather than by colour.
 
-Restraint still governs the rest. One accent colour, reserved for the machine
-and the single primary action. No toolbars and no sidebar — `⌘K` is the only
-navigation surface. Entry actions stay invisible until hover or focus. Background
-work shows a slow block-cursor pulse rather than a spinner, which reads as
-composing without implying a deadline.
+**Colour answers attention.** Each tag is assigned its own hue from a muted
+palette by hashing its name — stable forever, never random at render. The colour
+stays hidden until you hover the tag or scope to it. A wall of permanently
+coloured tags would shout over the writing.
+
+Entry actions stay invisible until hover or focus. A reflection arrives word by
+word rather than pasted whole. Every transition respects
+`prefers-reduced-motion`.
 
 ## Architecture
 
@@ -90,39 +98,51 @@ window management, the global hotkey, the tray, and notifications.
 
 ## Running it
 
-Requires Python 3.11+ and Node 20+.
+Requires Python 3.11+ and Node 20+. Nothing else — no `uv`, no global installs.
+
+**Terminal 1 — the service**
 
 ```bash
-# Service
 cd core
-uv venv && uv pip install -e ".[dev]" --python .venv/bin/python
+python3 -m venv .venv
+.venv/bin/python -m pip install --upgrade pip
+.venv/bin/python -m pip install -e ".[dev]"
 .venv/bin/python -m uvicorn tilt.api.app:app --port 8765
-
-# UI
-cd apps/desktop
-pnpm install
-pnpm dev
 ```
 
-Open http://localhost:5173. With no API key configured, Tilt runs an offline
-provider that derives its output from your prompt and labels itself as such —
-the whole app is explorable without a key or any spend.
-
-To use a real model:
+**Terminal 2 — the interface**
 
 ```bash
-export TILT_GEMINI_API_KEY=...      # falls back to the offline provider if unset
-export TILT_DATA_DIR=~/Tilt         # where your journal lives
+cd apps/desktop
+npm install          # or pnpm install
+npm run dev
+```
+
+Open **http://localhost:5173**.
+
+With no API key configured, Tilt runs an offline provider that derives its
+output from your prompt and says so — the whole app is explorable without a key
+and without spending anything.
+
+To use a real model, set these before starting the service:
+
+```bash
+export TILT_GEMINI_API_KEY=...   # falls back to offline if unset
+export TILT_DATA_DIR=~/Tilt      # where your journal lives
 ```
 
 See `core/.env.example` for the full set.
+
+> On Windows the venv paths are `.venv\Scripts\python` instead of
+> `.venv/bin/python`.
 
 ## Trying the MVP
 
 With both processes running, open http://localhost:5173 and walk this path:
 
-1. **Write.** Type a thought, `⌘↵`. It appears instantly — the save happens
-   behind it, and a failed save puts the text back rather than losing it.
+1. **Write.** Type a thought and press Enter (Shift+Enter for a new line). It
+   appears instantly — the save happens behind it, and a failed save puts the
+   text back rather than losing it.
 2. **Watch it get filed.** A `filing…` marker appears, then tags and a folder
    attach themselves. The folder shows up in the sidebar. You did nothing.
 3. **Write a second thought on the same subject.** Once it is filed, a
@@ -133,11 +153,15 @@ With both processes running, open http://localhost:5173 and walk this path:
    the result that matters.
 5. **Click a folder or tag** in the sidebar to scope the Stream. Double-click a
    folder to rename it, which pins the name against future agent edits.
-6. **`⌘K`** searches commands and journal content together. **`⌥Space`** is
-   quick capture. **`reflect`** on any entry for a threaded response.
-7. **Check the files.** `ls ~/Tilt/entries/**/*.md` — your thoughts are plain
-   Markdown with YAML frontmatter. Delete `~/Tilt/.tilt/index.db`, restart, and
-   everything comes back; the database is only a cache.
+6. **Hover a tag** to see its colour; click it to scope. **Search** from the top
+   bar. **`⌘K`** for commands, **`⌥Space`** for quick capture, and **reflect** on
+   any entry for a threaded response.
+7. **Rename the agent.** Click it in the sidebar, give it a name and a
+   personality — that text goes straight into the reflection prompt.
+8. **Check the files.** `ls ~/Tilt/entries/**/*.md` — your thoughts are plain
+   Markdown with YAML frontmatter, and folders and connections are written there
+   too. Delete `~/Tilt/.tilt/index.db`, restart, and everything comes back; the
+   database is only a cache.
 
 Offline mode is lexical, not intelligent: it matches on repeated keywords, so
 tags are decent and connections are conservative. Add a Gemini key for real
@@ -147,10 +171,10 @@ judgement — particularly for `contradiction`, which keyword overlap cannot fin
 
 ```bash
 cd core && .venv/bin/python -m pytest && .venv/bin/python -m ruff check tilt tests
-cd apps/desktop && pnpm test && pnpm typecheck && pnpm build
+cd apps/desktop && npm test && npm run typecheck && npm run build
 ```
 
-115 tests: 73 backend, 42 frontend.
+121 tests: 75 backend, 46 frontend.
 
 The load-bearing one writes entries, deletes the database, rebuilds from disk,
 and asserts nothing was lost — that guarantee is what the file-as-truth design

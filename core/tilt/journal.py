@@ -15,6 +15,7 @@ from tilt.models import (
     EntryKind,
     EntryUpdate,
     LinkedEntry,
+    LinkRecord,
     Provenance,
     ReplyKind,
     Thread,
@@ -84,6 +85,46 @@ class Journal:
         self.index.upsert(entry, path)
         return entry
 
+    def _from_disk(self, entry_id: str) -> Entry | None:
+        """Load an entry from its file rather than the index.
+
+        `theme_labels` and `links` have no SQLite columns — they live only in
+        frontmatter — so an entry read from the index carries them empty.
+        Rewriting that back to disk would erase whatever a previous agent step
+        had just written.
+        """
+        path = self.index.path_of(entry_id)
+        if path and path.exists():
+            return files.parse(path)
+        return self.index.get(entry_id)
+
+    def _rewrite(self, entry: Entry) -> None:
+        """Persist an entry's frontmatter without touching its timestamps."""
+        old_path = self.index.path_of(entry.id)
+        path = files.write(entry, self.entries_root, preserve_extra_from=old_path)
+        self.index.upsert(entry, path)
+
+    def set_themes(self, entry_id: str, labels: list[str]) -> None:
+        """Record folder membership in the entry's own Markdown.
+
+        The SQLite row is the queryable copy; this is the durable one.
+        """
+        entry = self._from_disk(entry_id)
+        if entry is None:
+            return
+        entry.theme_labels = labels
+        self._rewrite(entry)
+
+    def record_link(self, entry_id: str, record: LinkRecord) -> None:
+        """Append a connection to the source entry's frontmatter."""
+        entry = self._from_disk(entry_id)
+        if entry is None:
+            return
+        if any(existing.to == record.to for existing in entry.links):
+            return
+        entry.links = [*entry.links, record]
+        self._rewrite(entry)
+
     def delete(self, entry_id: str) -> bool:
         path = self.index.path_of(entry_id)
         # Cascade to replies so deleting a thought does not orphan its replies.
@@ -107,7 +148,14 @@ class Journal:
         before: str | None = None,
         theme_id: str | None = None,
         tag: str | None = None,
+        query: str | None = None,
     ) -> list[Thread]:
+        if query and query.strip():
+            # Search returns whole threads rather than bare hits, so a result
+            # arrives with its folders, tags, and connections intact.
+            hits = self.search(query, limit=limit)
+            roots = [h for h in hits if h.kind is not EntryKind.REPLY]
+            return self._hydrate(roots)
         roots = self.index.roots(limit=limit, before=before, theme_id=theme_id, tag=tag)
         return self._hydrate(roots)
 

@@ -14,7 +14,7 @@ from __future__ import annotations
 from tilt.agents.ledger import MeteredProvider
 from tilt.agents.parsing import extract_json
 from tilt.journal import Journal
-from tilt.models import Entry, Link, LinkKind, utcnow
+from tilt.models import Entry, Link, LinkKind, LinkRecord, utcnow
 from tilt.store.files import new_id
 
 JOB = "connect"
@@ -105,5 +105,8 @@ async def connect(
             created=utcnow(),
         )
         if journal.index.add_link(link):
+            journal.record_link(
+                entry_id, LinkRecord(to=link.dst_id, kind=kind.value, why=link.rationale)
+            )
             created.append(link)
     return created

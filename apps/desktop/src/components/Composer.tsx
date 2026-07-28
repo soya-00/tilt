@@ -1,5 +1,7 @@
 import { forwardRef, useImperativeHandle, useLayoutEffect, useRef, useState } from "react";
 
+import { IconButton } from "./primitives";
+
 export interface ComposerHandle {
   focus: () => void;
 }
@@ -8,19 +10,21 @@ interface Props {
   onSubmit: (body: string) => Promise<void>;
   placeholder?: string;
   autoFocus?: boolean;
-  /** Compact styling for the quick-capture window. */
   compact?: boolean;
 }
 
-const MAX_ROWS_PX = 420;
+const MAX_LINES = 8;
 
 /**
- * The writing surface.
+ * The writing surface, anchored at the bottom.
  *
- * Auto-growing rather than scrolling, because a fixed-height box makes long
- * thoughts feel unwelcome. Enter inserts a newline and Cmd/Ctrl+Enter sends:
- * in a journal, paragraph breaks are far more common than submissions, so the
- * unmodified key belongs to the more frequent action.
+ * Enter sends and Shift+Enter breaks the line — the chat convention the layout
+ * implies. Escape blurs. The textarea has no border or fill of its own; the
+ * composer's separation is a single hairline above it.
+ *
+ * The send control is an outlined circle, never filled with the accent. With
+ * input present its border and glyph strengthen — that is the entire
+ * affordance.
  */
 export const Composer = forwardRef<ComposerHandle, Props>(function Composer(
   { onSubmit, placeholder = "What are you thinking?", autoFocus, compact },
@@ -30,15 +34,14 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer(
   const [busy, setBusy] = useState(false);
   const area = useRef<HTMLTextAreaElement>(null);
 
-  useImperativeHandle(ref, () => ({
-    focus: () => area.current?.focus(),
-  }));
+  useImperativeHandle(ref, () => ({ focus: () => area.current?.focus() }));
 
   useLayoutEffect(() => {
     const el = area.current;
     if (!el) return;
+    const line = parseFloat(getComputedStyle(el).lineHeight) || 24;
     el.style.height = "auto";
-    el.style.height = `${Math.min(el.scrollHeight, MAX_ROWS_PX)}px`;
+    el.style.height = `${Math.min(el.scrollHeight, line * MAX_LINES)}px`;
   }, [value]);
 
   const send = async () => {
@@ -56,8 +59,10 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer(
     }
   };
 
+  const ready = value.trim().length > 0;
+
   return (
-    <div className={`composer${compact ? " composer--compact" : ""}`}>
+    <div className={"composer" + (compact ? " composer--compact" : "")}>
       <textarea
         ref={area}
         className="composer__input"
@@ -69,23 +74,31 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer(
         aria-label="Write an entry"
         onChange={(e) => setValue(e.target.value)}
         onKeyDown={(e) => {
-          if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
+          if (e.key === "Enter" && !e.shiftKey) {
             e.preventDefault();
             void send();
+          } else if (e.key === "Escape") {
+            area.current?.blur();
           }
         }}
       />
-      <div className="composer__footer">
-        <span className="micro composer__hint">
-          {value.trim() ? "⌘↵ to keep" : "⌘K for commands"}
-        </span>
-        <button
-          className="composer__send mono"
-          onClick={() => void send()}
-          disabled={!value.trim() || busy}
-        >
-          {busy ? "keeping…" : "Keep"}
-        </button>
+
+      <div className="composer__bar">
+        <div className="composer__left">
+          <IconButton name="camera" label="Attach an image" outlined />
+          <IconButton name="paperclip" label="Attach a file" outlined />
+        </div>
+        <div className="composer__right">
+          <IconButton name="waveform" label="Dictate" />
+          <IconButton
+            name="arrow-up"
+            label="Keep this entry"
+            outlined
+            ready={ready}
+            disabled={!ready || busy}
+            onClick={() => void send()}
+          />
+        </div>
       </div>
     </div>
   );

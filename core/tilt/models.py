@@ -42,6 +42,19 @@ class ReplyKind(StrEnum):
     QUESTION = "question"
 
 
+class LinkRecord(BaseModel):
+    """A connection as stored in the entry's own Markdown frontmatter.
+
+    Links live with the entry rather than only in SQLite, so the connective
+    tissue between thoughts survives losing the index.
+    """
+
+    to: str
+    kind: str
+    why: str = ""
+    dismissed: bool = False
+
+
 class Entry(BaseModel):
     id: str
     created: datetime
@@ -55,6 +68,12 @@ class Entry(BaseModel):
     reply_kind: ReplyKind | None = None
     tags: list[str] = Field(default_factory=list)
     body: str = ""
+
+    # Agent-derived structure, persisted to frontmatter so a full index rebuild
+    # restores it. Without this, deleting index.db would silently discard every
+    # folder assignment and connection the agent ever made.
+    theme_labels: list[str] = Field(default_factory=list)
+    links: list[LinkRecord] = Field(default_factory=list)
 
     @property
     def is_machine(self) -> bool:

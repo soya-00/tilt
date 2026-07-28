@@ -13,7 +13,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { ApiError, api } from "./api";
-import type { Entry, Scope, Status, TagCount, Theme, Thread } from "./types";
+import type { Entry, Persona, Scope, Status, TagCount, Theme, Thread } from "./types";
 
 const PAGE = 50;
 
@@ -22,6 +22,7 @@ export interface JournalState {
   themes: Theme[];
   tags: TagCount[];
   status: Status | null;
+  persona: Persona | null;
   scope: Scope;
   loading: boolean;
   error: string | null;
@@ -29,6 +30,8 @@ export interface JournalState {
   reflecting: Set<string>;
   /** Entry ids being categorised or connected. */
   processing: Set<string>;
+  /** Reply ids that arrived this session, so they reveal word by word. */
+  freshReplies: Set<string>;
   setScope: (scope: Scope) => void;
   create: (body: string) => Promise<void>;
   reflect: (entryId: string) => Promise<void>;
@@ -37,6 +40,7 @@ export interface JournalState {
   remove: (entryId: string) => Promise<void>;
   dismissLink: (linkId: string) => Promise<void>;
   renameTheme: (themeId: string, label: string) => Promise<void>;
+  savePersona: (payload: Partial<Persona>) => Promise<void>;
   refresh: () => Promise<void>;
   dismissError: () => void;
 }
@@ -64,11 +68,13 @@ export function useJournal(): JournalState {
   const [themes, setThemes] = useState<Theme[]>([]);
   const [tags, setTags] = useState<TagCount[]>([]);
   const [status, setStatus] = useState<Status | null>(null);
+  const [persona, setPersona] = useState<Persona | null>(null);
   const [scope, setScope] = useState<Scope>({ type: "all" });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [reflecting, setReflecting] = useState<Set<string>>(new Set());
   const [processing, setProcessing] = useState<Set<string>>(new Set());
+  const [freshReplies, setFresh] = useState<Set<string>>(new Set());
 
   const mounted = useRef(true);
   // Read inside callbacks so they never need `threads` as a dependency, which
@@ -100,15 +106,17 @@ export function useJournal(): JournalState {
 
   const refreshLibrary = useCallback(async () => {
     try {
-      const [nextThemes, nextTags, nextStatus] = await Promise.all([
+      const [nextThemes, nextTags, nextStatus, nextPersona] = await Promise.all([
         api.themes(),
         api.tags(),
         api.status(),
+        api.persona(),
       ]);
       if (!mounted.current) return;
       setThemes(nextThemes);
       setTags(nextTags);
       setStatus(nextStatus);
+      setPersona(nextPersona);
     } catch {
       /* Ambient data; a failure here must never disrupt writing. */
     }
@@ -180,6 +188,9 @@ export function useJournal(): JournalState {
       track(setReflecting, entryId, true);
       try {
         const reply = await api.reflect(entryId);
+        // Marked fresh so it reveals word by word. Only replies that arrive
+        // while you are watching animate; reloads render settled.
+        setFresh((prev) => new Set(prev).add(reply.id));
         setThreads((prev) =>
           prev.map((t) =>
             t.entry.id === entryId ? { ...t, replies: [...t.replies, reply] } : t,
@@ -267,16 +278,29 @@ export function useJournal(): JournalState {
     [refreshLibrary],
   );
 
+  const savePersona = useCallback(
+    async (payload: Partial<Persona>) => {
+      try {
+        setPersona(await api.savePersona(payload));
+      } catch (err) {
+        setError(describe(err));
+      }
+    },
+    [],
+  );
+
   return {
     threads,
     themes,
     tags,
     status,
+    persona,
     scope,
     loading,
     error,
     reflecting,
     processing,
+    freshReplies,
     setScope,
     create,
     reflect,
@@ -285,6 +309,7 @@ export function useJournal(): JournalState {
     remove,
     dismissLink,
     renameTheme,
+    savePersona,
     refresh,
     dismissError: () => setError(null),
   };

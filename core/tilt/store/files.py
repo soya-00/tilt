@@ -16,7 +16,7 @@ from pathlib import Path
 import frontmatter
 from ulid import ULID
 
-from tilt.models import Entry, EntryKind, Provenance, ReplyKind, utcnow
+from tilt.models import Entry, EntryKind, LinkRecord, Provenance, ReplyKind, utcnow
 
 # Frontmatter keys that carry structure. Anything else is passed through
 # untouched so hand-edited files never lose data on rewrite.
@@ -32,6 +32,8 @@ _KNOWN_KEYS = {
     "source_url",
     "reply_kind",
     "tags",
+    "themes",
+    "links",
 }
 
 
@@ -80,6 +82,18 @@ def parse(path: Path) -> Entry:
     if isinstance(tags, str):
         tags = [t.strip() for t in tags.split(",") if t.strip()]
 
+    themes = meta.get("themes") or []
+    if isinstance(themes, str):
+        themes = [themes]
+
+    links: list[LinkRecord] = []
+    for raw in meta.get("links") or []:
+        if isinstance(raw, dict) and raw.get("to"):
+            try:
+                links.append(LinkRecord(**raw))
+            except Exception:  # noqa: BLE001 - one bad link must not lose the entry
+                continue
+
     return Entry(
         id=str(meta.get("id") or path.stem.split("-")[-1]),
         created=created,
@@ -92,6 +106,8 @@ def parse(path: Path) -> Entry:
         source_url=meta.get("source_url") or None,
         reply_kind=_enum(ReplyKind, "reply_kind", None),
         tags=[str(t) for t in tags],
+        theme_labels=[str(t) for t in themes],
+        links=links,
         body=post.content.strip(),
     )
 
@@ -122,6 +138,8 @@ def write(entry: Entry, root: Path, *, preserve_extra_from: Path | None = None) 
         **({"source_url": entry.source_url} if entry.source_url else {}),
         **({"reply_kind": entry.reply_kind.value} if entry.reply_kind else {}),
         "tags": entry.tags,
+        **({"themes": entry.theme_labels} if entry.theme_labels else {}),
+        **({"links": [link.model_dump() for link in entry.links]} if entry.links else {}),
         **extra,
     }
 

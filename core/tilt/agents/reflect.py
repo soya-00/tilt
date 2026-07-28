@@ -13,10 +13,13 @@ from __future__ import annotations
 from tilt.agents.ledger import MeteredProvider
 from tilt.journal import Journal
 from tilt.models import Entry, ReplyKind
+from tilt.persona import Persona
 
 JOB = "reflect"
 
 SYSTEM = """You are the reflective faculty of a private journal called Tilt.
+
+{persona}
 
 Your purpose is to help the writer understand their own thinking. You are not an
 assistant, a coach, or a productivity tool.
@@ -45,11 +48,17 @@ def build_prompt(entry: Entry, context: list[Entry]) -> str:
     return "\n\n".join(parts)
 
 
+def system_prompt(persona: Persona | None = None) -> str:
+    """The reflection instruction, carrying the agent's chosen identity."""
+    return SYSTEM.format(persona=(persona or Persona()).as_instruction())
+
+
 async def reflect_on(
     journal: Journal,
     provider: MeteredProvider,
     entry_id: str,
     *,
+    persona: Persona | None = None,
     interactive: bool = True,
 ) -> Entry | None:
     """Generate a reflection and thread it under the entry.
@@ -65,6 +74,6 @@ async def reflect_on(
     context = journal.context_for(entry_id)
     prompt = build_prompt(entry, context)
     completion = await provider.complete(
-        prompt, job=JOB, system=SYSTEM, interactive=interactive
+        prompt, job=JOB, system=system_prompt(persona), interactive=interactive
     )
     return journal.add_reply(entry_id, completion.text, ReplyKind.REFLECTION)

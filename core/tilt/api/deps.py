@@ -12,6 +12,7 @@ from fastapi import Request
 from tilt.agents.ledger import MeteredProvider
 from tilt.config import Settings
 from tilt.journal import Journal
+from tilt.persona import PersonaStore
 
 
 def get_journal(request: Request) -> Journal:
@@ -24,3 +25,7 @@ def get_provider(request: Request) -> MeteredProvider:
 
 def get_settings_dep(request: Request) -> Settings:
     return request.app.state.settings
+
+
+def get_persona_store(request: Request) -> PersonaStore:
+    return request.app.state.persona

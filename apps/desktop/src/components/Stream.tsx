@@ -2,16 +2,14 @@ import { useMemo } from "react";
 
 import { dayHeading, dayKey } from "../lib/time";
 import type { Scope, Thread } from "../lib/types";
-import { EntryItem } from "./EntryItem";
+import { ConnectionRow, DatePill, EntryRow, ReplyRow } from "./Thread";
 
 interface Props {
   threads: Thread[];
   loading: boolean;
   scope: Scope;
-  reflecting: Set<string>;
-  processing: Set<string>;
+  freshReplies: Set<string>;
   onReflect: (id: string) => void;
-  onConnect: (id: string) => void;
   onUpdate: (id: string, body: string) => void;
   onDelete: (id: string) => void;
   onDismissLink: (linkId: string) => void;
@@ -25,9 +23,10 @@ interface DayGroup {
   threads: Thread[];
 }
 
+/** Oldest first: the thread reads downward and ends at the composer. */
 function groupByDay(threads: Thread[]): DayGroup[] {
   const groups: DayGroup[] = [];
-  for (const thread of threads) {
+  for (const thread of [...threads].reverse()) {
     const key = dayKey(thread.entry.created);
     const last = groups.at(-1);
     if (last?.key === key) last.threads.push(thread);
@@ -36,34 +35,21 @@ function groupByDay(threads: Thread[]): DayGroup[] {
   return groups;
 }
 
-function emptyMessage(scope: Scope): { line: string; hint: string } {
-  if (scope.type === "theme") {
-    return { line: `Nothing in ${scope.label} yet.`, hint: "This folder is empty." };
-  }
-  if (scope.type === "tag") {
-    return { line: `Nothing tagged ${scope.tag}.`, hint: "Try another tag." };
-  }
-  return {
-    line: "Nothing here yet.",
-    hint: "Write above and press ⌘↵. Everything stays on this machine, as Markdown.",
-  };
+function emptyMessage(scope: Scope): string {
+  if (scope.type === "theme") return `Nothing in ${scope.label} yet.`;
+  if (scope.type === "tag") return `Nothing tagged ${scope.tag} yet.`;
+  return "Write a line about your day.";
 }
 
-export function Stream({ threads, loading, scope, ...handlers }: Props) {
+export function Stream({ threads, loading, scope, freshReplies, ...on }: Props) {
   const groups = useMemo(() => groupByDay(threads), [threads]);
 
-  if (loading) {
-    // No spinner. An empty field is quieter than a loading state, and the wait
-    // is milliseconds against a local service.
-    return <div className="stream__placeholder" aria-busy="true" />;
-  }
+  if (loading) return <div className="stream" aria-busy="true" />;
 
   if (threads.length === 0) {
-    const { line, hint } = emptyMessage(scope);
     return (
-      <div className="stream__empty fade">
-        <p className="stream__empty-line">{line}</p>
-        <p className="mono stream__empty-hint">{hint}</p>
+      <div className="stream">
+        <p className="stream__empty">{emptyMessage(scope)}</p>
       </div>
     );
   }
@@ -71,23 +57,41 @@ export function Stream({ threads, loading, scope, ...handlers }: Props) {
   return (
     <div className="stream">
       {groups.map((group) => (
-        <section key={group.key} className="stream__day">
-          <h2 className="micro stream__day-heading">{group.heading}</h2>
-          {group.threads.map((thread) => (
-            <EntryItem
-              key={thread.entry.id}
-              thread={thread}
-              reflecting={handlers.reflecting.has(thread.entry.id)}
-              processing={handlers.processing.has(thread.entry.id)}
-              onReflect={handlers.onReflect}
-              onConnect={handlers.onConnect}
-              onUpdate={handlers.onUpdate}
-              onDelete={handlers.onDelete}
-              onDismissLink={handlers.onDismissLink}
-              onOpenEntry={handlers.onOpenEntry}
-              onScope={handlers.onScope}
-            />
-          ))}
+        <section key={group.key} className="group">
+          <DatePill label={group.heading} />
+          {group.threads.map((thread) => {
+            const below = thread.links.length + thread.replies.length;
+            return (
+              <div key={thread.entry.id} className="group__thread">
+                <EntryRow
+                  entry={thread.entry}
+                  themes={thread.themes}
+                  connected={below > 0}
+                  onScope={on.onScope}
+                  onReflect={on.onReflect}
+                  onEdit={on.onUpdate}
+                  onDelete={on.onDelete}
+                />
+                {thread.links.map((linked, i) => (
+                  <ConnectionRow
+                    key={linked.link.id}
+                    linked={linked}
+                    connected={i < below - 1}
+                    onOpen={on.onOpenEntry}
+                    onDismiss={on.onDismissLink}
+                  />
+                ))}
+                {thread.replies.map((reply, i) => (
+                  <ReplyRow
+                    key={reply.id}
+                    entry={reply}
+                    fresh={freshReplies.has(reply.id)}
+                    connected={thread.links.length + i < below - 1}
+                  />
+                ))}
+              </div>
+            );
+          })}
         </section>
       ))}
     </div>

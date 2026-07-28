@@ -17,9 +17,10 @@ def list_stream(
     before: str | None = Query(None, description="ISO timestamp for keyset pagination"),
     theme_id: str | None = Query(None, description="Scope to one agent-created theme"),
     tag: str | None = Query(None, description="Scope to one tag"),
+    q: str | None = Query(None, description="Full-text search, returned as whole threads"),
     journal: Journal = Depends(get_journal),
 ) -> list[Thread]:
-    return journal.stream(limit=limit, before=before, theme_id=theme_id, tag=tag)
+    return journal.stream(limit=limit, before=before, theme_id=theme_id, tag=tag, query=q)
 
 
 @router.post("", response_model=Thread, status_code=status.HTTP_201_CREATED)

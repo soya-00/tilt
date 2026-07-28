@@ -4,7 +4,16 @@
  * in development this falls back to the local dev server.
  */
 
-import type { AgentRun, Entry, Scope, Status, TagCount, Theme, Thread } from "./types";
+import type {
+  AgentRun,
+  Entry,
+  Persona,
+  Scope,
+  Status,
+  TagCount,
+  Theme,
+  Thread,
+} from "./types";
 
 declare global {
   interface Window {
@@ -67,6 +76,7 @@ async function readError(response: Response): Promise<string> {
 function scopeQuery(scope: Scope): string {
   if (scope.type === "theme") return `&theme_id=${encodeURIComponent(scope.id)}`;
   if (scope.type === "tag") return `&tag=${encodeURIComponent(scope.tag)}`;
+  if (scope.type === "search") return `&q=${encodeURIComponent(scope.q)}`;
   return "";
 }
 
@@ -128,6 +138,14 @@ export const api = {
     }),
 
   runs: () => request<AgentRun[]>("/agent/runs"),
+
+  persona: () => request<Persona>("/agent/persona"),
+
+  savePersona: (payload: Partial<Persona>) =>
+    request<Persona>("/agent/persona", {
+      method: "PATCH",
+      body: JSON.stringify(payload),
+    }),
 
   rebuildIndex: () => request<{ indexed: number }>("/index/rebuild", { method: "POST" }),
 };

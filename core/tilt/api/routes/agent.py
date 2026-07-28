@@ -10,9 +10,10 @@ from tilt.agents.categorize import categorize
 from tilt.agents.connect import connect
 from tilt.agents.ledger import MeteredProvider
 from tilt.agents.reflect import reflect_on
-from tilt.api.deps import get_journal, get_provider
+from tilt.api.deps import get_journal, get_persona_store, get_provider
 from tilt.journal import Journal
 from tilt.models import Entry, Thread
+from tilt.persona import Persona, PersonaStore, PersonaUpdate
 
 router = APIRouter(prefix="/agent", tags=["agent"])
 
@@ -32,10 +33,11 @@ async def reflect(
     payload: EntryRequest,
     journal: Journal = Depends(get_journal),
     provider: MeteredProvider = Depends(get_provider),
+    store: PersonaStore = Depends(get_persona_store),
 ) -> Entry:
     """Reflect on one entry and thread the response beneath it."""
     try:
-        reply = await reflect_on(journal, provider, payload.entry_id)
+        reply = await reflect_on(journal, provider, payload.entry_id, persona=store.load())
     except (BudgetExceeded, AgentError) as exc:
         raise _surface(exc) from exc
 
@@ -96,6 +98,19 @@ async def process_entry(
     except (BudgetExceeded, AgentError) as exc:
         raise _surface(exc) from exc
     return journal.thread(payload.entry_id)
+
+
+@router.get("/persona", response_model=Persona)
+def read_persona(store: PersonaStore = Depends(get_persona_store)) -> Persona:
+    """The one agent's name and manner. There is no roster."""
+    return store.load()
+
+
+@router.patch("/persona", response_model=Persona)
+def write_persona(
+    payload: PersonaUpdate, store: PersonaStore = Depends(get_persona_store)
+) -> Persona:
+    return store.update(payload)
 
 
 @router.get("/runs")

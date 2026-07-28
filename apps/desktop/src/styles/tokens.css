@@ -1,181 +1,124 @@
 /* Tilt design tokens.
  *
- * Three influences, each doing a specific job:
+ * The thesis: the content is the interface. No header, no footer, no toolbar.
+ * Structure comes from whitespace, one hairline, and one accent used once per
+ * screen. Hierarchy is weight, size, and opacity — never coloured text or
+ * background fills.
  *
- *   Liquid Glass — surfaces are translucent and layered, with a specular top
- *     edge and a saturating blur, so panels feel like material over a lit
- *     backdrop rather than opaque rectangles. This needs something behind it to
- *     refract, which is what the ambient gradient wash in app.css provides.
- *
- *   Twitter dark — the dark palette is the "dim" navy family rather than a
- *     neutral grey, with its blue accent. Warmer and easier to sit in than
- *     true black.
- *
- *   Threaded elevation — a machine reply is connected to its entry by a rail,
- *     the way a reply sits under a post or a response nests in a mail thread.
- *     Depth comes from connection, not from stacking cards.
- *
- * The structural constant is the two-voice type system: what you write is set
- * in a humanist face, what the machine says is set in mono. */
+ * The one deliberate departure: chrome surfaces (sidebar, composer, overlays)
+ * are liquid glass — translucent, blurred, with a specular top edge. The thread
+ * itself stays flat paper: your words never sit on a card. Glass marks what is
+ * app; flatness marks what is yours.
+ */
 
 :root {
-  /* ---- Type ------------------------------------------------------------ */
-  --font-human: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Inter",
-    system-ui, sans-serif;
-  --font-machine: ui-monospace, "SF Mono", SFMono-Regular, Menlo,
-    "JetBrains Mono", monospace;
+  /* ---- Type: exactly three sizes ---------------------------------------- */
+  --font: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Inter", system-ui,
+    sans-serif;
+  --font-mono: ui-monospace, "SF Mono", SFMono-Regular, Menlo, monospace;
 
-  --text-xs: 0.6875rem;
-  --text-sm: 0.8125rem;
-  --text-md: 0.9375rem;
-  --text-lg: 1.0625rem;
-  --text-xl: 1.25rem;
+  --t-meta: 0.875rem;  /* 14 — timestamps, labels, agent attribution */
+  --t-body: 0.9375rem; /* 15 — UI text, replies */
+  --t-entry: 1.0625rem;/* 17 — what you wrote, and the composer */
 
-  --leading-prose: 1.6;
-  --leading-tight: 1.45;
-  --tracking-mono: 0.01em;
-  --tracking-caps: 0.06em;
-  --tracking-display: -0.015em;
+  --w-normal: 400;
+  --w-medium: 500;
+  --w-semi: 600; /* nothing goes heavier */
 
-  --measure: 68ch;
+  --lh-tight: 1.35;
+  --lh-body: 1.6;
 
-  /* ---- Space: 4pt grid ------------------------------------------------- */
-  --s-1: 0.25rem;
-  --s-2: 0.5rem;
-  --s-3: 0.75rem;
-  --s-4: 1rem;
-  --s-5: 1.5rem;
-  --s-6: 2rem;
-  --s-7: 3rem;
-  --s-8: 4rem;
+  /* ---- Space: 4px scale -------------------------------------------------- */
+  --s-1: 4px;
+  --s-2: 8px;
+  --s-3: 12px;
+  --s-4: 16px;
+  --s-5: 20px;
+  --s-6: 24px;
+  --s-8: 32px;
+  --s-10: 40px;
+  --s-12: 48px;
 
-  /* ---- Radii ----------------------------------------------------------- */
-  --radius-xs: 8px;
-  --radius-sm: 10px;
-  --radius-md: 16px;
-  --radius-lg: 22px;
-  --radius-xl: 30px;
-  --radius-pill: 999px;
+  --r-sm: 8px;
+  --r-md: 14px;
+  --r-lg: 18px;
+  --r-pill: 999px;
 
-  /* ---- Glass ----------------------------------------------------------- */
-  /* Saturation lift is what separates glass from plain translucency: it pulls
-   * colour out of whatever sits behind the panel. */
-  --glass-blur: blur(30px) saturate(190%);
-  --glass-blur-heavy: blur(50px) saturate(200%);
+  --gutter: 40px;   /* dot column in a thread row */
+  --sidebar: 260px;
+  --measure: 760px;
 
-  /* Thread rail width, shared by the connector and its node. */
-  --rail: 2px;
+  /* ---- Motion: nothing longer than 280ms -------------------------------- */
+  --dur-fast: 120ms;
+  --dur-base: 180ms;
+  --dur-slow: 260ms;
+  --ease: cubic-bezier(0.22, 1, 0.36, 1);
 
-  /* ---- Motion ---------------------------------------------------------- */
-  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
-  --ease-spring: cubic-bezier(0.34, 1.42, 0.64, 1);
-  --dur-fast: 130ms;
-  --dur-base: 200ms;
-  --dur-slow: 300ms;
-
-  --titlebar-h: 42px;
-  --statusbar-h: 30px;
+  /* ---- Glass (chrome only) ---------------------------------------------- */
+  --glass-blur: blur(30px) saturate(180%);
+  --glass-blur-heavy: blur(50px) saturate(190%);
 }
 
-/* ---- Light: dim white, neutral. No colour cast ------------------------- */
+/* ---- Light: dim neutral white ------------------------------------------- */
 :root,
 :root[data-theme="light"] {
   color-scheme: light;
 
-  --bg: #ececed;
-  /* Neutral greys, not tinted. The wash gives glass something to refract
-   * without staining the whole app blue. */
-  --glow-1: rgba(255, 255, 255, 0.95);
-  --glow-2: rgba(210, 210, 213, 0.55);
-  --glow-3: rgba(255, 255, 255, 0.7);
+  --bg: #f4f4f5;
+  --bg-sunken: #eaeaec;
+  --bg-hover: rgba(22, 24, 28, 0.045);
+  --bg-active: rgba(22, 24, 28, 0.08);
 
-  --surface: rgba(255, 255, 255, 0.7);
-  --surface-strong: rgba(255, 255, 255, 0.86);
-  --surface-2: rgba(245, 245, 247, 0.7);
-  --surface-hover: rgba(255, 255, 255, 0.88);
+  /* Ambient wash — greyscale, so glass refracts without a colour cast. */
+  --wash-1: rgba(255, 255, 255, 0.9);
+  --wash-2: rgba(214, 214, 218, 0.5);
 
-  /* The specular top edge that makes a panel read as glass rather than paint. */
-  --glass-edge: inset 0 1px 0 rgba(255, 255, 255, 0.85);
-  --glass-border: rgba(255, 255, 255, 0.75);
+  --glass: rgba(255, 255, 255, 0.66);
+  --glass-strong: rgba(255, 255, 255, 0.85);
+  --glass-edge: inset 0 1px 0 rgba(255, 255, 255, 0.9);
+  --glass-border: rgba(255, 255, 255, 0.7);
 
-  --fg: #0f1419;
-  --fg-strong: #000000;
-  --fg-muted: #536471;
-  --fg-faint: rgba(15, 20, 25, 0.42);
+  --ink: #16181c;
+  --ink-secondary: #5b6068; /* 4.9:1 on --bg */
+  --ink-tertiary: #9aa0a8;  /* non-essential text only */
 
-  --rule: rgba(15, 20, 25, 0.08);
-  --rule-strong: rgba(15, 20, 25, 0.14);
+  --line: rgba(22, 24, 28, 0.1);
+  --line-strong: rgba(22, 24, 28, 0.2);
 
-  --accent: #007aff;
-  --accent-hover: #0069df;
-  --accent-soft: rgba(0, 122, 255, 0.12);
-  --accent-ghost: rgba(0, 122, 255, 0.07);
-  --accent-ring: rgba(0, 122, 255, 0.3);
-  --accent-rail: rgba(0, 122, 255, 0.35);
-  --on-accent: #ffffff;
+  --accent: #0a7cff;
+  --accent-ink: #ffffff;
+  --focus: #0a7cff;
 
-  --danger: #f4212e;
-  --danger-soft: rgba(244, 33, 46, 0.1);
-
-  --shadow-card: 0 1px 2px rgba(15, 20, 25, 0.04), 0 8px 24px rgba(15, 20, 25, 0.06);
-  --shadow-raised: 0 2px 8px rgba(15, 20, 25, 0.07), 0 18px 48px rgba(15, 20, 25, 0.1);
-  --shadow-overlay: 0 12px 32px rgba(15, 20, 25, 0.12), 0 40px 90px rgba(15, 20, 25, 0.18);
-
-  --scrim: rgba(15, 20, 25, 0.16);
-  --vibrancy: rgba(255, 255, 255, 0.6);
+  --scrim: rgba(22, 24, 28, 0.18);
 }
 
-/* ---- Dark: dim neutral black. No blue cast ----------------------------- */
+/* ---- Dark: dim neutral black -------------------------------------------- */
 :root[data-theme="dark"] {
   color-scheme: dark;
 
   --bg: #0d0d0e;
-  /* Neutral lift only — the glass reads as smoked glass over black rather
-   * than as a blue gradient. */
-  --glow-1: rgba(255, 255, 255, 0.055);
-  --glow-2: rgba(255, 255, 255, 0.03);
-  --glow-3: rgba(255, 255, 255, 0.022);
+  --bg-sunken: #000000;
+  --bg-hover: rgba(255, 255, 255, 0.055);
+  --bg-active: rgba(255, 255, 255, 0.1);
 
-  --surface: rgba(40, 40, 43, 0.55);
-  --surface-strong: rgba(46, 46, 49, 0.8);
-  --surface-2: rgba(58, 58, 62, 0.55);
-  --surface-hover: rgba(52, 52, 56, 0.72);
+  --wash-1: rgba(255, 255, 255, 0.05);
+  --wash-2: rgba(255, 255, 255, 0.025);
 
-  --glass-edge: inset 0 1px 0 rgba(255, 255, 255, 0.08);
-  --glass-border: rgba(255, 255, 255, 0.1);
+  --glass: rgba(42, 42, 46, 0.52);
+  --glass-strong: rgba(46, 46, 50, 0.8);
+  --glass-edge: inset 0 1px 0 rgba(255, 255, 255, 0.07);
+  --glass-border: rgba(255, 255, 255, 0.09);
 
-  --fg: #f2f2f3;
-  --fg-strong: #ffffff;
-  --fg-muted: #9a9aa0;
-  --fg-faint: rgba(154, 154, 160, 0.68);
+  --ink: #f2f2f3;
+  --ink-secondary: #9ba0a8; /* 5.6:1 on --bg */
+  --ink-tertiary: #6b7078;
 
-  --rule: rgba(255, 255, 255, 0.1);
-  --rule-strong: rgba(255, 255, 255, 0.18);
+  --line: rgba(255, 255, 255, 0.1);
+  --line-strong: rgba(255, 255, 255, 0.22);
 
-  /* The one colour in the app. Everything else is neutral. */
-  --accent: #1d9bf0;
-  --accent-hover: #3aabf5;
-  --accent-soft: rgba(29, 155, 240, 0.18);
-  --accent-ghost: rgba(29, 155, 240, 0.1);
-  --accent-ring: rgba(29, 155, 240, 0.45);
-  --accent-rail: rgba(29, 155, 240, 0.45);
-  --on-accent: #ffffff;
+  --accent: #2f92ff;
+  --accent-ink: #06121f;
+  --focus: #2f92ff;
 
-  --danger: #f4212e;
-  --danger-soft: rgba(244, 33, 46, 0.18);
-
-  --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.5);
-  --shadow-raised: 0 6px 24px rgba(0, 0, 0, 0.6);
-  --shadow-overlay: 0 24px 80px rgba(0, 0, 0, 0.8);
-
-  --scrim: rgba(0, 0, 0, 0.62);
-  --vibrancy: rgba(22, 22, 24, 0.66);
-}
-
-@media (prefers-reduced-motion: reduce) {
-  :root {
-    --dur-fast: 0ms;
-    --dur-base: 0ms;
-    --dur-slow: 0ms;
-  }
+  --scrim: rgba(0, 0, 0, 0.6);
 }
