@@ -1,0 +1,363 @@
+/* Layout shell: titlebar, the single writing column, status bar. */
+
+.app {
+  display: grid;
+  grid-template-rows: var(--titlebar-h) 1fr var(--statusbar-h);
+  height: 100%;
+}
+
+/* ---- Titlebar ----------------------------------------------------------- */
+/* Hidden native titlebar with inset traffic lights. The app content runs to
+ * the window edge; this strip exists to be dragged and to hold one quiet mark. */
+.titlebar {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--vibrancy);
+  backdrop-filter: saturate(180%) blur(20px);
+  -webkit-backdrop-filter: saturate(180%) blur(20px);
+  border-bottom: 1px solid var(--rule);
+  user-select: none;
+}
+
+.titlebar__mark {
+  color: var(--fg-faint);
+  letter-spacing: 0.24em;
+  text-transform: lowercase;
+  transition: color var(--dur-slow) var(--ease-out);
+}
+
+.app:hover .titlebar__mark {
+  color: var(--fg-muted);
+}
+
+/* ---- Writing column ----------------------------------------------------- */
+.main {
+  min-height: 0;
+  padding: var(--s-6) var(--s-5) var(--s-8);
+}
+
+.column {
+  width: 100%;
+  max-width: var(--measure);
+  margin: 0 auto;
+}
+
+/* ---- Composer ----------------------------------------------------------- */
+.composer {
+  padding-bottom: var(--s-5);
+  border-bottom: 1px solid var(--rule);
+  margin-bottom: var(--s-6);
+}
+
+.composer--compact {
+  padding-bottom: 0;
+  border-bottom: none;
+  margin-bottom: 0;
+}
+
+.composer__input {
+  display: block;
+  width: 100%;
+  resize: none;
+  overflow-y: auto;
+  font-family: var(--font-human);
+  font-size: var(--text-lg);
+  line-height: var(--leading-prose);
+  color: var(--fg-strong);
+  background: transparent;
+  caret-color: var(--accent);
+}
+
+.composer__input::placeholder {
+  color: var(--fg-faint);
+}
+
+/* No focus ring on the writing surfaces. A blinking caret already says "type
+ * here", and an outlined box turns the Stream into a web form. */
+.composer__input:focus-visible,
+.entry__editor:focus-visible {
+  outline: none;
+}
+
+.composer__footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: var(--s-3);
+  opacity: 0;
+  transition: opacity var(--dur-base) var(--ease-out);
+}
+
+/* The affordances appear once you engage, not before. */
+.composer:hover .composer__footer,
+.composer:focus-within .composer__footer {
+  opacity: 1;
+}
+
+.composer__hint {
+  color: var(--fg-faint);
+}
+
+.composer__send {
+  font-size: var(--text-sm);
+  color: var(--fg-muted);
+  padding: var(--s-1) var(--s-3);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-sm);
+  transition:
+    color var(--dur-fast) var(--ease-out),
+    border-color var(--dur-fast) var(--ease-out);
+}
+
+.composer__send:hover:not(:disabled) {
+  color: var(--accent);
+  border-color: var(--accent-dim);
+}
+
+.composer__send:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+/* ---- Stream ------------------------------------------------------------- */
+.stream__placeholder {
+  min-height: 40vh;
+}
+
+.stream__empty {
+  padding-top: var(--s-6);
+}
+
+.stream__empty-line {
+  margin: 0 0 var(--s-2);
+  color: var(--fg-muted);
+}
+
+.stream__empty-hint {
+  margin: 0;
+  color: var(--fg-faint);
+  font-size: var(--text-sm);
+}
+
+.stream__day + .stream__day {
+  margin-top: var(--s-7);
+}
+
+.stream__day-heading {
+  margin: 0 0 var(--s-5);
+  padding-bottom: var(--s-2);
+  border-bottom: 1px solid var(--rule);
+  color: var(--fg-faint);
+}
+
+/* ---- Entry -------------------------------------------------------------- */
+.entry {
+  padding: var(--s-4) 0 var(--s-5);
+  border-radius: var(--radius-md);
+  animation: rise var(--dur-slow) var(--ease-out) both;
+}
+
+.entry--pending {
+  opacity: 0.5;
+}
+
+.entry--highlight {
+  animation: highlight 1.6s var(--ease-out);
+}
+
+@keyframes highlight {
+  0%,
+  70% {
+    background: var(--accent-ghost);
+  }
+  100% {
+    background: transparent;
+  }
+}
+
+.entry__meta {
+  display: flex;
+  align-items: center;
+  gap: var(--s-3);
+  margin-bottom: var(--s-2);
+  min-height: 1.25rem;
+}
+
+.entry__stamp {
+  color: var(--fg-faint);
+}
+
+/* Actions are invisible at rest. The Stream should be text and nothing else
+ * until you reach for something. */
+.entry__actions {
+  display: flex;
+  gap: var(--s-3);
+  opacity: 0;
+  transition: opacity var(--dur-base) var(--ease-out);
+}
+
+.entry:hover .entry__actions,
+.entry:focus-within .entry__actions {
+  opacity: 1;
+}
+
+.entry__action {
+  color: var(--fg-faint);
+  transition: color var(--dur-fast) var(--ease-out);
+}
+
+.entry__action:hover:not(:disabled) {
+  color: var(--accent);
+}
+
+.entry__action:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.entry__action--danger,
+.entry__action--danger:hover {
+  color: var(--danger);
+}
+
+.entry__body p {
+  margin: 0 0 var(--s-3);
+  color: var(--fg);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.entry__body p:last-child {
+  margin-bottom: 0;
+}
+
+.entry__editor {
+  display: block;
+  width: 100%;
+  resize: none;
+  overflow: hidden;
+  font-family: var(--font-human);
+  font-size: var(--text-md);
+  line-height: var(--leading-prose);
+  color: var(--fg-strong);
+  background: var(--bg-input);
+  border: 1px solid var(--rule-strong);
+  border-radius: var(--radius-sm);
+  padding: var(--s-3);
+  caret-color: var(--accent);
+}
+
+.entry__tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-3);
+  list-style: none;
+  margin: var(--s-3) 0 0;
+  padding: 0;
+}
+
+.entry__tag {
+  color: var(--fg-faint);
+}
+
+.entry__tag::before {
+  content: "#";
+  opacity: 0.6;
+}
+
+/* ---- Reply: the machine's voice ---------------------------------------- */
+.entry__replies {
+  margin-top: var(--s-4);
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-4);
+}
+
+.reply {
+  padding-left: var(--s-4);
+  border-left: 1px solid var(--accent-dim);
+}
+
+.reply__label {
+  display: block;
+  margin-bottom: var(--s-2);
+  color: var(--accent-dim);
+}
+
+.reply__body {
+  color: var(--fg-muted);
+  line-height: var(--leading-tight);
+}
+
+.reply__body p {
+  margin: 0 0 var(--s-3);
+  overflow-wrap: anywhere;
+}
+
+.reply__body p:last-child {
+  margin-bottom: 0;
+}
+
+.reply__note {
+  color: var(--fg-faint);
+  font-size: var(--text-xs);
+}
+
+/* Slow block-cursor pulse instead of a spinner. */
+.cursor {
+  display: inline-block;
+  color: var(--accent);
+  animation: cursor-pulse 1.4s var(--ease-out) infinite;
+}
+
+/* ---- Status bar --------------------------------------------------------- */
+.statusbar {
+  display: flex;
+  align-items: center;
+  gap: var(--s-4);
+  padding: 0 var(--s-4);
+  background: var(--vibrancy);
+  backdrop-filter: saturate(180%) blur(20px);
+  -webkit-backdrop-filter: saturate(180%) blur(20px);
+  border-top: 1px solid var(--rule);
+  user-select: none;
+}
+
+.statusbar__spacer {
+  flex: 1;
+}
+
+.statusbar__item {
+  color: var(--fg-faint);
+}
+
+.statusbar__item--muted {
+  opacity: 0.7;
+}
+
+.statusbar__item--warn {
+  color: var(--accent);
+}
+
+.statusbar--error {
+  border-top-color: var(--danger);
+}
+
+.statusbar__error {
+  color: var(--danger);
+  text-transform: none;
+  letter-spacing: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.statusbar__dismiss {
+  margin-left: auto;
+  color: var(--fg-muted);
+}
+
+.statusbar__dismiss:hover {
+  color: var(--fg);
+}

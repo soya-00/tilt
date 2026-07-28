@@ -41,7 +41,7 @@ def status(
         provider=provider.name,
         offline=offline,
         model="offline" if offline else settings.gemini_model,
-        entries=journal.index.count(),
+        entries=journal.index.count(authored_only=True),
         spend_this_month_usd=round(provider.spend_this_month(), 4),
         cost_ceiling_usd=settings.monthly_cost_ceiling_usd,
         data_dir=str(settings.data_dir),

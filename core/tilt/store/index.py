@@ -209,8 +209,17 @@ class Index:
             out.setdefault(row["parent"], []).append(_row_to_entry(row))
         return out
 
-    def count(self) -> int:
-        return self._conn.execute("SELECT COUNT(*) AS n FROM entries").fetchone()["n"]
+    def count(self, *, authored_only: bool = False) -> int:
+        """Total rows, or only what the user actually wrote.
+
+        Machine replies are stored as entries so they are searchable and survive
+        in Markdown — but counting them in a user-facing total would report four
+        entries to someone who wrote three.
+        """
+        sql = "SELECT COUNT(*) AS n FROM entries" + (
+            " WHERE kind != 'reply'" if authored_only else ""
+        )
+        return self._conn.execute(sql).fetchone()["n"]
 
     def recent_bodies(self, *, limit: int = 20, exclude: str | None = None) -> list[Entry]:
         """Recent self-authored entries — the context an agent call reads from."""

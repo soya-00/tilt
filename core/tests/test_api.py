@@ -78,6 +78,14 @@ def test_reflect_threads_a_reply_and_records_a_run(client: TestClient) -> None:
     assert runs[0]["status"] == "ok"
 
 
+def test_status_entry_count_excludes_machine_replies(client: TestClient) -> None:
+    """Someone who wrote three things must not be told they have four."""
+    entry = _create(client, "A thought worth reflecting on at some length.")
+    client.post("/agent/reflect", json={"entry_id": entry["id"]})
+
+    assert client.get("/status").json()["entries"] == 1
+
+
 def test_reflect_on_missing_entry_returns_404(client: TestClient) -> None:
     assert client.post("/agent/reflect", json={"entry_id": "nope"}).status_code == 404
 

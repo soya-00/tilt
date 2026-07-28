@@ -1,0 +1,105 @@
+/* Overlays: the command palette and quick capture.
+ *
+ * Both sit high in the viewport rather than dead centre — a centred dialog
+ * shifts your eye down and away from where you were reading, and both of these
+ * are meant to be transient. */
+
+.palette-scrim,
+.capture-scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: flex;
+  justify-content: center;
+  /* flex-start, not the default stretch — otherwise the dialog grows to the
+   * full viewport height and one search result sits above a wall of empty. */
+  align-items: flex-start;
+  padding-top: 14vh;
+  background: var(--scrim);
+  backdrop-filter: blur(2px);
+  -webkit-backdrop-filter: blur(2px);
+}
+
+.palette,
+.capture {
+  width: min(640px, calc(100vw - var(--s-6)));
+  max-height: 62vh;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-overlay);
+  border: 1px solid var(--rule-strong);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+}
+
+/* ---- Command palette ---------------------------------------------------- */
+.palette__input {
+  width: 100%;
+  padding: var(--s-4);
+  font-family: var(--font-human);
+  font-size: var(--text-lg);
+  color: var(--fg-strong);
+  background: transparent;
+  caret-color: var(--accent);
+}
+
+.palette__input::placeholder {
+  color: var(--fg-faint);
+}
+
+.palette__list {
+  list-style: none;
+  margin: 0;
+  padding: var(--s-1) 0 var(--s-2);
+  border-top: 1px solid var(--rule);
+  min-height: 0;
+}
+
+.palette__row {
+  display: flex;
+  align-items: baseline;
+  gap: var(--s-4);
+  padding: var(--s-2) var(--s-4);
+  cursor: pointer;
+}
+
+/* Selection is a ghost wash plus an accent edge — no filled bar, which would
+ * read as a web dropdown rather than an instrument. */
+.palette__row--active {
+  background: var(--accent-ghost);
+  box-shadow: inset 2px 0 0 var(--accent);
+}
+
+.palette__label {
+  flex: 1;
+  min-width: 0;
+  font-size: var(--text-sm);
+  color: var(--fg);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Journal hits are the user's own words, so they keep the human face. */
+.palette__label--entry {
+  color: var(--fg-muted);
+}
+
+.palette__hint {
+  flex-shrink: 0;
+  color: var(--fg-faint);
+}
+
+.palette__none {
+  margin: 0;
+  padding: var(--s-3) var(--s-4);
+  border-top: 1px solid var(--rule);
+  color: var(--fg-faint);
+  font-size: var(--text-sm);
+}
+
+/* ---- Quick capture ------------------------------------------------------ */
+.capture {
+  max-height: none;
+  padding: var(--s-4);
+}

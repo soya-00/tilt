@@ -1,0 +1,103 @@
+/** Typed client for the Tilt core service.
+ *
+ * The desktop shell injects the sidecar's port and per-launch token at runtime;
+ * in development this falls back to the local dev server.
+ */
+
+import type { AgentRun, Entry, Status, Thread } from "./types";
+
+declare global {
+  interface Window {
+    __TILT__?: { baseUrl?: string; token?: string };
+  }
+}
+
+const BASE_URL =
+  window.__TILT__?.baseUrl ??
+  (import.meta.env.VITE_TILT_API as string | undefined) ??
+  "http://127.0.0.1:8765";
+
+export class ApiError extends Error {
+  constructor(
+    message: string,
+    readonly status: number,
+  ) {
+    super(message);
+    this.name = "ApiError";
+  }
+}
+
+async function request<T>(path: string, init?: RequestInit): Promise<T> {
+  const token = window.__TILT__?.token;
+  let response: Response;
+
+  try {
+    response = await fetch(`${BASE_URL}${path}`, {
+      ...init,
+      headers: {
+        "Content-Type": "application/json",
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        ...init?.headers,
+      },
+    });
+  } catch {
+    // A dead sidecar is the most likely failure in the desktop shell, and it
+    // deserves a human sentence rather than "Failed to fetch".
+    throw new ApiError("Cannot reach the Tilt service.", 0);
+  }
+
+  if (!response.ok) {
+    throw new ApiError(await readError(response), response.status);
+  }
+  return response.status === 204 ? (undefined as T) : ((await response.json()) as T);
+}
+
+async function readError(response: Response): Promise<string> {
+  try {
+    const body = await response.json();
+    const detail = body?.detail;
+    if (typeof detail === "string") return detail;
+    if (Array.isArray(detail) && detail[0]?.msg) return String(detail[0].msg);
+  } catch {
+    /* fall through to the status text */
+  }
+  return response.statusText || `Request failed (${response.status})`;
+}
+
+export const api = {
+  status: () => request<Status>("/status"),
+
+  stream: (limit = 50, before?: string) =>
+    request<Thread[]>(
+      `/entries?limit=${limit}${before ? `&before=${encodeURIComponent(before)}` : ""}`,
+    ),
+
+  thread: (id: string) => request<Thread>(`/entries/${id}`),
+
+  create: (body: string, extra: Partial<{ source_url: string; tags: string[] }> = {}) =>
+    request<Thread>("/entries", {
+      method: "POST",
+      body: JSON.stringify({ body, ...extra }),
+    }),
+
+  update: (id: string, body: string) =>
+    request<Entry>(`/entries/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify({ body }),
+    }),
+
+  remove: (id: string) => request<void>(`/entries/${id}`, { method: "DELETE" }),
+
+  search: (q: string, limit = 20) =>
+    request<Entry[]>(`/entries/search?q=${encodeURIComponent(q)}&limit=${limit}`),
+
+  reflect: (entryId: string) =>
+    request<Entry>("/agent/reflect", {
+      method: "POST",
+      body: JSON.stringify({ entry_id: entryId }),
+    }),
+
+  runs: () => request<AgentRun[]>("/agent/runs"),
+
+  rebuildIndex: () => request<{ indexed: number }>("/index/rebuild", { method: "POST" }),
+};
