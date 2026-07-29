@@ -15,6 +15,7 @@ from tilt.journal import Journal
 from tilt.persona import PersonaStore
 from tilt.settings_store import SettingsStore
 from tilt.store.artifacts import ArtifactStore
+from tilt.store.brief import BriefStore
 
 
 def get_journal(request: Request) -> Journal:
@@ -31,6 +32,10 @@ def get_settings_dep(request: Request) -> Settings:
 
 def get_artifacts(request: Request) -> ArtifactStore:
     return request.app.state.artifacts
+
+
+def get_brief(request: Request) -> BriefStore:
+    return request.app.state.brief
 
 
 def get_persona_store(request: Request) -> PersonaStore:

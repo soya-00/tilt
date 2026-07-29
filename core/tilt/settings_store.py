@@ -18,11 +18,36 @@ from pathlib import Path
 
 from pydantic import BaseModel, Field
 
+MAX_FEEDS = 20
+"""More than anyone reads, and few enough that one pass cannot take all
+morning. Each feed is a request the scout makes before it decides anything."""
+
+
+def clean_feeds(urls: list[str]) -> list[str]:
+    """Trim, drop blanks and duplicates, and refuse anything that is not http.
+
+    A ``file://`` or ``data:`` URL here would make the scout fetch from the
+    machine it runs on, which is not what "watch a publication" means to anyone
+    typing into that box.
+    """
+    out: list[str] = []
+    for raw in urls:
+        url = raw.strip()
+        if url.startswith(("http://", "https://")) and url not in out:
+            out.append(url)
+    return out[:MAX_FEEDS]
+
 
 class RuntimeSettings(BaseModel):
     gemini_api_key: str = ""
     gemini_model: str = "gemini-3.6-flash"
     monthly_cost_ceiling_usd: float = Field(default=20.0, ge=0)
+    feeds: list[str] = Field(default_factory=list)
+    """Atom or RSS URLs the scout should watch, edited from inside the app.
+
+    Runtime rather than boot configuration, because which publications are
+    worth following is a thing you change your mind about — and changing it
+    should not mean restarting the service."""
 
     @property
     def has_key(self) -> bool:
@@ -33,6 +58,7 @@ class RuntimeSettingsUpdate(BaseModel):
     gemini_api_key: str | None = None
     gemini_model: str | None = None
     monthly_cost_ceiling_usd: float | None = Field(default=None, ge=0)
+    feeds: list[str] | None = None
 
 
 class PublicSettings(BaseModel):
@@ -42,6 +68,10 @@ class PublicSettings(BaseModel):
     key_hint: str
     gemini_model: str
     monthly_cost_ceiling_usd: float
+    feeds: list[str] = Field(default_factory=list)
+    """Not a secret, unlike the key — these are addresses of public pages, and
+    the whole point of them being here is that you can see and change which
+    ones the scout watches."""
 
 
 class SettingsStore:
@@ -71,6 +101,8 @@ class SettingsStore:
             current.gemini_model = payload.gemini_model.strip() or current.gemini_model
         if payload.monthly_cost_ceiling_usd is not None:
             current.monthly_cost_ceiling_usd = payload.monthly_cost_ceiling_usd
+        if payload.feeds is not None:
+            current.feeds = clean_feeds(payload.feeds)
         return self.save(current)
 
     def public(self) -> PublicSettings:
@@ -82,4 +114,5 @@ class SettingsStore:
             key_hint=f"…{key[-4:]}" if len(key) >= 4 else "",
             gemini_model=s.gemini_model,
             monthly_cost_ceiling_usd=s.monthly_cost_ceiling_usd,
+            feeds=s.feeds,
         )

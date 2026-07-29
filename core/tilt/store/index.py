@@ -336,6 +336,32 @@ class Index:
         )
         return self._conn.execute(sql).fetchone()["n"]
 
+    def open_questions(self, *, limit: int = 12) -> list[Entry]:
+        """What sources left unresolved, newest first.
+
+        Distillation already extracts these and stores them as cards, so the
+        journal knows what you have been left wondering about without anyone
+        being asked to keep a list. They are the sharpest thing to go looking
+        on behalf of: a subject is a topic, a question is a gap.
+        """
+        rows = self._conn.execute(
+            "SELECT * FROM entries WHERE kind = 'card' AND reply_kind = 'question'"
+            " ORDER BY created DESC LIMIT ?",
+            (limit,),
+        )
+        return [_row_to_entry(r) for r in rows]
+
+    def known_urls(self) -> set[str]:
+        """Every source URL the journal already holds.
+
+        Half of the scout's memory. The other half is the brief's tombstones;
+        between them, nothing already read or already refused comes back.
+        """
+        rows = self._conn.execute(
+            "SELECT source_url FROM entries WHERE source_url IS NOT NULL AND source_url != ''"
+        )
+        return {str(r["source_url"]) for r in rows}
+
     def all_entries(self) -> list[Entry]:
         """Every entry, oldest first.
 

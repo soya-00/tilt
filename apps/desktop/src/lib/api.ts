@@ -8,6 +8,7 @@ import type {
   Activity,
   AgentRun,
   Artifact,
+  BriefItem,
   DiagramScope,
   Entry,
   Graph,
@@ -158,7 +159,7 @@ export const api = {
   runs: () => request<AgentRun[]>("/agent/runs"),
 
   /** Run a scheduled job now, rather than waiting to find out at 3am. */
-  runJob: (name: "sweep" | "themes") =>
+  runJob: (name: "sweep" | "themes" | "vectors" | "scout") =>
     request<JobSummary>(`/agent/jobs/${name}`, { method: "POST" }),
 
   activity: (since: string) =>
@@ -174,7 +175,11 @@ export const api = {
 
   settings: () => request<PublicSettings>("/settings"),
 
-  saveSettings: (payload: { gemini_api_key?: string; gemini_model?: string }) =>
+  saveSettings: (payload: {
+    gemini_api_key?: string;
+    gemini_model?: string;
+    feeds?: string[];
+  }) =>
     request<PublicSettings>("/settings", { method: "PATCH", body: JSON.stringify(payload) }),
 
   ingest: (payload: { title: string; text: string; url?: string }) =>
@@ -215,4 +220,24 @@ export const api = {
   deleteDiagram: (id: string) => request<void>(`/diagrams/${id}`, { method: "DELETE" }),
 
   rebuildIndex: () => request<{ indexed: number }>("/index/rebuild", { method: "POST" }),
+
+  /* ------------------------------------------------------------------ brief */
+
+  brief: () => request<BriefItem[]>("/brief"),
+
+  /** Put something here yourself. A link, a note, or both — a note with no URL
+   *  is a legitimate item, because "the second half of that book" has no
+   *  address. */
+  addToBrief: (payload: { url?: string; title?: string; why?: string }) =>
+    request<BriefItem>("/brief", { method: "POST", body: JSON.stringify(payload) }),
+
+  /** The only expensive call in the whole feature, and the only one behind a
+   *  decision a person made. Distils the link into the Stream and empties the
+   *  item out of the brief. */
+  readBriefItem: (id: string) => request<Thread>(`/brief/${id}/read`, { method: "POST" }),
+
+  /** No, and do not offer this again. A tombstone rather than a deletion — the
+   *  scout has to know what it has already put in front of you. */
+  dismissBriefItem: (id: string) =>
+    request<BriefItem>(`/brief/${id}/dismiss`, { method: "POST" }),
 };

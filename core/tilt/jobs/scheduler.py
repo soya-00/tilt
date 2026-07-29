@@ -28,6 +28,10 @@ log = logging.getLogger(__name__)
 KEEPER_MINUTE = 17
 """Not on the hour. Everything else that runs at 3am runs at 3:00."""
 
+SCOUT_MINUTE = 41
+"""Same reason, and not the keeper's minute either — two model-calling jobs
+waking together would race for the same ceiling check."""
+
 
 class Schedule:
     """The scheduled half of the agent layer.
@@ -81,6 +85,17 @@ class Schedule:
             args=["vectors"],
             id="vectors",
             name="Embed new entries",
+        )
+        # A cron rather than an interval, and the only job here whose schedule
+        # is about the reader rather than the backlog. Nothing accumulates that
+        # this drains — it goes and looks — so running it more often would only
+        # fill the brief faster than anyone empties it.
+        scheduler.add_job(
+            self._run,
+            CronTrigger(hour=self._settings.scout_hour, minute=SCOUT_MINUTE),
+            args=["scout"],
+            id="scout",
+            name="Look for something worth reading",
         )
         scheduler.start()
         self._scheduler = scheduler

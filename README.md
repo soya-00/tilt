@@ -47,6 +47,12 @@ Five loops are in: **inputting, categorising, connecting, distilling, seeing.**
   a search, and it picks the form: a mindmap when these are facets of one
   preoccupation, a flowchart when one thing leads to another, a state diagram
   when a position moved. Saved as Markdown beside your journal.
+- **The brief** (`⌘B`) — reading that has not happened yet, filled from both
+  sides. You put things there; once a day the agent looks through the feeds you
+  named and whatever arXiv has on your subjects, and adds at most two, each with
+  one line on which of your open questions it might answer. Read one and it goes
+  through the same distillation as anything you paste; dismiss it and it is
+  never offered again. Nothing in it is in your journal until you choose it.
 - **Sidebar** — navigate folders and tags the agent produced, kept deliberately
   few (see below). Rename a folder to pin its name against future agent edits;
   delete one, in two clicks, when the agent's guess about how your thinking
@@ -187,6 +193,34 @@ The index is free to rebuild from Markdown and the app says so; vectors were
 bought from a hosted model, so throwing them away has a price. Two files means
 either can be discarded without paying for the other.
 
+### A shelf, not a queue
+
+A daily list of things to read is the one shape this app's own rule excludes:
+*does its output make you do something, or understand something?* A digest that
+fills faster than it empties makes you do something, and the something is
+triage.
+
+Two decisions are what keep the brief on the right side of that line.
+
+**The scout never writes to the journal.** It proposes; you decide. Gathering
+is free — feeds are XML — and triage is one call over titles and abstracts,
+asked for at most two and told that zero is the usual answer. Reading is the
+expensive step and it never happens without you. An unattended scout distilling
+five findings a day would spend about $2.50 a month on your behalf; this one
+pays for a triage call and stops.
+
+**The brief is two-way.** It is not a digest the machine fills. You add what
+you have been meaning to read — a link, or a plain note with no link at all,
+because "the second half of that book" has no address. Both kinds carry why
+they are there, which is the first thing to go a fortnight later.
+
+Nothing in it is a task and nothing is completed. There is no count, no
+progress, no tick box, and an empty brief is not congratulated — an item leaves
+by becoming journal content or by being turned down, and one that simply sits
+there is not a failure. Dismissals are kept as tombstones so the same paper is
+never offered twice, which is the fastest way to teach someone to stop opening
+a list.
+
 ### Reading someone you disagree with
 
 `contradicts` is reserved for you disagreeing with yourself — a changed mind is
@@ -278,15 +312,19 @@ process behind them.
 | Job | When | What it does |
 |---|---|---|
 | **Sweep** | every 15 min | Files and connects entries the interface never got to |
+| **Vectors** | hourly | Embeds what has been written since the last pass |
 | **Theme-keeper** | nightly, 03:17 | Merges duplicate folders, retires quiet ones, drops empty ones |
+| **Scout** | daily, 06:41 | Looks through your feeds and proposes at most two things to read |
 
-The two are shaped differently on purpose. A backlog can appear at any hour — a
+They are shaped differently on purpose. A backlog can appear at any hour — a
 thought caught with `⌥Space` while the window was closed, one written when a
 call failed — so the sweep is an interval, cheap enough to run constantly
 because it costs one indexed query when there is nothing waiting. The
 theme-keeper rearranges the sidebar, and watching folders move under the cursor
 is disorienting, so it is a cron and it runs overnight. Not on the hour:
-everything else that runs at 3am runs at 3:00.
+everything else that runs at 3am runs at 3:00. The scout is a cron for a
+different reason — nothing accumulates that it drains, so running it more often
+would only fill the brief faster than anyone empties it.
 
 Both are bounded, both are idempotent, and both stop at 80% of the monthly
 ceiling rather than spending it — an interactive request must never be refused
@@ -535,7 +573,7 @@ beside it.
 | 2 | Scheduled agents: catch-up sweep, theme upkeep | done |
 | 3 | Source distillation — transcript, subtitles, PDF, link | done |
 | 4 | Constellation graph, on-demand diagrams | done |
-| 5 | Research scout, daily brief | designed |
+| 5 | Research scout, daily brief | built, unmerged |
 | 6 | Weekly synthesis, growth timeline | designed |
 
 Some of what is designed is deliberately still open.
@@ -575,6 +613,17 @@ offline provider matches keywords and would only measure itself. What is in
 place is everything the measurement needs: dismissals are kept as tombstones
 rather than deleted, so the rate per link kind is recoverable from the index
 whenever there is a corpus worth measuring.
+
+Phase 5 sits on its own branch and stays there until it has earned a merge. The
+concern is recorded rather than argued away: a brief is the closest thing in
+this app to a queue, and the way to find out whether it is one is to use it for
+a while, not to reason about it harder. Offline, the loop does close — the scout
+picked a paper because of a question written nine days earlier, and after
+distillation the sweep linked one of its ideas back to that question without
+being asked. That proves the plumbing, not the judgement: offline both the pick
+and the link are keyword overlap. Whether a real model finds something worth an
+afternoon often enough to justify the sheet is the question the branch is open
+to answer.
 
 Every proposed feature answers one question: does its output make you *do*
 something, or *understand* something? Only the second ships.

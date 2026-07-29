@@ -57,6 +57,12 @@ class Settings(BaseSettings):
     """Local hour for the nightly folder tidy. Overnight because it rearranges
     the sidebar, and watching folders move under the cursor is unsettling."""
 
+    scout_hour: int = 6
+    """Local hour for the daily look outward. Early, so whatever it found is
+    already there the first time you open the brief, and daily rather than
+    hourly because a list that fills faster than it is read is a backlog
+    whatever it is called."""
+
     cors_origins: list[str] = Field(
         default_factory=lambda: [
             "http://localhost:5173",
@@ -102,6 +108,12 @@ class Settings(BaseSettings):
         price — and the two have to be discardable independently or deleting
         the cheap one silently costs money."""
         return self.internal_dir / "vectors.db"
+
+    @property
+    def brief_dir(self) -> Path:
+        """Reading that has not happened yet. Beside the journal rather than in
+        it: none of this is a thought until you read it and it becomes one."""
+        return self.data_dir / "brief"
 
     @property
     def diagrams_dir(self) -> Path:

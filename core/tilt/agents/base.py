@@ -49,7 +49,10 @@ class Reference:
 
     url: str
     kind: str
-    """``video`` or ``article``. Decided by :mod:`tilt.ingest.route`."""
+    """``video`` or ``article``, decided by :mod:`tilt.ingest.route` — or
+    ``search``, which the scout uses to let the model go looking rather than
+    handing it something already found. In that case ``url`` is empty: there is
+    nothing to open yet, which is the point."""
 
 
 @runtime_checkable

@@ -10,7 +10,11 @@ interface Props {
   status: Status | null;
   theme: "light" | "dark";
   onClose: () => void;
-  onSave: (payload: { gemini_api_key?: string; gemini_model?: string }) => Promise<void>;
+  onSave: (payload: {
+    gemini_api_key?: string;
+    gemini_model?: string;
+    feeds?: string[];
+  }) => Promise<void>;
   onToggleTheme: () => void;
 }
 
@@ -32,12 +36,17 @@ export function Settings({
 }: Props) {
   const [key, setKey] = useState("");
   const [model, setModel] = useState(settings?.gemini_model ?? "gemini-3.6-flash");
+  /** One URL per line. A textarea rather than a chip editor: these are long,
+   *  they are pasted rather than typed, and a list you can select and delete
+   *  wholesale is the right weight for something changed twice a year. */
+  const [feeds, setFeeds] = useState("");
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     if (open) {
       setKey("");
       setModel(settings?.gemini_model ?? "gemini-3.6-flash");
+      setFeeds((settings?.feeds ?? []).join("\n"));
     }
   }, [open, settings]);
 
@@ -57,6 +66,7 @@ export function Settings({
       await onSave({
         ...(key.trim() ? { gemini_api_key: key.trim() } : {}),
         gemini_model: model,
+        feeds: feeds.split(/\n+/).map((f) => f.trim()).filter(Boolean),
       });
       onClose();
     } finally {
@@ -131,6 +141,23 @@ export function Settings({
               spellCheck={false}
               aria-label="Gemini model"
               onChange={(e) => setModel(e.target.value)}
+            />
+          </section>
+
+          <section className="sheet__section">
+            <h3 className="sheet__label">Feeds</h3>
+            <p className="sheet__note">
+              Atom or RSS the scout looks through once a day. arXiv is searched already,
+              from what your folders are about — this is for anything else worth
+              following. Leave it empty and the scout still works.
+            </p>
+            <textarea
+              className="field__input field__input--feeds"
+              value={feeds}
+              spellCheck={false}
+              placeholder={"https://example.com/feed.xml\nhttps://another.org/rss"}
+              aria-label="Feed URLs, one per line"
+              onChange={(e) => setFeeds(e.target.value)}
             />
           </section>
 

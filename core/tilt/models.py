@@ -314,3 +314,40 @@ class Artifact(BaseModel):
     """One sentence from the agent on the structure it saw."""
     subject_ids: list[str] = Field(default_factory=list)
     created: datetime
+
+
+class BriefOrigin(StrEnum):
+    SCOUT = "scout"
+    """The agent went looking and found it."""
+    YOU = "you"
+    """You put it here yourself, which is what stops this being the machine's
+    list rather than yours."""
+
+
+class BriefItem(BaseModel):
+    """Reading that has not happened yet.
+
+    Not an entry, and deliberately so. Nothing here is a thought — it is
+    something that might become one. An item leaves this list by being read,
+    at which point the usual distil path turns it into a source entry and the
+    promotion bar decides what any of it contributes.
+
+    Not a task list either, whatever it looks like from outside. Nothing in it
+    is completed; the only way out is to become journal content or to be
+    dismissed as not worth it, and an item that simply sits here is in no way
+    a failure.
+    """
+
+    id: str
+    title: str = ""
+    url: str | None = None
+    why: str = ""
+    """What made this worth proposing — the question it might answer, or your
+    own note to yourself. Without it a list of links is unreadable a week
+    later, because the reason you saved something is the first thing to go."""
+    origin: BriefOrigin = BriefOrigin.YOU
+    created: datetime
+    dismissed: bool = False
+    """Kept rather than deleted, so the scout never proposes it again. The same
+    bargain a dismissed connection strikes."""
+    path: str = ""

@@ -16,6 +16,7 @@ interface Props {
   persona: Persona | null;
   onScope: (scope: Scope) => void;
   onOpenGraph: () => void;
+  onOpenBrief: () => void;
   onRenameTheme: (themeId: string, label: string) => void;
   onDeleteTheme: (themeId: string) => void;
   onSavePersona: (payload: Partial<Persona>) => void;
@@ -57,6 +58,7 @@ export function Sidebar({
   persona,
   onScope,
   onOpenGraph,
+  onOpenBrief,
   onRenameTheme,
   onDeleteTheme,
   onSavePersona,
@@ -94,6 +96,14 @@ export function Sidebar({
             label="Constellation"
             title="See how it all connects (⌘G)"
             onClick={onOpenGraph}
+          />
+          {/* No count. A number beside this would turn a shelf into a backlog,
+              and the whole design rests on it not being one. */}
+          <NavRow
+            icon="bookmark"
+            label="Brief"
+            title="Reading you have not done yet (⌘B)"
+            onClick={onOpenBrief}
           />
         </div>
 

@@ -52,7 +52,11 @@ export interface JournalState {
   renameTheme: (themeId: string, label: string) => Promise<void>;
   deleteTheme: (themeId: string) => Promise<void>;
   savePersona: (payload: Partial<Persona>) => Promise<void>;
-  saveSettings: (payload: { gemini_api_key?: string; gemini_model?: string }) => Promise<void>;
+  saveSettings: (payload: {
+    gemini_api_key?: string;
+    gemini_model?: string;
+    feeds?: string[];
+  }) => Promise<void>;
   ingest: (payload: { title: string; text: string; url?: string }) => Promise<void>;
   ingestFile: (file: File) => Promise<void>;
   refresh: () => Promise<void>;
@@ -335,7 +339,7 @@ export function useJournal(): JournalState {
   );
 
   const saveSettings = useCallback(
-    async (payload: { gemini_api_key?: string; gemini_model?: string }) => {
+    async (payload: { gemini_api_key?: string; gemini_model?: string; feeds?: string[] }) => {
       try {
         setSettings(await api.saveSettings(payload));
         await refreshLibrary();
