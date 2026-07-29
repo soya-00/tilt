@@ -4,15 +4,18 @@
  * bridge, so the browser build is byte-for-byte the design as written. */
 
 /* The titlebar is hidden and content runs to the window edge, so the traffic
- * lights float over the top-left of the sidebar. Inset it rather than reserving
- * a strip: a strip would be a header, and this app does not have one. */
-:root[data-shell="tauri"] .sidebar {
+ * lights float over the top-left of the sidebar. Inset the list rather than the
+ * panel: the panel's glass should still run to the top of the window, and a
+ * reserved strip would be a header, which this app does not have. */
+:root[data-shell="tauri"] .sidebar__scroll {
   padding-top: 30px;
 }
 
 /* Nothing else is draggable — there is no titlebar left to grab — so the empty
- * band above the sidebar becomes the handle. */
-:root[data-shell="tauri"] .sidebar::before {
+ * band across the top of the window becomes the handle. It hangs off .app
+ * rather than the sidebar because the sidebar's own pseudo-elements are spoken
+ * for by the glass rim. */
+:root[data-shell="tauri"] .app::after {
   content: "";
   position: fixed;
   top: 0;
@@ -46,17 +49,25 @@
   height: 100dvh;
   padding: var(--s-4);
   border-radius: 14px; /* matches the radius the shell rounds the window to */
-  border: 1px solid var(--glass-border);
-  box-shadow: var(--glass-edge);
-  /* Faint, not opaque: the vibrancy behind it is doing most of the work. */
-  background: var(--glass);
   animation: capture-in var(--dur-slow) var(--ease) both;
 }
 
-/* Outside the shell the same view has no vibrant window under it, so it falls
- * back to the app's own glass over the ambient wash. */
+/* Under the shell macOS supplies real vibrancy behind this window, so the
+ * material is already there — drop our own blur and most of the fill and keep
+ * only the rim, which the system does not draw. */
+:root[data-shell="tauri"] .capture-window {
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  background: var(--glass);
+  box-shadow: var(--glass-edge);
+}
+
+/* Outside the shell it has nothing vibrant under it, so it falls back to the
+ * app's own heaviest glass over the ambient wash. */
 :root:not([data-shell="tauri"]) .capture-window {
-  background: var(--glass-strong);
+  background:
+    linear-gradient(var(--sheen-angle), var(--sheen), transparent 46%),
+    var(--glass-strong);
   backdrop-filter: var(--glass-blur-heavy);
   -webkit-backdrop-filter: var(--glass-blur-heavy);
 }

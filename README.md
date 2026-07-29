@@ -30,8 +30,10 @@ The three core loops are in: **inputting, categorising, connecting.**
   `contradicts`, or `bridges to`, each with a one-line reason. Dismiss in one
   click; a dismissed pair is never proposed again.
 - **Sidebar** — navigate folders and tags the agent produced. Rename a folder to
-  pin its name against future agent edits; there is deliberately no way to
-  create one by hand.
+  pin its name against future agent edits; delete one, in two clicks, when the
+  agent's guess about how your thinking divides up is simply wrong. Deleting a
+  folder keeps every entry that was in it. There is deliberately no way to
+  create one by hand — a folder you maintain is filing work.
 - **Search** — full-text from the bar at the top; results arrive as whole
   threads, folders and connections intact.
 - **One agent, yours** — a single reflective voice with a name and a personality
@@ -55,11 +57,23 @@ deleted and rebuilt at any time.
 
 Three influences, each doing a specific job.
 
-**Liquid glass.** Surfaces are translucent and layered, with a specular top edge
-and a saturating blur, so panels read as material over a lit backdrop rather
-than opaque rectangles. Glass has nothing to refract over a flat fill, so a
-fixed ambient gradient wash sits behind everything and each panel picks it up as
-it scrolls past.
+**Liquid glass.** Surfaces are translucent and layered — a saturating blur for
+refraction, a broad sheen for the light scattering inside the slab, and a
+specular rim around the edge. The rim is the part that sells it: a glass edge is
+a curved surface, so its brightness varies with the angle between the surface
+normal and the light. It runs near-white where the edge turns into the light,
+falls away on the flanks, and picks up a second, weaker highlight on the far
+side where light leaves through the back face. On a pale ground the dim stops
+are ink rather than white, because an edge turned away from the light stops
+reflecting and starts showing its own thickness.
+
+There is one light, fixed in the window, and every highlight in the app derives
+from it. Nothing is lit by the pointer: a highlight that chases the cursor only
+tells you where your cursor is, and it breaks the illusion the material depends
+on — that these are objects sitting in a lit room rather than rectangles
+reacting to input. Glass has nothing to refract over a flat fill, so a fixed
+ambient gradient wash sits behind everything and each panel picks it up as it
+scrolls past.
 
 **Threaded elevation.** A machine reply is connected to its entry by a rail with
 a node where the two meet — the way a reply hangs off a post or nests in a mail
@@ -282,7 +296,9 @@ With both processes running, open http://localhost:5173 and walk this path:
    *nothing*. A connector that links everything is worthless, so silence here is
    the result that matters.
 5. **Click a folder or tag** in the sidebar to scope the Stream. Double-click a
-   folder to rename it, which pins the name against future agent edits.
+   folder to rename it, which pins the name against future agent edits. Hover a
+   folder and press the bin, twice, to delete it — the folder goes, the thoughts
+   filed under it stay exactly where you wrote them.
 6. **Hover a tag** to see its colour; click it to scope. **Search** from the top
    bar. **`⌘K`** for commands, **`⌥Space`** for quick capture, and **reflect** on
    any entry for a threaded response.

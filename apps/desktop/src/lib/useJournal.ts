@@ -50,6 +50,7 @@ export interface JournalState {
   remove: (entryId: string) => Promise<void>;
   dismissLink: (linkId: string) => Promise<void>;
   renameTheme: (themeId: string, label: string) => Promise<void>;
+  deleteTheme: (themeId: string) => Promise<void>;
   savePersona: (payload: Partial<Persona>) => Promise<void>;
   saveSettings: (payload: { gemini_api_key?: string; gemini_model?: string }) => Promise<void>;
   ingest: (payload: { title: string; text: string; url?: string }) => Promise<void>;
@@ -293,6 +294,34 @@ export function useJournal(): JournalState {
     [refreshLibrary],
   );
 
+  const deleteTheme = useCallback(
+    async (themeId: string) => {
+      // Drop it from the sidebar first: the request has to reach disk to
+      // rewrite every affected entry's frontmatter, and a folder that lingers
+      // for that long after you deleted it reads as a failure.
+      const snapshot = themes;
+      const threadSnapshot = threadsRef.current;
+      setThemes((prev) => prev.filter((t) => t.id !== themeId));
+      // Entries on screen are still wearing the folder as a chip.
+      setThreads((prev) =>
+        prev.map((t) => ({ ...t, themes: t.themes.filter((th) => th.id !== themeId) })),
+      );
+      // And the stream may be scoped to a folder that no longer exists.
+      setScope((current) =>
+        current.type === "theme" && current.id === themeId ? { type: "all" } : current,
+      );
+      try {
+        await api.deleteTheme(themeId);
+        await refreshLibrary();
+      } catch (err) {
+        setThemes(snapshot);
+        setThreads(threadSnapshot);
+        setError(describe(err));
+      }
+    },
+    [refreshLibrary, themes],
+  );
+
   const savePersona = useCallback(
     async (payload: Partial<Persona>) => {
       try {
@@ -351,6 +380,7 @@ export function useJournal(): JournalState {
     remove,
     dismissLink,
     renameTheme,
+    deleteTheme,
     savePersona,
     saveSettings,
     ingest,

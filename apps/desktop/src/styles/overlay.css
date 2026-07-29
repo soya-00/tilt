@@ -17,19 +17,19 @@
   -webkit-backdrop-filter: blur(8px) saturate(140%);
 }
 
+/* Material comes from .glass --heavy. These only set the box: no background,
+ * no border, no shadow, so nothing here can out-specify the rim. */
 .palette,
 .capture {
   width: min(620px, calc(100vw - var(--s-8)));
   max-height: 60vh;
   display: flex;
   flex-direction: column;
+  /* Clips the list's corners. Safe for the rim: the scrolling element is the
+     list inside, not this box, so the highlight has nothing to scroll away
+     from. */
   overflow: hidden;
-  border: 1px solid var(--glass-border);
   border-radius: var(--r-lg);
-  background: var(--glass-strong);
-  backdrop-filter: var(--glass-blur-heavy);
-  -webkit-backdrop-filter: var(--glass-blur-heavy);
-  box-shadow: var(--glass-edge);
   animation: row-in var(--dur-slow) var(--ease) both;
 }
 

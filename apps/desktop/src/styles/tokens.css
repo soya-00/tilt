@@ -42,6 +42,7 @@
   --r-sm: 8px;
   --r-md: 14px;
   --r-lg: 18px;
+  --r-xl: 28px;
   --r-pill: 999px;
 
   --gutter: 40px;   /* dot column in a thread row */
@@ -53,10 +54,25 @@
   --dur-base: 180ms;
   --dur-slow: 260ms;
   --ease: cubic-bezier(0.22, 1, 0.36, 1);
+  /* Overshoots and settles. Glass that snaps to a stop reads as a diagram of a
+     material; a small rebound reads as the material itself. */
+  --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
 
   /* ---- Glass (chrome only) ---------------------------------------------- */
   --glass-blur: blur(30px) saturate(180%);
   --glass-blur-heavy: blur(50px) saturate(190%);
+
+  /* One light, fixed in the window, up and to the left. Every specular
+     highlight in the app is derived from this angle and nothing else — most of
+     all, not from the pointer.
+
+     --light is a conic angle (0deg = twelve o'clock, clockwise), used to place
+     the rim highlight around an edge. --sheen-angle is the same light as a
+     linear direction, for the broad wash across a face: a gradient pointing
+     away from the light is its conic bearing less a half turn. */
+  --light: 312deg;
+  --sheen-angle: 132deg;
+  --rim: 1.25px;
 }
 
 /* ---- Light: dim neutral white ------------------------------------------- */
@@ -75,8 +91,31 @@
 
   --glass: rgba(255, 255, 255, 0.66);
   --glass-strong: rgba(255, 255, 255, 0.85);
-  --glass-edge: inset 0 1px 0 rgba(255, 255, 255, 0.9);
   --glass-border: rgba(255, 255, 255, 0.7);
+
+  /* Specular rim, sampled around the edge. --rim-hi is the face turned into
+     the light; --rim-lo the flanks, where the normal is square to the light and
+     almost nothing reflects; --rim-mid the far side.
+
+     On a pale ground the two dim stops are ink rather than white. A glass edge
+     turned away from the light does not merely stop reflecting — you start
+     seeing through its thickness, and against a light surface that reads as a
+     dark line. A white highlight there would be invisible anyway, so the rim
+     runs bright at the top-left and darkens toward the bottom-right, which is
+     also the only thing separating a panel from the page behind it. */
+  --rim-hi: rgba(255, 255, 255, 0.98);
+  --rim-mid: rgba(22, 24, 28, 0.17);
+  --rim-lo: rgba(22, 24, 28, 0.09);
+
+  /* The broad scatter inside the slab, and the light that bounces up off
+     whatever the panel sits on. */
+  --sheen: rgba(255, 255, 255, 0.5);
+  --glass-edge:
+    inset 0 1px 0 rgba(255, 255, 255, 0.9),
+    inset 0 -1px 0 rgba(255, 255, 255, 0.45);
+  --glass-depth:
+    0 1px 2px rgba(22, 24, 28, 0.05),
+    0 10px 28px -10px rgba(22, 24, 28, 0.16);
 
   --ink: #16181c;
   --ink-secondary: #5b6068; /* 4.9:1 on --bg */
@@ -106,8 +145,23 @@
 
   --glass: rgba(42, 42, 46, 0.52);
   --glass-strong: rgba(46, 46, 50, 0.8);
-  --glass-edge: inset 0 1px 0 rgba(255, 255, 255, 0.07);
   --glass-border: rgba(255, 255, 255, 0.09);
+
+  /* Same model, and here it stays white the whole way round: against a dark
+     ground a darker edge is nothing at all, so the far side keeps the second,
+     weaker highlight it gets from light leaving through the back face. The rim
+     is the only thing telling you the panel has any thickness. */
+  --rim-hi: rgba(255, 255, 255, 0.7);
+  --rim-mid: rgba(255, 255, 255, 0.26);
+  --rim-lo: rgba(255, 255, 255, 0.06);
+
+  --sheen: rgba(255, 255, 255, 0.1);
+  --glass-edge:
+    inset 0 1px 0 rgba(255, 255, 255, 0.1),
+    inset 0 -1px 0 rgba(255, 255, 255, 0.04);
+  --glass-depth:
+    0 1px 2px rgba(0, 0, 0, 0.4),
+    0 12px 32px -12px rgba(0, 0, 0, 0.7);
 
   --ink: #f2f2f3;
   --ink-secondary: #9ba0a8; /* 5.6:1 on --bg */

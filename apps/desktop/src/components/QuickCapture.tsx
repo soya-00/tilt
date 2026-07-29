@@ -31,7 +31,7 @@ export function QuickCapture({ open, onSubmit, onClose }: Props) {
   return (
     <div className="capture-scrim fade" onMouseDown={onClose} role="presentation">
       <div
-        className="capture rise"
+        className="capture rise glass glass--heavy"
         role="dialog"
         aria-modal="true"
         aria-label="Quick capture"
