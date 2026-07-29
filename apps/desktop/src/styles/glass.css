@@ -99,8 +99,14 @@
 /* ---- Interactive glass --------------------------------------------------- */
 /* A control made of the same material, which means it also has to behave like
    it: the rim flares as it turns toward the light on hover, and it compresses
-   under a press rather than merely getting darker. */
-.glass-btn {
+   under a press rather than merely getting darker.
+ *
+ * Deliberately rare. The composer's three controls are made of it — add, attach
+ * and keep — because that row is where you act, and everything else in the app
+ * stays a bare glyph. Applied everywhere it stops being a material and becomes
+ * a texture, and the row that matters stops standing out at all. */
+.glass-btn,
+.icon-btn--outlined {
   position: relative;
   isolation: isolate;
   overflow: hidden;
@@ -117,7 +123,8 @@
     color var(--dur-fast) var(--ease);
 }
 
-.glass-btn::before {
+.glass-btn::before,
+.icon-btn--outlined::before {
   content: "";
   position: absolute;
   inset: 0;
@@ -149,7 +156,8 @@
    off the left edge until the control is hovered. This is the one specular
    that moves, and it moves because the object moved, not because the pointer
    did. */
-.glass-btn::after {
+.glass-btn::after,
+.icon-btn--outlined::after {
   content: "";
   position: absolute;
   inset: -40%;
@@ -167,21 +175,25 @@
   opacity: 0;
 }
 
-.glass-btn > * {
+.glass-btn > *,
+.icon-btn--outlined > * {
   position: relative;
   z-index: 3;
 }
 
-.glass-btn:hover:not(:disabled) {
+.glass-btn:hover:not(:disabled),
+.icon-btn--outlined:hover:not(:disabled) {
   transform: translateY(-1px);
   box-shadow: var(--glass-edge), var(--glass-depth), 0 0 0 4px var(--bg-hover);
 }
 
-.glass-btn:hover:not(:disabled)::before {
+.glass-btn:hover:not(:disabled)::before,
+.icon-btn--outlined:hover:not(:disabled)::before {
   filter: brightness(1.35);
 }
 
-.glass-btn:hover:not(:disabled)::after {
+.glass-btn:hover:not(:disabled)::after,
+.icon-btn--outlined:hover:not(:disabled)::after {
   opacity: 0.55;
   animation: glass-sweep 720ms var(--ease) both;
 }
@@ -189,18 +201,21 @@
 /* Glass under pressure: it squashes across the axis of the press and springs
    back, which is what makes it read as a soft solid rather than a button
    graphic that got smaller. */
-.glass-btn:active:not(:disabled) {
+.glass-btn:active:not(:disabled),
+.icon-btn--outlined:active:not(:disabled) {
   transform: translateY(0) scale(0.92);
   transition-duration: var(--dur-fast);
 }
 
-.glass-btn:disabled {
+.glass-btn:disabled,
+.icon-btn--outlined:disabled {
   color: var(--ink-tertiary);
   cursor: default;
   box-shadow: var(--glass-edge);
 }
 
-.glass-btn:disabled::before {
+.glass-btn:disabled::before,
+.icon-btn--outlined:disabled::before {
   opacity: 0.4;
 }
 
@@ -219,7 +234,8 @@
    panel — which is what an unsupported mask would otherwise leave behind. */
 @supports not ((mask-composite: exclude) or (-webkit-mask-composite: xor)) {
   .glass::before,
-  .glass-btn::before {
+  .glass-btn::before,
+.icon-btn--outlined::before {
     padding: 0;
     background: none;
     box-shadow: inset 0 0 0 1px var(--glass-border);
@@ -228,15 +244,18 @@
 
 @media (prefers-reduced-motion: reduce) {
   .glass-btn,
-  .glass-btn::before {
+  .glass-btn::before,
+.icon-btn--outlined::before {
     transition: none;
   }
 
-  .glass-btn:hover:not(:disabled) {
+  .glass-btn:hover:not(:disabled),
+.icon-btn--outlined:hover:not(:disabled) {
     transform: none;
   }
 
-  .glass-btn:hover:not(:disabled)::after {
+  .glass-btn:hover:not(:disabled)::after,
+.icon-btn--outlined:hover:not(:disabled)::after {
     animation: none;
     opacity: 0;
   }

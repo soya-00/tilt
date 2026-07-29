@@ -225,8 +225,12 @@ export default function App() {
         <div className="pane__strip">
           <SearchBar scope={scope} onScope={setScope} />
           {scopeLabel && (
-            <button className="scope-chip" onClick={() => setScope({ type: "all" })}>
-              {scopeLabel}
+            <button
+              className="scope-chip"
+              title={scopeLabel}
+              onClick={() => setScope({ type: "all" })}
+            >
+              <span className="scope-chip__label">{scopeLabel}</span>
               <span className="scope-chip__clear">clear</span>
             </button>
           )}

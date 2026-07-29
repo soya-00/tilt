@@ -325,19 +325,34 @@
   color: var(--ink-tertiary);
 }
 
+/* A folder name can be any length the agent felt like, so the chip has to be
+   able to give up on showing all of it. Without a bound "Personal Computing"
+   wrapped to a second line and left "clear" stranded beside the first. */
 .scope-chip {
   display: inline-flex;
   align-items: baseline;
   gap: var(--s-2);
+  flex: none;
+  max-width: 260px;
   padding: var(--s-1) var(--s-3);
   border-radius: var(--r-pill);
   background: var(--bg-active);
   font-size: var(--t-meta);
   font-weight: var(--w-semi);
   color: var(--ink);
+  white-space: nowrap;
+}
+
+/* The name yields, never the affordance: a chip that truncated "clear" would
+   be a control with no visible way out of it. */
+.scope-chip__label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .scope-chip__clear {
+  flex: none;
   font-weight: var(--w-normal);
   color: var(--ink-secondary);
 }
@@ -770,6 +785,12 @@
   height: 40px;
   border-radius: var(--r-pill);
   color: var(--ink-secondary);
+}
+
+/* Scoped away from the two composer controls, which are made of glass and own
+   their own transitions — an unscoped `transition: color` here loads after
+   glass.css and would quietly drop their lift and squish. */
+.icon-btn:not(.icon-btn--outlined) {
   transition: color var(--dur-fast) var(--ease);
 }
 
@@ -779,14 +800,14 @@
 }
 
 .icon-btn--outlined {
-  border: 1px solid var(--line-strong);
   padding: 0 var(--s-3);
 }
 
-/* The send affordance in full: border and glyph strengthen. Never a fill. */
+/* The send affordance in full: the glyph strengthens and the rim tightens into
+   a ring. Never a fill. */
 .icon-btn--ready {
-  border-color: var(--ink);
   color: var(--ink);
+  box-shadow: var(--glass-edge), var(--glass-depth), inset 0 0 0 1px var(--ink);
 }
 
 .icon-btn:disabled {
