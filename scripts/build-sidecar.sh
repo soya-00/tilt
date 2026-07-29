@@ -28,6 +28,28 @@ if [ ! -x "$PY" ]; then
   exit 1
 fi
 
+# `timeout` is GNU coreutils, and macOS does not ship it — which is the one
+# platform this script exists to build for. Rather than make the build depend on
+# `brew install coreutils`, this is the same idea in portable shell: start the
+# command, start a watchdog beside it, and let whichever finishes first decide.
+# `wait` returns the moment the command exits, so a passing check costs nothing.
+with_timeout() {
+  local limit="$1"
+  shift
+  "$@" &
+  local pid=$!
+  (
+    sleep "$limit"
+    kill -9 "$pid" 2>/dev/null
+  ) &
+  local killer=$!
+  local status=0
+  wait "$pid" || status=$?
+  kill "$killer" 2>/dev/null || true
+  wait "$killer" 2>/dev/null || true
+  return "$status"
+}
+
 echo "→ ensuring PyInstaller is available"
 "$PY" -m pip install --quiet --upgrade 'pyinstaller>=6.11'
 
@@ -42,8 +64,10 @@ echo "→ installing into the bundle"
 find "$DEST" -mindepth 1 ! -name README.md -delete
 cp -R "$CORE/dist/tilt-core/." "$DEST/"
 
+# Generous, because this is the binary's first run: on macOS an unsigned bundle
+# pays for Gatekeeper's scan before a single byte of it executes.
 echo "→ verifying it starts and reports a port"
-if ! timeout 60 "$DEST/tilt-core" --self-check; then
+if ! with_timeout 180 "$DEST/tilt-core" --self-check; then
   echo "The packaged core did not come up. The bundle is incomplete." >&2
   exit 1
 fi
