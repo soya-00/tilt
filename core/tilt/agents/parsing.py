@@ -14,6 +14,8 @@ from __future__ import annotations
 
 import json
 import re
+from collections.abc import Iterable
+from difflib import SequenceMatcher
 from typing import Any
 
 # A wrapped string reads far better here than sixty quoted list items.
@@ -133,3 +135,66 @@ def clean_label(raw: Any, *, limit: int = 40) -> str:
     if label.islower() or label.isupper():
         label = label.title()
     return label[:limit]
+
+
+# --------------------------------------------------------------- vocabulary
+#
+# A journal's folders and tags are a vocabulary, and a vocabulary is only worth
+# having if it is small enough to recognise. Left alone a model will happily
+# mint "Attention", "Attentional Control" and "Attention Economy" across three
+# nights, each with one member, and the sidebar becomes a list of things you
+# wrote once. The prompt asks for reuse; this is what does not depend on asking.
+
+
+def _singular(word: str) -> str:
+    """Crude, deliberately. Only the endings that are safe without a lexicon."""
+    if len(word) > 4 and word.endswith("ies"):
+        return word[:-3] + "y"
+    if len(word) > 4 and word.endswith(("ses", "xes", "zes", "ches", "shes")):
+        return word[:-2]
+    if len(word) > 3 and word.endswith("s") and not word.endswith(("ss", "us", "is")):
+        return word[:-1]
+    return word
+
+
+def canonical(term: str) -> str:
+    """The comparison key for a tag or a folder name.
+
+    Case, punctuation and plurality are not distinctions anyone is making on
+    purpose: "Attention", "attention" and "attentions" are one subject that
+    would otherwise occupy three rows of the sidebar.
+    """
+    words = re.findall(r"[a-z0-9']+", term.lower())
+    return " ".join(_singular(w) for w in words)
+
+
+def snap(proposed: str, existing: Iterable[str], *, threshold: float = 0.9) -> str | None:
+    """The existing term this is really proposing, or ``None`` for a new one.
+
+    Exact match on the canonical form first, then near-match by edit ratio. The
+    threshold is high on purpose, and the asymmetry is the reason: a duplicate
+    folder is cheap to fix — the nightly keeper merges it and you can delete it
+    by hand — while folding two genuinely different subjects together destroys a
+    distinction the writer was making and cannot be undone from the interface.
+    When unsure, mint the duplicate.
+    """
+    key = canonical(proposed)
+    if not key:
+        return None
+
+    best: tuple[float, str] | None = None
+    for term in existing:
+        other = canonical(term)
+        if not other:
+            continue
+        if other == key:
+            return term
+        # Never snap a single word onto a phrase or vice versa. "Memory" and
+        # "Memory And Attention" score well above the threshold and are not the
+        # same folder — the second is a claim about the first meeting something.
+        if other.count(" ") != key.count(" "):
+            continue
+        ratio = SequenceMatcher(None, key, other).ratio()
+        if ratio >= threshold and (best is None or ratio > best[0]):
+            best = (ratio, term)
+    return best[1] if best else None
