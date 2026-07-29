@@ -112,3 +112,24 @@ def test_delete_theme_endpoint_keeps_the_entries(client: TestClient) -> None:
 
 def test_delete_missing_theme_returns_404(client: TestClient) -> None:
     assert client.delete("/themes/nope").status_code == 404
+
+
+def test_status_names_what_is_asleep_without_a_key(client: TestClient) -> None:
+    """Without a key the app still writes, files, connects and draws, so nothing
+    looks broken — and what is missing is exactly what nobody would think to go
+    looking for. Settings shows this list beside the key field."""
+    body = client.get("/status").json()
+    assert body["offline"] is True
+    assert body["dormant"], "an offline service must say what it cannot do"
+    assert any("share no words" in d["capability"] for d in body["dormant"])
+    assert all(d["why"].strip() for d in body["dormant"]), "each needs a reason"
+
+
+def test_status_says_nothing_is_asleep_once_a_key_is_present(
+    client: TestClient, settings
+) -> None:
+    # `offline` is derived from which provider is actually wired up, not from
+    # whether a key happens to be in settings — so this fakes the provider.
+    settings.gemini_api_key = "test-key"
+    client.app.state.provider._provider.name = "gemini"
+    assert client.get("/status").json()["dormant"] == []

@@ -97,6 +97,13 @@ export interface Status {
   spend_this_month_usd: number;
   cost_ceiling_usd: number;
   data_dir: string;
+  /** What is asleep for want of a key. Empty when one is configured. */
+  dormant: Dormant[];
+}
+
+export interface Dormant {
+  capability: string;
+  why: string;
 }
 
 export interface AgentRun {

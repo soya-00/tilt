@@ -14,6 +14,7 @@ from collections.abc import Awaitable, Callable
 from tilt.agents.ledger import MeteredProvider
 from tilt.jobs.sweep import sweep
 from tilt.jobs.themes import keep_themes
+from tilt.jobs.vectors import embed_pending
 from tilt.journal import Journal
 from tilt.models import AgentRun, JobSummary, utcnow
 from tilt.store.files import new_id
@@ -22,7 +23,7 @@ log = logging.getLogger(__name__)
 
 Job = Callable[[Journal, MeteredProvider], Awaitable[JobSummary]]
 
-JOBS: dict[str, Job] = {"sweep": sweep, "themes": keep_themes}
+JOBS: dict[str, Job] = {"sweep": sweep, "themes": keep_themes, "vectors": embed_pending}
 """The jobs a schedule can run, and the ones the UI can trigger by name."""
 
 

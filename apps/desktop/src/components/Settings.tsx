@@ -106,6 +106,21 @@ export function Settings({
               Stored in your journal folder at <code>.tilt/settings.json</code>, readable only
               by you. It never leaves this machine except in calls to Google.
             </p>
+
+            {/* Named rather than left to be discovered. Without a key the app
+                still writes, files, connects and draws, so nothing looks
+                broken — and what is missing is exactly what you would never
+                think to go looking for. */}
+            {!!status?.dormant?.length && (
+              <ul className="dormant">
+                {status.dormant.map((item) => (
+                  <li key={item.capability} className="dormant__item">
+                    <span className="dormant__what">{item.capability}</span>
+                    <span className="dormant__why">{item.why}</span>
+                  </li>
+                ))}
+              </ul>
+            )}
           </section>
 
           <section className="sheet__section">

@@ -28,6 +28,16 @@ class Settings(BaseSettings):
     gemini_model: str = "gemini-3.6-flash"
     gemini_fallback_model: str = "gemini-3.5-flash"
 
+    embeddings_enabled: bool = True
+    """Whether to embed entries at all. Needs a key regardless — off is for
+    anyone who wants a key for the agent but not a second thing spending on a
+    schedule."""
+
+    embed_dims: int = 768
+    """Vector width. Changing this invalidates every stored vector, because two
+    widths are not comparable; the store drops the old signature rather than
+    mixing them."""
+
     monthly_cost_ceiling_usd: float = 20.0
     """Scheduled agent work stops at 80% of this. User-initiated calls continue."""
 
@@ -38,6 +48,10 @@ class Settings(BaseSettings):
     sweep_interval_minutes: int = 15
     """How often to look for entries nothing has filed yet. Cheap when the
     backlog is empty, which it usually is."""
+
+    embed_interval_minutes: int = 60
+    """How often to embed what has been written since the last pass. Hourly:
+    nothing waits on it, and each pass is a network call and a small charge."""
 
     theme_keeper_hour: int = 3
     """Local hour for the nightly folder tidy. Overnight because it rearranges
@@ -78,6 +92,16 @@ class Settings(BaseSettings):
     @property
     def internal_dir(self) -> Path:
         return self.data_dir / ".tilt"
+
+    @property
+    def vectors_path(self) -> Path:
+        """Beside the index, deliberately not inside it.
+
+        ``index.db`` is free to rebuild from Markdown and the app says so.
+        Vectors were bought from a hosted model, so throwing them away has a
+        price — and the two have to be discardable independently or deleting
+        the cheap one silently costs money."""
+        return self.internal_dir / "vectors.db"
 
     @property
     def diagrams_dir(self) -> Path:

@@ -11,8 +11,8 @@ it, by design.
 > Status: early but real. Writing, categorising, connecting, distilling sources,
 > the constellation and on-demand diagrams all work end to end, offline, with no
 > API key, and the agent keeps working on a schedule after you close the window.
-> The research scout and weekly synthesis are designed but unbuilt — see the
-> roadmap.
+> One capability needs a key and always will — see below. The research scout and
+> weekly synthesis are designed but unbuilt; see the roadmap.
 
 ---
 
@@ -159,6 +159,34 @@ distinction you were making and cannot be undone from the interface. When
 unsure it mints the duplicate. Tags fold more readily than folders: a tag is a
 label, a folder is a place.
 
+### The one thing Tilt cannot do on its own
+
+`bridges to` — two unrelated areas turning out to touch — is the only link kind
+whose value is in pairs sharing no vocabulary. Proofing dough and a polling
+interval are alike because waiting is a thing in the world, and that is a fact
+about the world rather than about your journal. Nothing built from your own
+writing can know it, which is why this capability needs a key and always will.
+
+It was worse than that until recently. The connector's candidates came from a
+full-text search and the recency window, and the model only ever judges pairs it
+is shown — so such a pair was presentable only while both entries were recent.
+After that the link could never be proposed however good the model was. The
+feature was shipped, prompted for, rendered with its own label, and unreachable.
+
+Entries are now embedded on a schedule and the nearest by meaning join the
+candidate set, which is the path that does not require shared words. An offline
+embedder was built for this and then removed: measured on a corpus with a
+deliberately planted bridge, it separated subjects cleanly and bridged nothing,
+which was the one job it was there for.
+
+Settings lists what is asleep without a key rather than leaving you to notice.
+Everything else still runs offline.
+
+Vectors live in `.tilt/vectors.db`, beside the index and deliberately not in it.
+The index is free to rebuild from Markdown and the app says so; vectors were
+bought from a hosted model, so throwing them away has a price. Two files means
+either can be discarded without paying for the other.
+
 ### Reading someone you disagree with
 
 `contradicts` is reserved for you disagreeing with yourself — a changed mind is
@@ -240,7 +268,7 @@ process behind them.
 |---|---|---|
 | Source of truth | Markdown + YAML frontmatter | Portable, greppable, outlives the app |
 | Index | SQLite + FTS5 | Rebuildable projection, never the record |
-| Retrieval | BM25 today, fused via RRF | Vector ranking drops in without reworking callers |
+| Retrieval | BM25 fused with vector kNN via RRF | Two rankers when there is a key, one when there is not |
 | Models | Provider protocol | Offline provider by default; Gemini when a key is present |
 | Unattended work | APScheduler in the service | Missed runs coalesce rather than stampede when a laptop wakes |
 | Reading sources | Route on metadata, extract in the service | A pure function decides *what this is*; the browser never needs a parser |
@@ -537,9 +565,9 @@ mean anything.
 
 The theme-keeper merges folders and retires quiet ones, but it does not *split*
 them. Splitting on lexical evidence alone is guesswork, and a bad split scatters
-one subject across two folders with no way for you to see why. It needs the
-embedding layer, and so does clustering themes from scratch rather than
-repairing what accumulated filing produced.
+one subject across two folders with no way for you to see why. The embedding
+layer it was waiting for now exists, so this and from-scratch clustering are
+buildable — they are simply not built.
 
 And the connector's precision has not been measured. The gate for this phase is
 ≥0.8 on hand-labelled pairs, which requires a real corpus and a real key; the

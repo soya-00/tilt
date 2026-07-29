@@ -9,9 +9,15 @@ from tilt import __version__
 from tilt.agents.ledger import MeteredProvider
 from tilt.api.deps import get_journal, get_provider, get_settings_dep
 from tilt.config import Settings
+from tilt.embed import DORMANT_WITHOUT_KEY
 from tilt.journal import Journal
 
 router = APIRouter(tags=["system"])
+
+
+class Dormant(BaseModel):
+    capability: str
+    why: str
 
 
 class Status(BaseModel):
@@ -29,6 +35,13 @@ class Status(BaseModel):
     spend_this_month_usd: float
     cost_ceiling_usd: float
     data_dir: str
+    dormant: list[Dormant] = []
+    """What is asleep for want of a key, and why.
+
+    Empty when a key is present. Said out loud rather than left to be noticed:
+    without one the app still writes, files, connects and draws, so nothing
+    looks broken — and the capabilities that are missing are exactly the ones
+    you would never think to look for."""
 
 
 @router.get("/health")
@@ -53,6 +66,11 @@ def status(
         spend_this_month_usd=round(provider.spend_this_month(), 4),
         cost_ceiling_usd=settings.monthly_cost_ceiling_usd,
         data_dir=str(settings.data_dir),
+        dormant=(
+            [Dormant(capability=name, why=why) for name, why in DORMANT_WITHOUT_KEY]
+            if offline
+            else []
+        ),
     )
 
 

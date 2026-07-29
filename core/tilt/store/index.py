@@ -336,6 +336,16 @@ class Index:
         )
         return self._conn.execute(sql).fetchone()["n"]
 
+    def all_entries(self) -> list[Entry]:
+        """Every entry, oldest first.
+
+        For the passes that must consider the whole journal rather than a page
+        of it. Replies are included: a reflection is text the writer may search
+        for and may want found, even though it is not drawn in the graph.
+        """
+        rows = self._conn.execute("SELECT * FROM entries ORDER BY created")
+        return [_row_to_entry(r) for r in rows]
+
     def recent_bodies(self, *, limit: int = 20, exclude: str | None = None) -> list[Entry]:
         """Recent self-authored entries — the context an agent call reads from."""
         sql = (
