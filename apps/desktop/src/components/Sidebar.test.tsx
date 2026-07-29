@@ -5,7 +5,7 @@ import { describe, expect, it, vi } from "vitest";
 import type { Scope, Theme } from "../lib/types";
 import { Sidebar } from "./Sidebar";
 
-function theme(label: string, count: number, id = label): Theme {
+function theme(label: string, count: number, id = label, status: Theme["status"] = "active"): Theme {
   const now = new Date().toISOString();
   return {
     id,
@@ -15,6 +15,8 @@ function theme(label: string, count: number, id = label): Theme {
     updated: now,
     pinned_label: false,
     count,
+    status,
+    last_active: now,
   };
 }
 
@@ -113,5 +115,16 @@ describe("Sidebar", () => {
   it("marks the active scope", () => {
     render(<Sidebar {...base} scope={{ type: "theme", id: "Memory", label: "Memory" }} />);
     expect(screen.getByText("Memory").closest("button")).toHaveClass("nav-row--selected");
+  });
+
+  it("recedes a folder that has gone quiet without hiding it", () => {
+    // Dormant is not deleted. A subject you set down is part of the record of
+    // how your thinking moved, and removing it would flatten that.
+    render(<Sidebar {...base} themes={[theme("Old Preoccupation", 9, "old", "dormant")]} />);
+
+    const row = screen.getByText("Old Preoccupation");
+    expect(row).toBeInTheDocument();
+    expect(row.closest(".stagger")).toHaveClass("nav-dormant");
+    expect(row.closest("button")).toHaveAttribute("title", expect.stringContaining("quiet"));
   });
 });

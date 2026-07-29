@@ -13,6 +13,7 @@ from tilt.api.auth import TokenAuthMiddleware
 from tilt.api.routes import agent, entries, ingest, library, system
 from tilt.api.routes import settings as settings_routes
 from tilt.config import Settings, get_settings
+from tilt.jobs import Schedule
 from tilt.journal import Journal
 from tilt.persona import PersonaStore
 from tilt.settings_store import SettingsStore
@@ -48,10 +49,21 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             settings.provider = "auto"
         ceiling = runtime.monthly_cost_ceiling_usd or settings.monthly_cost_ceiling_usd
 
-        app.state.provider = MeteredProvider(build_provider(settings), index, ceiling)
+        provider = MeteredProvider(build_provider(settings), index, ceiling)
+        app.state.provider = provider
+
+        # Started after everything it touches exists, and only once the app is
+        # actually serving — a job that fired mid-boot would race the rebuild
+        # above and file entries the index had not finished reading.
+        schedule = Schedule(journal, provider, settings)
+        app.state.schedule = schedule
+        if settings.schedule_enabled:
+            schedule.start()
+
         try:
             yield
         finally:
+            schedule.shutdown()
             index.close()
 
     app = FastAPI(

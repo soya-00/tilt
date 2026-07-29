@@ -5,8 +5,10 @@
  */
 
 import type {
+  Activity,
   AgentRun,
   Entry,
+  JobSummary,
   Persona,
   PublicSettings,
   Scope,
@@ -142,6 +144,13 @@ export const api = {
     }),
 
   runs: () => request<AgentRun[]>("/agent/runs"),
+
+  /** Run a scheduled job now, rather than waiting to find out at 3am. */
+  runJob: (name: "sweep" | "themes") =>
+    request<JobSummary>(`/agent/jobs/${name}`, { method: "POST" }),
+
+  activity: (since: string) =>
+    request<Activity>(`/agent/activity?since=${encodeURIComponent(since)}`),
 
   persona: () => request<Persona>("/agent/persona"),
 

@@ -19,6 +19,12 @@ interface Props {
   onSavePersona: (payload: Partial<Persona>) => void;
 }
 
+/** Dormant folders say so on hover. Dimming alone reads as a rendering quirk. */
+function dormantTitle(theme: Theme): string {
+  const base = theme.description || `Show everything in ${theme.label}`;
+  return theme.status === "dormant" ? `${base} — quiet for a while` : base;
+}
+
 function isActive(scope: Scope, candidate: Scope): boolean {
   if (scope.type !== candidate.type) return false;
   if (scope.type === "theme" && candidate.type === "theme") return scope.id === candidate.id;
@@ -98,14 +104,14 @@ export function Sidebar({
             ) : (
               <div
                 key={theme.id}
-                className="stagger"
+                className={"stagger" + (theme.status === "dormant" ? " nav-dormant" : "")}
                 style={{ animationDelay: `${Math.min(i, 8) * 28}ms` }}
               >
                 <NavRow
                   icon="folder"
                   label={theme.label}
                   count={theme.count}
-                  title={theme.description || `Show everything in ${theme.label}`}
+                  title={dormantTitle(theme)}
                   selected={isActive(scope, { type: "theme", id: theme.id, label: theme.label })}
                   onClick={() => onScope({ type: "theme", id: theme.id, label: theme.label })}
                   onDoubleClick={() => {

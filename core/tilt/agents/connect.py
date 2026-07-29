@@ -73,11 +73,19 @@ async def connect(
         if c.id not in already
     ][:CANDIDATES]
     if not candidates:
+        # Nothing to compare against — the first entry in an empty journal, or
+        # one whose neighbours have all been judged already. Settled either way.
+        journal.index.mark_considered(entry_id, judged=True)
         return []
 
     completion = await provider.complete(
         build_prompt(entry, candidates), job=JOB, system=SYSTEM, interactive=interactive
     )
+
+    # Finding nothing is the common and correct outcome, so it has to be
+    # recorded as a result. Otherwise every unconnected thought looks unexamined
+    # and the nightly sweep judges the whole journal again, forever.
+    journal.index.mark_considered(entry_id, judged=True)
 
     payload = extract_json(completion.text)
     proposals = payload.get("links") if isinstance(payload, dict) else None

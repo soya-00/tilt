@@ -30,6 +30,11 @@ _STOPWORDS = frozenset(
     again also even still yet ever never always often sometimes perhaps maybe
     because since while during before after between through into onto over under
     keeps keep kept feels feel felt seems seem seemed looks look looked
+    than such each both upon unto whom whose shall must might rather instead
+    however though although unless whether toward towards across among beyond
+    within without many some thus hence therefore else other others another
+    either neither here itself himself herself themselves myself ourselves
+    yourself everyone anyone someone nobody having
     """.split()  # noqa: SIM905
 )
 
@@ -72,6 +77,8 @@ class EchoProvider:
             text = _categorize(prompt)
         elif task == "connect":
             text = _connect(prompt)
+        elif task == "merge":
+            text = _merge()
         elif task == "distill":
             text = _distill(prompt)
         else:
@@ -168,6 +175,19 @@ def _categorize(prompt: str) -> str:
 
 
 # ------------------------------------------------------------------- connect
+
+
+def _merge() -> str:
+    """Never fold two folders together offline.
+
+    The candidates reaching this point already share a word — that is what
+    selected them — so keyword overlap has no opinion left to give, and the
+    question being asked is whether two names describe one subject. Merging
+    destroys a distinction the writer was making, and it cannot be undone from
+    the interface. Declining is the honest answer, and it matches the
+    instruction the real model is given: when unsure, do not merge.
+    """
+    return json.dumps({"merges": []})
 
 
 def _connect(prompt: str) -> str:

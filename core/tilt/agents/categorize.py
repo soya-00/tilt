@@ -64,6 +64,12 @@ async def categorize(
         build_prompt(entry, existing), job=JOB, system=SYSTEM, interactive=interactive
     )
 
+    # Recorded on the strength of the call having returned, not on it having
+    # produced tags. A response the parser could not use is this model's answer
+    # for this entry, and paying for the same answer again every night is worse
+    # than leaving one thought untagged.
+    journal.index.mark_considered(entry_id, filed=True)
+
     payload = extract_json(completion.text)
     if not isinstance(payload, dict):
         return entry

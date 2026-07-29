@@ -9,8 +9,9 @@ you now contradict. There are no todos, no boards, and no due dates anywhere in
 it, by design.
 
 > Status: early but real. Writing, categorising, and connecting all work end to
-> end, offline, with no API key. Source distillation, the constellation graph,
-> the research scout, and weekly synthesis are designed but unbuilt — see the
+> end, offline, with no API key, and the agent keeps working on a schedule after
+> you close the window. Source distillation, the constellation graph, the
+> research scout, and weekly synthesis are designed but unbuilt — see the
 > roadmap.
 
 ---
@@ -39,8 +40,13 @@ The three core loops are in: **inputting, categorising, connecting.**
   grounded in your related earlier writing, arriving word by word.
 - **Command palette** (`⌘K`) — commands and journal content in one list.
 - **Quick capture** (`⌥Space`) — a small window for one thought.
+- **It keeps working when you close it** — a sweep every quarter hour files and
+  connects anything the interface missed, and a nightly pass merges folders that
+  drifted into duplicates and retires ones that have gone quiet. Both are
+  runnable on the spot from Settings, and every run leaves a record there.
 - **Cost ledger** — every model call is priced and recorded; spend is always
-  visible in the status bar.
+  visible in the status bar. Unattended work stops at 80% of your ceiling;
+  anything you asked for yourself always proceeds.
 
 Your journal is a folder of Markdown files. The database is a cache that can be
 deleted and rebuilt at any time.
@@ -75,9 +81,16 @@ palette by hashing its name — stable forever, never random at render. The colo
 stays hidden until you hover the tag or scope to it. A wall of permanently
 coloured tags would shout over the writing.
 
+**Quiet things recede rather than vanish.** A folder nothing has landed in for
+two months drops to half strength and sorts below the live ones, and comes back
+to full weight the moment you hover or select it. Deleting it would be easier and
+wrong: what you have stopped thinking about is part of the shape of how you
+think, and a sidebar showing only this month's preoccupations has no memory.
+
 Entry actions stay invisible until hover or focus. A reflection arrives word by
-word rather than pasted whole. Every transition respects
-`prefers-reduced-motion`.
+word rather than pasted whole. The app never congratulates you — work done in
+your absence is reported as one dismissible line, never a badge or an alert.
+Every transition respects `prefers-reduced-motion`.
 
 ## Architecture
 
@@ -85,6 +98,8 @@ word rather than pasted whole. Every transition respects
 apps/desktop/            React + TypeScript UI
 apps/desktop/src-tauri/  Tauri v2 shell: windows, hotkey, tray, sidecar lifetime
 core/                    Python service: Markdown store, SQLite index, agents
+core/tilt/agents/        What runs because you asked
+core/tilt/jobs/          What runs because time passed
 scripts/                 Packaging the sidecar, rendering the icon
 ```
 
@@ -98,6 +113,40 @@ process behind them.
 | Index | SQLite + FTS5 | Rebuildable projection, never the record |
 | Retrieval | BM25 today, fused via RRF | Vector ranking drops in without reworking callers |
 | Models | Provider protocol | Offline provider by default; Gemini when a key is present |
+| Unattended work | APScheduler in the service | Missed runs coalesce rather than stampede when a laptop wakes |
+
+### What runs on its own
+
+| Job | When | What it does |
+|---|---|---|
+| **Sweep** | every 15 min | Files and connects entries the interface never got to |
+| **Theme-keeper** | nightly, 03:17 | Merges duplicate folders, retires quiet ones, drops empty ones |
+
+The two are shaped differently on purpose. A backlog can appear at any hour — a
+thought caught with `⌥Space` while the window was closed, one written when a
+call failed — so the sweep is an interval, cheap enough to run constantly
+because it costs one indexed query when there is nothing waiting. The
+theme-keeper rearranges the sidebar, and watching folders move under the cursor
+is disorienting, so it is a cron and it runs overnight. Not on the hour:
+everything else that runs at 3am runs at 3:00.
+
+Both are bounded, both are idempotent, and both stop at 80% of the monthly
+ceiling rather than spending it — an interactive request must never be refused
+because a background job got there first. Neither waits for a schedule to prove
+itself: both are runnable from Settings, and every run leaves a row there
+whether it succeeded, failed, or stopped at the ceiling.
+
+The sweep also leaves entries alone for their first three minutes. The interface
+is already filing anything just written, and without a quiet period the two
+would race and the same judgement would be paid for twice.
+
+Two details do most of the work. The service records that it has *considered* an
+entry, so a thought the connector correctly found nothing for is never judged a
+second time; without it the nightly sweep would re-examine the whole journal for
+as long as the journal exists. And a merge rewrites the affected entries'
+Markdown, not just the database — themes are restored from frontmatter on boot,
+so a merge that touched only SQLite would bring the folder it deleted straight
+back on the next restart.
 
 ## Running it
 
@@ -205,7 +254,12 @@ With both processes running, open http://localhost:5173 and walk this path:
    any entry for a threaded response.
 7. **Rename the agent.** Click it in the sidebar, give it a name and a
    personality — that text goes straight into the reflection prompt.
-8. **Check the files.** `ls ~/Tilt/entries/**/*.md` — your thoughts are plain
+8. **Watch it catch up on its own.** Capture a thought with `⌥Space` — that
+   window saves and closes without filing anything. Open **Settings → Activity**
+   and press **Catch up**: the entry gets tagged, filed, and judged for
+   connections, and a row appears saying what the run did. Left alone it would
+   have happened within fifteen minutes anyway.
+9. **Check the files.** `ls ~/Tilt/entries/**/*.md` — your thoughts are plain
    Markdown with YAML frontmatter, and folders and connections are written there
    too. Delete `~/Tilt/.tilt/index.db`, restart, and everything comes back; the
    database is only a cache.
@@ -222,7 +276,7 @@ cd apps/desktop && npm test && npm run typecheck && npm run build
 cd apps/desktop/src-tauri && cargo build
 ```
 
-160 tests: 104 backend, 56 frontend.
+200 tests: 135 backend, 65 frontend.
 
 The load-bearing one writes entries, deletes the database, rebuilds from disk,
 and asserts nothing was lost — that guarantee is what the file-as-truth design
@@ -235,24 +289,53 @@ between the app and the service: that the journal answers nobody without the
 launch token, and that the service reports the port it actually got rather than
 the one anyone assumed.
 
+For the scheduled agents it is the two ways unattended work goes wrong quietly.
+One asserts that a second sweep over settled entries considers nothing, because
+the failure it prevents — re-judging the whole journal every night — costs money
+without changing anything and would never show up as a bug. The other merges two
+folders, rebuilds the index from disk, and asserts the merged-away folder does
+not come back.
+
 ## Roadmap
 
 | Phase | Scope | State |
 |---|---|---|
 | 0 | Store, index, search, the Stream | done |
 | 1 | Tauri shell, global hotkey, `.dmg` | done |
-| 2 | Connection surfacing, emergent themes | designed |
+| 2 | Scheduled agents: catch-up sweep, theme upkeep | done |
 | 3 | Source distillation — video, transcript, PDF, article | designed |
 | 4 | Constellation graph, on-demand diagrams | designed |
 | 5 | Research scout, daily brief | designed |
 | 6 | Weekly synthesis, growth timeline | designed |
 
-Two pieces of Phase 1 are deliberately still open. The API key lives in
-`~/Tilt/.tilt/settings.json` at mode 600 rather than in the macOS Keychain —
-moving it there means the key stops travelling through the settings API, which
-is a change to how the app is configured and not just to where a string is
-kept. And there are no notifications yet, because nothing runs unattended for
-them to be about; that arrives with the scheduled agents in Phase 2.
+Some of what is designed is deliberately still open.
+
+The API key lives in `~/Tilt/.tilt/settings.json` at mode 600 rather than in the
+macOS Keychain — moving it there means the key stops travelling through the
+settings API, which is a change to how the app is configured and not just to
+where a string is kept.
+
+There are no system notifications, and that is now a decision rather than a gap.
+The plan had the shell raise one when a scheduled job found something; against a
+journal, a banner announcing that a note has been tagged is exactly the
+congratulatory interruption the design rules out. What replaced it is one line
+above the Stream when you come back — *3 filed, 2 connections while you were
+away* — that dismisses on click and never returns. The connections themselves
+stay threaded under the entries they belong to, which is the only place they
+mean anything.
+
+The theme-keeper merges folders and retires quiet ones, but it does not *split*
+them. Splitting on lexical evidence alone is guesswork, and a bad split scatters
+one subject across two folders with no way for you to see why. It needs the
+embedding layer, and so does clustering themes from scratch rather than
+repairing what accumulated filing produced.
+
+And the connector's precision has not been measured. The gate for this phase is
+≥0.8 on hand-labelled pairs, which requires a real corpus and a real key; the
+offline provider matches keywords and would only measure itself. What is in
+place is everything the measurement needs: dismissals are kept as tombstones
+rather than deleted, so the rate per link kind is recoverable from the index
+whenever there is a corpus worth measuring.
 
 Every proposed feature answers one question: does its output make you *do*
 something, or *understand* something? Only the second ships.

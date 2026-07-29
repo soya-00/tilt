@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import json
+
 import pytest
 
 from tilt.agents import build_provider
@@ -68,6 +70,26 @@ async def test_echo_provider_signs_with_the_configured_agent_name() -> None:
         "ENTRY:\nA thought.", system='Your name is "Neo".\n\nYour manner: terse.'
     )
     assert "Neo is offline" in result.text
+
+
+async def test_offline_tags_are_never_joining_words() -> None:
+    """A folder named "Than" is what this guards against.
+
+    Only words of four letters or more reach the ranker, which lets a whole
+    class of function word through — and once entries are filed on a schedule,
+    nobody is watching when one becomes a folder in the sidebar.
+    """
+    prompt = (
+        "TASK: categorize\n\nEXISTING THEMES:\n(none yet)\n\nENTRY:\n"
+        "Attention behaves like a filter rather than a spotlight; what it "
+        "excludes matters more than what it lands on."
+    )
+    result = await EchoProvider().complete(prompt)
+    payload = json.loads(result.text)
+
+    assert "attention" in payload["tags"]
+    assert not {"than", "such", "rather", "however", "within"} & set(payload["tags"])
+    assert payload["theme"].lower() not in {"than", "rather", "what"}
 
 
 async def test_echo_provider_is_deterministic() -> None:

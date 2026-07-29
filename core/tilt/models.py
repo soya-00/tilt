@@ -120,6 +120,17 @@ class Link(BaseModel):
     dismissed: bool = False
 
 
+class ThemeStatus(StrEnum):
+    ACTIVE = "active"
+    DORMANT = "dormant"
+    """Nothing new has fallen into it for a long time.
+
+    Not deleted and not hidden. A preoccupation you have set down is part of the
+    record of how your thinking moved, and losing it would flatten the timeline
+    into a picture of only this month.
+    """
+
+
 class Theme(BaseModel):
     """A category the agent discovered and named. Browsed like a folder.
 
@@ -136,6 +147,10 @@ class Theme(BaseModel):
     pinned_label: bool = False
     """Set when the user renames it, so the agent never renames it back."""
     count: int = 0
+    status: ThemeStatus = ThemeStatus.ACTIVE
+    last_active: datetime | None = None
+    """When its most recent member was written. Derived, never stored — the
+    entries are the truth and a cached copy of this would drift from them."""
 
 
 class TagCount(BaseModel):
@@ -170,3 +185,36 @@ class AgentRun(BaseModel):
     tokens_out: int = 0
     cost_usd: float = 0.0
     error: str | None = None
+    detail: str = ""
+    """What the run actually did, in one human sentence.
+
+    Only unattended work fills this in. A scheduled job that finished with
+    status ``ok`` and no further explanation is indistinguishable from one that
+    silently did nothing, and the whole point of watching a 3am job is to be
+    able to tell those apart the next morning."""
+
+
+class JobSummary(BaseModel):
+    """The outcome of one scheduled pass, returned when it is triggered by hand."""
+
+    job: str
+    considered: int = 0
+    """Entries or themes the job looked at."""
+    filed: int = 0
+    connected: int = 0
+    merged: int = 0
+    dormant: int = 0
+    detail: str = ""
+    paused: bool = False
+    """Set when the budget ceiling stopped the run partway.
+
+    Distinct from an error: the work is unfinished but nothing is broken, and
+    the next run picks up exactly where this one stopped."""
+
+
+class Activity(BaseModel):
+    """What the agent did while you were not looking."""
+
+    since: datetime
+    filed: int = 0
+    connected: int = 0

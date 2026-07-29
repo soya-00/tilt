@@ -63,6 +63,20 @@
   margin-bottom: var(--s-2);
 }
 
+/* A folder nothing has landed in for months. Recedes rather than disappears —
+   what you have stopped thinking about is part of the shape of how you think,
+   and it comes back to full strength the moment it is hovered or selected. */
+.nav-dormant {
+  opacity: 0.55;
+  transition: opacity var(--dur-base) var(--ease);
+}
+
+.nav-dormant:hover,
+.nav-dormant:focus-within,
+.nav-dormant:has(.nav-row--selected) {
+  opacity: 1;
+}
+
 /* ---- Rows: one state machine, applied everywhere ------------------------ */
 .nav-row {
   display: flex;
@@ -261,6 +275,21 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+/* What the agent did overnight. Shares the error's slot: both are transient
+   notices about the app rather than content, and they are never both urgent. */
+.pane__away {
+  margin-left: auto;
+  font-size: var(--t-meta);
+  color: var(--ink-tertiary);
+  white-space: nowrap;
+  animation: row-in var(--dur-slow) var(--ease) both;
+  transition: color var(--dur-fast) var(--ease);
+}
+
+.pane__away:hover {
+  color: var(--ink-secondary);
 }
 
 .pane__scroll {
@@ -1175,6 +1204,53 @@
   display: flex;
   justify-content: flex-end;
   gap: var(--s-2);
+}
+
+/* ---- Activity log -------------------------------------------------------- */
+.job-row {
+  display: flex;
+  gap: var(--s-2);
+  margin-bottom: var(--s-2);
+}
+
+.runs {
+  display: flex;
+  flex-direction: column;
+  list-style: none;
+}
+
+/* The machine's own account of itself, so it is set in the machine's voice. */
+.run {
+  display: grid;
+  grid-template-columns: 5.5rem 1fr auto;
+  gap: var(--s-3);
+  align-items: baseline;
+  padding: var(--s-1) 0;
+  font-family: var(--font-mono);
+  font-size: var(--t-meta);
+  color: var(--ink-tertiary);
+}
+
+.run + .run {
+  border-top: 1px solid var(--line);
+}
+
+.run__job {
+  color: var(--ink-secondary);
+}
+
+.run__detail {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* A failed run is the only thing on this screen worth raising your voice for,
+   and it still only earns weight — the one accent belongs to the journal. */
+.run--error .run__detail,
+.run--error .run__job {
+  color: var(--ink);
+  font-weight: var(--w-medium);
 }
 
 .field__input--source {

@@ -14,6 +14,9 @@ dependencies = [
     # Not an extra: running Gemini is the point of the app, and making it
     # optional meant saving an API key failed with an install error.
     "google-genai>=1.0",
+    # Unattended jobs need a scheduler that survives a sleeping laptop: missed
+    # runs coalesce instead of stampeding on wake.
+    "apscheduler>=3.11,<4",
 ]
 
 [project.scripts]

@@ -19,6 +19,10 @@ def settings(tmp_path: Path) -> Settings:
         data_dir=tmp_path / "journal",
         provider="echo",
         monthly_cost_ceiling_usd=1.0,
+        # Tests drive the jobs directly. A live scheduler would fire the sweep
+        # underneath them and make assertions about what the agent has touched
+        # depend on how long the suite took to run.
+        schedule_enabled=False,
     )
 
 

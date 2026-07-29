@@ -11,6 +11,7 @@ import { Stream } from "./components/Stream";
 import { Icon } from "./components/Icon";
 import { api } from "./lib/api";
 import { onCaptured } from "./lib/shell";
+import { describe, useAway } from "./lib/useAway";
 import { useJournal } from "./lib/useJournal";
 import { useLiquidGlass } from "./lib/useLiquidGlass";
 import { useTheme } from "./lib/useTheme";
@@ -21,6 +22,7 @@ const STICK_THRESHOLD = 120;
 
 export default function App() {
   const journal = useJournal();
+  const away = useAway();
   const [theme, toggleTheme] = useTheme();
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [captureOpen, setCaptureOpen] = useState(false);
@@ -164,10 +166,16 @@ export default function App() {
               <span className="scope-chip__clear">clear</span>
             </button>
           )}
-          {journal.error && (
+          {journal.error ? (
             <button className="pane__error" onClick={journal.dismissError} role="alert">
               {journal.error}
             </button>
+          ) : (
+            away.activity && (
+              <button className="pane__away" onClick={away.dismiss} title="Dismiss">
+                {describe(away.activity)}
+              </button>
+            )
           )}
 
           <button

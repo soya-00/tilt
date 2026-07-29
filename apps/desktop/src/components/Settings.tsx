@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 
 import { useLiquidGlass } from "../lib/useLiquidGlass";
 import type { PublicSettings } from "../lib/types";
+import { ActivityLog } from "./ActivityLog";
 import { Icon } from "./Icon";
 
 interface Props {
@@ -111,6 +112,15 @@ export function Settings({
             aria-label="Gemini model"
             onChange={(e) => setModel(e.target.value)}
           />
+        </section>
+
+        <section className="sheet__section">
+          <h3 className="sheet__label">Activity</h3>
+          <p className="sheet__note">
+            Tilt files what you write as you write it, sweeps every quarter hour for anything
+            missed, and tidies the folders overnight.
+          </p>
+          <ActivityLog />
         </section>
 
         <section className="sheet__section">

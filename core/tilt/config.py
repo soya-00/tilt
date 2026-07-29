@@ -31,6 +31,18 @@ class Settings(BaseSettings):
     monthly_cost_ceiling_usd: float = 20.0
     """Scheduled agent work stops at 80% of this. User-initiated calls continue."""
 
+    schedule_enabled: bool = True
+    """Run the unattended jobs. Off in tests, and worth turning off for anyone
+    who wants the agent to act only when asked."""
+
+    sweep_interval_minutes: int = 15
+    """How often to look for entries nothing has filed yet. Cheap when the
+    backlog is empty, which it usually is."""
+
+    theme_keeper_hour: int = 3
+    """Local hour for the nightly folder tidy. Overnight because it rearranges
+    the sidebar, and watching folders move under the cursor is unsettling."""
+
     cors_origins: list[str] = Field(
         default_factory=lambda: [
             "http://localhost:5173",

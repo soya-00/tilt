@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from datetime import datetime
+
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel
 
 from tilt.agents import AgentError, BudgetExceeded
@@ -11,8 +13,9 @@ from tilt.agents.connect import connect
 from tilt.agents.ledger import MeteredProvider
 from tilt.agents.reflect import reflect_on
 from tilt.api.deps import get_journal, get_persona_store, get_provider
+from tilt.jobs import JOBS, run_job
 from tilt.journal import Journal
-from tilt.models import Entry, Thread
+from tilt.models import Activity, AgentRun, Entry, JobSummary, Thread
 from tilt.persona import Persona, PersonaStore, PersonaUpdate
 
 router = APIRouter(prefix="/agent", tags=["agent"])
@@ -113,7 +116,47 @@ def write_persona(
     return store.update(payload)
 
 
-@router.get("/runs")
+@router.get("/runs", response_model=list[AgentRun])
 def list_runs(journal: Journal = Depends(get_journal), limit: int = 50) -> list[dict]:
     """Recent agent activity. The observability surface for silent failures."""
     return journal.index.runs(limit=limit)
+
+
+@router.post("/jobs/{name}", response_model=JobSummary)
+async def trigger_job(
+    name: str,
+    journal: Journal = Depends(get_journal),
+    provider: MeteredProvider = Depends(get_provider),
+) -> JobSummary:
+    """Run a scheduled job now.
+
+    Every unattended job is reachable by hand. Waiting until 3am to find out
+    whether a job works is not a way to build one, and a user who suspects the
+    agent has fallen behind should be able to settle it in one click rather than
+    by leaving the app open overnight.
+    """
+    if name not in JOBS:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, f"No such job: {name}.")
+    try:
+        return await run_job(name, journal, provider)
+    except (BudgetExceeded, AgentError) as exc:
+        raise _surface(exc) from exc
+
+
+@router.get("/activity", response_model=Activity)
+def activity(
+    since: datetime = Query(..., description="Return what has happened since this moment"),
+    journal: Journal = Depends(get_journal),
+) -> Activity:
+    """What the agent did while you were not looking.
+
+    Counts only. The connections themselves are already threaded under the
+    entries they belong to, which is where they mean something — this exists to
+    tell you there is a reason to scroll, not to become a second inbox.
+    """
+    stamp = since.isoformat()
+    return Activity(
+        since=since,
+        filed=journal.index.filed_since(stamp),
+        connected=journal.index.links_since(stamp),
+    )

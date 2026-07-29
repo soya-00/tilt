@@ -20,10 +20,10 @@ from pathlib import Path
 
 from pydantic import ValidationError
 
-from tilt.models import AgentRun, Entry, Link, TagCount, Theme, utcnow
+from tilt.models import AgentRun, Entry, Link, TagCount, Theme, ThemeStatus, utcnow
 from tilt.store import files
 
-SCHEMA_VERSION = 2
+SCHEMA_VERSION = 3
 
 
 def pair_key(a: str, b: str) -> str:
@@ -70,7 +70,10 @@ CREATE TABLE IF NOT EXISTS themes (
     description  TEXT NOT NULL DEFAULT '',
     created      TEXT NOT NULL,
     updated      TEXT NOT NULL,
-    pinned_label INTEGER NOT NULL DEFAULT 0
+    pinned_label INTEGER NOT NULL DEFAULT 0,
+    -- 'active' | 'dormant'. Set by the nightly keeper from when the theme last
+    -- gained a member; never a reason to hide it, only to render it quietly.
+    status       TEXT NOT NULL DEFAULT 'active'
 );
 
 CREATE UNIQUE INDEX IF NOT EXISTS idx_themes_label ON themes(label COLLATE NOCASE);
@@ -109,10 +112,41 @@ CREATE TABLE IF NOT EXISTS agent_runs (
     tokens_in  INTEGER NOT NULL DEFAULT 0,
     tokens_out INTEGER NOT NULL DEFAULT 0,
     cost_usd  REAL NOT NULL DEFAULT 0.0,
-    error     TEXT
+    error     TEXT,
+    detail    TEXT NOT NULL DEFAULT ''
 );
 
 CREATE INDEX IF NOT EXISTS idx_runs_started ON agent_runs(started DESC);
+
+-- What the agent has already considered.
+--
+-- Without this an entry the connector correctly found nothing for is
+-- indistinguishable from one it never looked at, so the nightly sweep would
+-- re-judge every unconnected thought forever. Index-only state: losing it to a
+-- rebuild costs one redundant pass, which is why it is not in the Markdown.
+CREATE TABLE IF NOT EXISTS entry_state (
+    entry_id  TEXT PRIMARY KEY REFERENCES entries(id) ON DELETE CASCADE,
+    filed_at  TEXT,
+    judged_at TEXT
+);
+"""
+
+_ADDED_COLUMNS = (
+    ("themes", "status", "TEXT NOT NULL DEFAULT 'active'"),
+    ("agent_runs", "detail", "TEXT NOT NULL DEFAULT ''"),
+)
+
+
+_THEME_STATS = """
+    (SELECT COUNT(*) FROM entry_themes et WHERE et.theme_id = t.id) AS count,
+    (SELECT MAX(e.created) FROM entry_themes et JOIN entries e ON e.id = et.entry_id
+     WHERE et.theme_id = t.id) AS last_active
+"""
+"""Membership size and freshness, derived per theme rather than cached.
+
+Correlated subqueries instead of a GROUP BY join: the join form multiplies rows
+before aggregating, so counting and taking a maximum in the same query needs
+either two passes or a subquery anyway.
 """
 
 
@@ -141,6 +175,15 @@ class Index:
     def _migrate(self) -> None:
         with self.tx() as conn:
             conn.executescript(_SCHEMA)
+            # `CREATE TABLE IF NOT EXISTS` is a no-op on a table that already
+            # exists, so a column added to the schema above never reaches an
+            # index built by an earlier version. Dropping and rebuilding would
+            # be simpler but would discard every theme name the user has pinned,
+            # which lives nowhere else.
+            for table, column, decl in _ADDED_COLUMNS:
+                present = {r["name"] for r in conn.execute(f"PRAGMA table_info({table})")}
+                if column not in present:
+                    conn.execute(f"ALTER TABLE {table} ADD COLUMN {column} {decl}")
             conn.execute(f"PRAGMA user_version={SCHEMA_VERSION}")
 
     @contextmanager
@@ -310,8 +353,11 @@ class Index:
             if row:
                 # Never overwrite a label the user has pinned by renaming it.
                 keep_label = row["label"] if row["pinned_label"] else theme.label
+                # Filing something new into a dormant theme is exactly what it
+                # means for the subject to have come back.
                 conn.execute(
-                    "UPDATE themes SET label=?, description=?, updated=? WHERE id=?",
+                    "UPDATE themes SET label=?, description=?, updated=?, status='active'"
+                    " WHERE id=?",
                     (
                         keep_label,
                         theme.description or row["description"],
@@ -336,9 +382,7 @@ class Index:
 
     def get_theme(self, theme_id: str) -> Theme | None:
         row = self._conn.execute(
-            "SELECT t.*, (SELECT COUNT(*) FROM entry_themes et WHERE et.theme_id = t.id)"
-            " AS count FROM themes t WHERE t.id = ?",
-            (theme_id,),
+            f"SELECT t.*, {_THEME_STATS} FROM themes t WHERE t.id = ?", (theme_id,)
         ).fetchone()
         return _row_to_theme(row) if row else None
 
@@ -352,13 +396,55 @@ class Index:
         return self.get_theme(theme_id) if updated else None
 
     def themes(self) -> list[Theme]:
-        """All themes with membership counts, busiest first."""
+        """All themes with membership counts. Live ones first, then busiest.
+
+        Dormant themes sort last rather than being filtered out — what you have
+        stopped thinking about is part of the shape of how you think.
+        """
         rows = self._conn.execute(
-            "SELECT t.*, COUNT(et.entry_id) AS count FROM themes t"
-            " LEFT JOIN entry_themes et ON et.theme_id = t.id"
-            " GROUP BY t.id ORDER BY count DESC, t.label COLLATE NOCASE ASC"
+            f"SELECT t.*, {_THEME_STATS} FROM themes t"
+            " ORDER BY (t.status = 'dormant'), count DESC, t.label COLLATE NOCASE ASC"
         )
         return [_row_to_theme(r) for r in rows]
+
+    def set_theme_status(self, theme_id: str, status: ThemeStatus) -> None:
+        with self.tx() as conn:
+            conn.execute(
+                "UPDATE themes SET status = ? WHERE id = ?", (status.value, theme_id)
+            )
+
+    def merge_themes(self, keep_id: str, drop_id: str) -> int:
+        """Fold one theme into another. Returns how many entries moved.
+
+        The losing theme's members are re-pointed rather than copied, so an
+        entry never ends up in both halves of a merge. Callers are responsible
+        for rewriting the affected entries' frontmatter afterwards — SQLite is
+        the projection here, and leaving the Markdown stale would resurrect the
+        dead theme on the next rebuild.
+        """
+        if keep_id == drop_id:
+            return 0
+        with self.tx() as conn:
+            moved = [
+                r["entry_id"]
+                for r in conn.execute(
+                    "SELECT entry_id FROM entry_themes WHERE theme_id = ?", (drop_id,)
+                )
+            ]
+            conn.executemany(
+                "INSERT OR IGNORE INTO entry_themes (entry_id, theme_id) VALUES (?, ?)",
+                [(eid, keep_id) for eid in moved],
+            )
+            conn.execute("DELETE FROM themes WHERE id = ?", (drop_id,))
+        return len(moved)
+
+    def entries_in_theme(self, theme_id: str) -> list[Entry]:
+        rows = self._conn.execute(
+            "SELECT e.* FROM entries e JOIN entry_themes et ON et.entry_id = e.id"
+            " WHERE et.theme_id = ? ORDER BY e.created DESC",
+            (theme_id,),
+        )
+        return [_row_to_entry(r) for r in rows]
 
     def set_entry_themes(self, entry_id: str, theme_ids: list[str]) -> None:
         with self.tx() as conn:
@@ -405,6 +491,59 @@ class Index:
             TagCount(tag=t, count=c)
             for t, c in sorted(counts.items(), key=lambda kv: (-kv[1], kv[0]))
         ]
+
+    # ------------------------------------------------------------ agent state
+
+    def mark_considered(self, entry_id: str, *, filed: bool = False, judged: bool = False) -> None:
+        """Record that an agent has looked at this entry.
+
+        Written by the agents themselves rather than by the sweep, so work the
+        UI did in the foreground is not repeated in the background an hour
+        later.
+        """
+        now = utcnow().isoformat()
+        with self.tx() as conn:
+            conn.execute(
+                "INSERT INTO entry_state (entry_id, filed_at, judged_at) VALUES (?, ?, ?)"
+                " ON CONFLICT(entry_id) DO UPDATE SET"
+                "   filed_at  = COALESCE(excluded.filed_at,  filed_at),"
+                "   judged_at = COALESCE(excluded.judged_at, judged_at)",
+                (entry_id, now if filed else None, now if judged else None),
+            )
+
+    def backlog(self, *, limit: int, settled_before: str) -> list[tuple[Entry, bool, bool]]:
+        """Entries no agent has finished with, newest first.
+
+        ``settled_before`` excludes anything written in the last few minutes.
+        The interface already files an entry the moment you keep it, and without
+        a quiet period the sweep would race that request and pay for the same
+        judgement twice.
+
+        Returns each entry with whether it still needs filing and judging.
+        """
+        rows = self._conn.execute(
+            "SELECT e.*, s.filed_at, s.judged_at FROM entries e"
+            " LEFT JOIN entry_state s ON s.entry_id = e.id"
+            " WHERE e.parent IS NULL AND e.kind != 'reply' AND e.created < ?"
+            "   AND (s.filed_at IS NULL OR s.judged_at IS NULL)"
+            " ORDER BY e.created DESC LIMIT ?",
+            (settled_before, limit),
+        )
+        return [
+            (_row_to_entry(r), r["filed_at"] is None, r["judged_at"] is None) for r in rows
+        ]
+
+    def filed_since(self, iso_ts: str) -> int:
+        row = self._conn.execute(
+            "SELECT COUNT(*) AS n FROM entry_state WHERE filed_at >= ?", (iso_ts,)
+        ).fetchone()
+        return int(row["n"])
+
+    def links_since(self, iso_ts: str) -> int:
+        row = self._conn.execute(
+            "SELECT COUNT(*) AS n FROM links WHERE dismissed = 0 AND created >= ?", (iso_ts,)
+        ).fetchone()
+        return int(row["n"])
 
     # ------------------------------------------------------------------ links
 
@@ -512,7 +651,7 @@ class Index:
         with self.tx() as conn:
             conn.execute(
                 "INSERT OR REPLACE INTO agent_runs (id, job, model, status, started, finished,"
-                " tokens_in, tokens_out, cost_usd, error) VALUES (?,?,?,?,?,?,?,?,?,?)",
+                " tokens_in, tokens_out, cost_usd, error, detail) VALUES (?,?,?,?,?,?,?,?,?,?,?)",
                 (
                     run.id,
                     run.job,
@@ -524,6 +663,7 @@ class Index:
                     run.tokens_out,
                     run.cost_usd,
                     run.error,
+                    run.detail,
                 ),
             )
 
@@ -611,6 +751,9 @@ class Index:
 
 
 def _row_to_theme(row: sqlite3.Row) -> Theme:
+    # `in row` iterates a sqlite3.Row's *values*, not its keys, so the .keys()
+    # call is load-bearing here rather than redundant.
+    columns = row.keys()
     return Theme(
         id=row["id"],
         label=row["label"],
@@ -618,9 +761,9 @@ def _row_to_theme(row: sqlite3.Row) -> Theme:
         created=row["created"],
         updated=row["updated"],
         pinned_label=bool(row["pinned_label"]),
-        # `in row` iterates a sqlite3.Row's *values*, not its keys, so the
-        # .keys() call is load-bearing here rather than redundant.
-        count=row["count"] if "count" in row.keys() else 0,  # noqa: SIM118
+        status=row["status"],
+        count=row["count"] if "count" in columns else 0,
+        last_active=row["last_active"] if "last_active" in columns else None,
     )
 
 

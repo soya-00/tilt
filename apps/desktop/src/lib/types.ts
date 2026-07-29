@@ -36,6 +36,10 @@ export interface LinkedEntry {
   entry: Entry;
 }
 
+/** Dormant is quiet, not gone. A subject you set down still shows in the
+ *  sidebar — it just stops competing for attention with the live ones. */
+export type ThemeStatus = "active" | "dormant";
+
 export interface Theme {
   id: string;
   label: string;
@@ -44,6 +48,8 @@ export interface Theme {
   updated: string;
   pinned_label: boolean;
   count: number;
+  status: ThemeStatus;
+  last_active: string | null;
 }
 
 export interface TagCount {
@@ -99,4 +105,26 @@ export interface AgentRun {
   tokens_out: number;
   cost_usd: number;
   error: string | null;
+  /** What an unattended run actually did. Empty for single model calls. */
+  detail: string;
+}
+
+/** The outcome of one scheduled pass. */
+export interface JobSummary {
+  job: string;
+  considered: number;
+  filed: number;
+  connected: number;
+  merged: number;
+  dormant: number;
+  detail: string;
+  /** Stopped at the spending ceiling — unfinished, but nothing is broken. */
+  paused: boolean;
+}
+
+/** What the agent did while the app was closed. */
+export interface Activity {
+  since: string;
+  filed: number;
+  connected: number;
 }
