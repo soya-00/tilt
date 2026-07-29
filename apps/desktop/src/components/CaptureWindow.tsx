@@ -2,7 +2,6 @@ import { useEffect, useState } from "react";
 
 import { api } from "../lib/api";
 import { announceCapture, dismiss } from "../lib/shell";
-import { useLiquidGlass } from "../lib/useLiquidGlass";
 import { Composer } from "./Composer";
 
 /**
@@ -18,7 +17,6 @@ import { Composer } from "./Composer";
  */
 export function CaptureWindow() {
   const [failed, setFailed] = useState<string | null>(null);
-  const glass = useLiquidGlass<HTMLDivElement>();
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -29,12 +27,7 @@ export function CaptureWindow() {
   }, []);
 
   return (
-    <div
-      ref={glass.ref}
-      className="capture-window glass-live"
-      onPointerMove={glass.onPointerMove}
-      onPointerLeave={glass.onPointerLeave}
-    >
+    <div className="capture-window glass">
       <Composer
         autoFocus
         compact

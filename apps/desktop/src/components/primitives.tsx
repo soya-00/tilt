@@ -37,11 +37,41 @@ export function IconButton({
     <button
       type="button"
       className={
-        "icon-btn" +
-        (outlined ? " icon-btn--outlined" : "") +
-        (ready ? " icon-btn--ready" : "")
+        "icon-btn" + (outlined ? " icon-btn--outlined" : "") + (ready ? " icon-btn--ready" : "")
       }
       aria-label={label}
+      onClick={onClick}
+      disabled={disabled}
+    >
+      <Icon name={name} size={size} />
+    </button>
+  );
+}
+
+/* -------------------------------------------------------------- GlassButton */
+
+interface GlassButtonProps {
+  name: IconName;
+  label: string;
+  onClick?: () => void;
+  disabled?: boolean;
+  size?: number;
+}
+
+/**
+ * A control cut from the same glass as the panels.
+ *
+ * Reserved for actions that open something. Everything else in the app is a
+ * bare glyph — if this treatment were applied twice on one surface it would
+ * stop meaning anything.
+ */
+export function GlassButton({ name, label, onClick, disabled, size = 20 }: GlassButtonProps) {
+  return (
+    <button
+      type="button"
+      className="glass-btn glass-btn--icon"
+      aria-label={label}
+      title={label}
       onClick={onClick}
       disabled={disabled}
     >
@@ -66,6 +96,9 @@ interface NavRowProps {
   onClick: () => void;
   onDoubleClick?: () => void;
   title?: string;
+  /** Trailing control, revealed on hover. Rendered as a sibling of the row
+   *  rather than inside it — a button cannot contain another button. */
+  action?: ReactNode;
 }
 
 export function NavRow({
@@ -76,8 +109,9 @@ export function NavRow({
   onClick,
   onDoubleClick,
   title,
+  action,
 }: NavRowProps) {
-  return (
+  const row = (
     <button
       type="button"
       className={"nav-row" + (selected ? " nav-row--selected" : "")}
@@ -90,6 +124,14 @@ export function NavRow({
       <span className="nav-row__label">{label}</span>
       {count !== undefined && <span className="nav-row__count">{count}</span>}
     </button>
+  );
+
+  if (!action) return row;
+  return (
+    <div className="nav-slot">
+      {row}
+      {action}
+    </div>
   );
 }
 

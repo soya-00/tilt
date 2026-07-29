@@ -33,6 +33,18 @@ def rename_theme(
     return theme
 
 
+@router.delete("/themes/{theme_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_theme(theme_id: str, journal: Journal = Depends(get_journal)) -> None:
+    """Delete a folder. The entries filed under it are kept.
+
+    Categorisation is the agent's, and this is how the user disagrees with it.
+    Nothing anyone wrote is removed — only the folder and the memberships that
+    pointed at it, in the index and in each entry's frontmatter.
+    """
+    if not journal.delete_theme(theme_id):
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Theme not found.")
+
+
 @router.get("/tags", response_model=list[TagCount])
 def list_tags(journal: Journal = Depends(get_journal)) -> list[TagCount]:
     return journal.index.tags()

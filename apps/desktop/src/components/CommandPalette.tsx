@@ -102,7 +102,7 @@ export function CommandPalette({ open, commands, onClose, onOpenEntry }: Props) 
   return (
     <div className="palette-scrim fade" onMouseDown={onClose} role="presentation">
       <div
-        className="palette rise"
+        className="palette rise glass glass--heavy"
         role="dialog"
         aria-modal="true"
         aria-label="Command palette"

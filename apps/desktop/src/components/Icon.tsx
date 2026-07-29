@@ -21,7 +21,9 @@ export type IconName =
   | "arrow-up"
   | "link"
   | "close"
+  | "plus"
   | "sun"
+  | "moon"
   | "refresh"
   | "pencil"
   | "trash"
@@ -41,7 +43,10 @@ const PATHS: Record<IconName, string> = {
   "arrow-up": "M12 19V5M6 11l6-6 6 6",
   link: "M10 13a4 4 0 0 0 5.7.4l2.8-2.8a4 4 0 0 0-5.7-5.7L11.4 6.3M14 11a4 4 0 0 0-5.7-.4l-2.8 2.8a4 4 0 0 0 5.7 5.7l1.4-1.4",
   close: "M6 6l12 12M18 6 6 18",
+  plus: "M12 5v14M5 12h14",
   sun: "M12 17a5 5 0 1 0 0-10 5 5 0 0 0 0 10zM12 2v2M12 20v2M4.2 4.2l1.4 1.4M18.4 18.4l1.4 1.4M2 12h2M20 12h2M4.2 19.8l1.4-1.4M18.4 5.6l1.4-1.4",
+  // A crescent, not a circle with a bite: the terminator is the whole glyph.
+  moon: "M20 14.5A8.5 8.5 0 0 1 9.5 4a8.5 8.5 0 1 0 10.5 10.5z",
   refresh: "M20 12a8 8 0 1 1-2.6-5.9M20 4v5h-5",
   pencil: "M4 20h4l10-10a2.8 2.8 0 0 0-4-4L4 16z",
   trash: "M4 7h16M10 7V5h4v2M6 7l1 12a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1l1-12",

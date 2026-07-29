@@ -1,7 +1,6 @@
 import { forwardRef, useImperativeHandle, useLayoutEffect, useRef, useState } from "react";
 
-import { useLiquidGlass } from "../lib/useLiquidGlass";
-import { IconButton } from "./primitives";
+import { GlassButton, IconButton } from "./primitives";
 
 export interface ComposerHandle {
   focus: () => void;
@@ -41,7 +40,6 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer(
   const [rejected, setRejected] = useState<string | null>(null);
   const area = useRef<HTMLTextAreaElement>(null);
   const filePicker = useRef<HTMLInputElement>(null);
-  const glass = useLiquidGlass<HTMLDivElement>();
 
   useImperativeHandle(ref, () => ({ focus: () => area.current?.focus() }));
 
@@ -86,10 +84,7 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer(
 
   return (
     <div
-      ref={glass.ref}
-      className={"composer glass-live" + (compact ? " composer--compact" : "")}
-      onPointerMove={glass.onPointerMove}
-      onPointerLeave={glass.onPointerLeave}
+      className={"composer" + (compact ? " composer--compact" : "")}
       onDragOver={(e) => e.preventDefault()}
       onDrop={(e) => {
         e.preventDefault();
@@ -128,17 +123,19 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer(
               e.target.value = "";
             }}
           />
+          {/* The one control in the composer made of glass rather than drawn
+              on it, because adding material is the only action here that opens
+              something rather than acting on what is already typed. */}
+          <GlassButton
+            name="plus"
+            label="Add source material"
+            onClick={() => onAddSource?.()}
+          />
           <IconButton
             name="paperclip"
             label="Attach a text file"
             outlined
             onClick={() => filePicker.current?.click()}
-          />
-          <IconButton
-            name="folder"
-            label="Add source material"
-            outlined
-            onClick={() => onAddSource?.()}
           />
         </div>
         <div className="composer__right">

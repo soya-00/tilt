@@ -395,6 +395,18 @@ class Index:
             ).rowcount
         return self.get_theme(theme_id) if updated else None
 
+    def delete_theme(self, theme_id: str) -> bool:
+        """Remove a theme and every entry's membership of it.
+
+        ``entry_themes`` cascades on the foreign key, so the memberships go with
+        the row and the entries themselves are never touched. Callers are
+        responsible for rewriting the affected entries' frontmatter afterwards —
+        Markdown is the durable copy, and a delete that touched only SQLite
+        would bring the folder straight back on the next rebuild.
+        """
+        with self.tx() as conn:
+            return conn.execute("DELETE FROM themes WHERE id = ?", (theme_id,)).rowcount > 0
+
     def themes(self) -> list[Theme]:
         """All themes with membership counts. Live ones first, then busiest.
 

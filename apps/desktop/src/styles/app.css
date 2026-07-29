@@ -28,18 +28,26 @@
 }
 
 /* ---- Sidebar ------------------------------------------------------------ */
-/* The only divider in the app is its right edge. */
+/* The only divider in the app is its right edge — which is also the only edge
+ * of this panel the light can reach, so .glass--edge-right collapses the rim
+ * onto it and the hairline border is redundant.
+ *
+ * The panel does not scroll; the list inside it does. The rim is painted by a
+ * pseudo-element pinned to the panel's bounds, and in a scroll container that
+ * highlight would slide away with the content. */
 .sidebar {
   display: flex;
   flex-direction: column;
-  gap: var(--s-6);
-  padding: var(--s-3);
   min-height: 0;
-  border-right: 1px solid var(--line);
-  background: var(--glass);
-  backdrop-filter: var(--glass-blur);
-  -webkit-backdrop-filter: var(--glass-blur);
-  box-shadow: var(--glass-edge);
+}
+
+.sidebar__scroll {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-6);
+  flex: 1;
+  min-height: 0;
+  padding: var(--s-3);
 }
 
 .sidebar__section {
@@ -132,6 +140,70 @@
   background: var(--bg-active);
   font-size: var(--t-body);
   color: var(--ink);
+}
+
+/* ---- Row with a trailing action ----------------------------------------- */
+/* The action overlays the row's right end rather than sitting beside it, so a
+ * folder's width does not change depending on whether you are pointing at it. */
+.nav-slot {
+  position: relative;
+}
+
+.nav-slot__delete {
+  position: absolute;
+  top: 50%;
+  right: var(--s-2);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: var(--r-pill);
+  color: var(--ink-tertiary);
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(-50%) scale(0.8);
+  transition:
+    opacity var(--dur-base) var(--ease),
+    transform var(--dur-base) var(--ease-spring),
+    color var(--dur-fast) var(--ease),
+    background var(--dur-fast) var(--ease);
+}
+
+.nav-slot:hover .nav-slot__delete,
+.nav-slot:focus-within .nav-slot__delete {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateY(-50%) scale(1);
+}
+
+.nav-slot__delete:hover {
+  color: var(--ink);
+  background: var(--bg-active);
+}
+
+/* Armed. It has to read as louder than merely hovered, or the second click is
+   a surprise — so it takes a ring and full-strength ink on top of the glyph
+   swap. Repeated under :hover and :focus-within because those selectors are
+   more specific than a lone class and would otherwise win the transform back. */
+.nav-slot__delete--armed,
+.nav-slot:hover .nav-slot__delete--armed,
+.nav-slot:focus-within .nav-slot__delete--armed {
+  opacity: 1;
+  pointer-events: auto;
+  color: var(--ink);
+  background: var(--bg-active);
+  box-shadow: inset 0 0 0 1px var(--line-strong);
+  transform: translateY(-50%) scale(1.06);
+}
+
+.nav-slot:hover .nav-row__count,
+.nav-slot:focus-within .nav-row__count {
+  opacity: 0;
+}
+
+.nav-row__count {
+  transition: opacity var(--dur-fast) var(--ease);
 }
 
 /* ---- Entities ----------------------------------------------------------- */
@@ -621,15 +693,11 @@
 }
 
 /* ---- Composer ----------------------------------------------------------- */
-/* Its only separation is one hairline above it. */
+/* Its only separation is its own lit top edge — the rim replaces the hairline
+ * that used to be there. Material comes from .glass; this sets the box. */
 .pane__composer {
   flex-shrink: 0;
-  border-top: 1px solid var(--line);
   padding: var(--s-4) var(--s-8) max(var(--s-6), env(safe-area-inset-bottom));
-  background: var(--glass);
-  backdrop-filter: var(--glass-blur);
-  -webkit-backdrop-filter: var(--glass-blur);
-  box-shadow: var(--glass-edge);
 }
 
 .pane__composer-inner {
@@ -705,6 +773,40 @@
   cursor: default;
 }
 
+/* ---- The add control ----------------------------------------------------- */
+/* Shape and glyph only; the material, the rim, the sweep and the squish all
+ * come from .glass-btn. The glyph rotates a quarter turn on hover — a plus
+ * turning toward a cross is the same mark seen from another angle, which is
+ * what the rest of the surface is doing too. */
+.glass-btn--icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  color: var(--ink-secondary);
+}
+
+.glass-btn--icon svg {
+  transition: transform var(--dur-slow) var(--ease-spring);
+}
+
+.glass-btn--icon:hover:not(:disabled) {
+  color: var(--ink);
+}
+
+.glass-btn--icon:hover:not(:disabled) svg {
+  transform: rotate(90deg);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .glass-btn--icon svg,
+  .glass-btn--icon:hover:not(:disabled) svg {
+    transition: none;
+    transform: none;
+  }
+}
+
 /* ---- Responsive --------------------------------------------------------- */
 @media (max-width: 860px) {
   .app {
@@ -754,6 +856,10 @@
 }
 
 /* ---- Search ------------------------------------------------------------- */
+/* A glass pill floating in open space rather than fixed to a window edge, so
+ * it wears the full rim: lit all the way round, hottest where the edge turns
+ * into the light and lit again, faintly, on the far side. Everything else
+ * comes from .glass — this only sets shape and behaviour. */
 .search {
   display: flex;
   align-items: center;
@@ -763,18 +869,26 @@
   height: 34px;
   padding: 0 var(--s-3);
   border-radius: var(--r-pill);
-  background: var(--bg-hover);
   color: var(--ink-secondary);
   transition:
-    background var(--dur-base) var(--ease),
     box-shadow var(--dur-base) var(--ease),
-    max-width var(--dur-slow) var(--ease);
+    max-width var(--dur-slow) var(--ease),
+    transform var(--dur-slow) var(--ease-spring);
 }
 
+/* Focus lifts it toward the light: the ring brightens as the surface turns,
+   and the accent halo sits outside the rim rather than replacing it. */
 .search:focus-within {
-  background: var(--glass-strong);
-  box-shadow: 0 0 0 2px var(--accent);
   max-width: 460px;
+  transform: translateY(-1px);
+  box-shadow:
+    var(--glass-edge),
+    var(--glass-depth),
+    0 0 0 2px var(--accent);
+}
+
+.search:focus-within::before {
+  filter: brightness(1.3);
 }
 
 .search__glyph {
@@ -1034,56 +1148,6 @@
 }
 
 
-/* ---- Dynamic liquid glass ----------------------------------------------- */
-/* A specular highlight that follows the pointer. --mx/--my are written by
- * useLiquidGlass on pointermove; --lit fades the whole effect in and out so it
- * glides off the edge rather than snapping. */
-.glass-live {
-  --mx: 50%;
-  --my: 50%;
-  --lit: 0;
-  position: relative;
-  isolation: isolate;
-  overflow: hidden;
-}
-
-.glass-live::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  z-index: -1;
-  pointer-events: none;
-  opacity: var(--lit);
-  background:
-    radial-gradient(
-      22rem 16rem at var(--mx) var(--my),
-      rgba(255, 255, 255, 0.16),
-      transparent 68%
-    ),
-    radial-gradient(
-      9rem 7rem at var(--mx) var(--my),
-      color-mix(in srgb, var(--accent) 22%, transparent),
-      transparent 72%
-    );
-  transition: opacity var(--dur-slow) var(--ease);
-}
-
-:root[data-theme="light"] .glass-live::after {
-  background:
-    radial-gradient(22rem 16rem at var(--mx) var(--my), rgba(255, 255, 255, 0.85), transparent 68%),
-    radial-gradient(
-      9rem 7rem at var(--mx) var(--my),
-      color-mix(in srgb, var(--accent) 14%, transparent),
-      transparent 72%
-    );
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .glass-live::after {
-    display: none;
-  }
-}
-
 /* ---- Strip button (settings) -------------------------------------------- */
 .strip-btn {
   display: inline-flex;
@@ -1125,21 +1189,34 @@
   -webkit-backdrop-filter: blur(10px) saturate(140%);
 }
 
+/* The panel does not scroll — its body does. A rim is a property of the panel's
+ * edge, and in a scroll container the pseudo-element that paints it would slide
+ * away with the content it is supposed to be framing. */
 .sheet {
   display: flex;
   flex-direction: column;
   gap: var(--s-5);
   width: min(480px, 100%);
   max-height: 78vh;
-  overflow-y: auto;
   padding: var(--s-5);
-  border: 1px solid var(--glass-border);
-  border-radius: var(--r-xl, 28px);
-  background: var(--glass-strong);
-  backdrop-filter: var(--glass-blur-heavy);
-  -webkit-backdrop-filter: var(--glass-blur-heavy);
-  box-shadow: var(--glass-edge);
+  border-radius: var(--r-xl);
   animation: sheet-in var(--dur-slow) var(--ease-spring) both;
+}
+
+.sheet__body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-5);
+  min-height: 0;
+  /* Room for the rim, so a scrollbar never runs under the lit edge. */
+  margin: 0 calc(var(--s-2) * -1);
+  padding: 0 var(--s-2);
+}
+
+/* The source sheet is one big textarea; its body should take the height rather
+   than collapse to the content and leave the panel short. */
+.sheet__body--grow {
+  flex: 1;
 }
 
 .sheet--wide {
@@ -1270,7 +1347,19 @@
   line-height: 1.55;
 }
 
-/* ---- Switch -------------------------------------------------------------- */
+/* ---- Liquid toggle ------------------------------------------------------- */
+/* The theme switch is the one control in the app whose whole job is to be
+ * touched, so it is the one that behaves most like liquid.
+ *
+ * The track is a sunken well — inset shadow rather than raised edge, because
+ * it is a channel cut into the surface, not a slab on top of it. The thumb is a
+ * bead of the same glass as the panels, and it carries a real rim: as it slides
+ * it keeps its highlight in the same place on its own body, since the lamp does
+ * not move when the bead does.
+ *
+ * The stretch is what makes it liquid rather than mechanical. Mid-travel the
+ * bead elongates along its direction of motion and thins across it, then
+ * settles — surface tension resolving, not a ball on a rail. */
 .switch {
   display: inline-flex;
   align-items: center;
@@ -1283,40 +1372,111 @@
 
 .switch__track {
   position: relative;
-  width: 46px;
-  height: 28px;
+  width: 56px;
+  height: 30px;
   border-radius: var(--r-pill);
   background: var(--bg-active);
-  border: 1px solid var(--glass-border);
-  box-shadow: var(--glass-edge);
-  transition: background var(--dur-base) var(--ease);
+  box-shadow:
+    inset 0 1px 3px rgba(0, 0, 0, 0.16),
+    inset 0 -1px 0 var(--rim-lo);
+  transition: background var(--dur-slow) var(--ease);
 }
 
 .switch--on .switch__track {
-  background: var(--accent);
+  background: color-mix(in srgb, var(--accent) 62%, transparent);
+}
+
+/* Both glyphs sit in the well at once and the bead parks over one of them, so
+   the glyph left showing is always the state you are one click away from. It
+   brightens; the one under the bead fades, because nothing is lit under there
+   anyway. */
+.switch__glyphs {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 8px;
+  pointer-events: none;
+}
+
+.switch__sun,
+.switch__moon {
+  transition:
+    opacity var(--dur-slow) var(--ease),
+    transform var(--dur-slow) var(--ease-spring);
+}
+
+/* Light: the bead is left, over the sun. The moon is the one you can see. */
+.switch__sun {
+  color: var(--ink-tertiary);
+  opacity: 0.35;
+  transform: scale(0.85);
+}
+
+.switch__moon {
+  color: var(--ink-secondary);
+}
+
+/* Dark: the bead has moved right, over the moon, uncovering the sun. */
+.switch--on .switch__sun {
+  color: var(--accent-ink);
+  opacity: 1;
+  transform: none;
+}
+
+.switch--on .switch__moon {
+  opacity: 0.35;
+  transform: scale(0.85);
 }
 
 .switch__thumb {
   position: absolute;
-  top: 2px;
-  left: 2px;
-  width: 22px;
-  height: 22px;
+  top: 3px;
+  left: 3px;
+  width: 24px;
+  height: 24px;
   border-radius: var(--r-pill);
-  background: var(--glass-strong);
-  backdrop-filter: var(--glass-blur);
-  -webkit-backdrop-filter: var(--glass-blur);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.6);
-  /* Spring easing gives the thumb a little overshoot, like a physical toggle. */
-  transition: transform var(--dur-slow) var(--ease-spring);
+  transform-origin: center;
+  transition:
+    transform var(--dur-slow) var(--ease-spring),
+    width var(--dur-slow) var(--ease-spring);
 }
 
 .switch--on .switch__thumb {
+  transform: translateX(26px);
+}
+
+/* Mid-travel, in both directions: the bead pulls out along the axis it is
+   moving and springs back once it lands. Driven off :active so the stretch
+   tracks the press rather than firing on every re-render. */
+.switch:active .switch__thumb {
+  width: 32px;
+}
+
+.switch--on:active .switch__thumb {
   transform: translateX(18px);
 }
 
 .switch__label {
   color: var(--ink-secondary);
+  font-variant-numeric: tabular-nums;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .switch__thumb,
+  .switch__sun,
+  .switch__moon {
+    transition-duration: 1ms;
+  }
+
+  .switch:active .switch__thumb {
+    width: 24px;
+  }
+
+  .switch--on:active .switch__thumb {
+    transform: translateX(26px);
+  }
 }
 
 /* ---- Composer additions -------------------------------------------------- */
@@ -1381,19 +1541,3 @@
   transition: background var(--dur-base) var(--ease);
 }
 
-/* The sidebar and thread pane scroll, so they cannot inherit .glass-live's
- * overflow:hidden — the highlight is clipped by their own bounds instead. */
-.sidebar.glass-live,
-.pane.glass-live {
-  overflow: visible;
-}
-
-.sidebar.glass-live {
-  overflow-y: auto;
-}
-
-.sidebar.glass-live::after,
-.pane.glass-live::after {
-  position: absolute;
-  inset: 0;
-}

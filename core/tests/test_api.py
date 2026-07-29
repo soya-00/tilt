@@ -94,3 +94,21 @@ def test_index_rebuild_endpoint(client: TestClient) -> None:
     _create(client, "One.")
     _create(client, "Two.")
     assert client.post("/index/rebuild").json() == {"indexed": 2}
+
+
+def test_delete_theme_endpoint_keeps_the_entries(client: TestClient) -> None:
+    entry = _create(client, "Attention is a filter that discards most input.")
+    client.post("/agent/process", json={"entry_id": entry["id"]})
+
+    themes = client.get("/themes").json()
+    assert themes, "the agent should have filed this somewhere"
+
+    assert client.delete(f"/themes/{themes[0]['id']}").status_code == 204
+    assert client.get("/themes").json() == []
+    # The folder is gone. What was written is not.
+    assert client.get(f"/entries/{entry['id']}").status_code == 200
+    assert client.get("/status").json()["entries"] == 1
+
+
+def test_delete_missing_theme_returns_404(client: TestClient) -> None:
+    assert client.delete("/themes/nope").status_code == 404
