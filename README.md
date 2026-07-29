@@ -307,13 +307,17 @@ edits on either side reload as usual.
 To build the app itself:
 
 ```bash
-./scripts/build-sidecar.sh     # freeze the Python service into the bundle
 cd apps/desktop && npm run tauri build
 ```
 
-The first command produces `Tilt.app`'s copy of the service with PyInstaller;
-the second produces `Tilt.app` and a `.dmg` in
-`apps/desktop/src-tauri/target/release/bundle/`.
+That produces `Tilt.app` and a `.dmg` in
+`apps/desktop/src-tauri/target/release/bundle/`. Freezing the Python service
+with PyInstaller is part of it — `beforeBuildCommand` runs
+`scripts/build-sidecar.sh`, so the bundle can never ship a service older than
+the checkout it was built from. It used to be a separate command you were
+expected to remember, and forgetting it produced an app that looked new,
+reported the previous version in Settings, and behaved like the release you
+thought you had replaced.
 
 > **The `.dmg` can only be built on macOS.** Apple's linker and code-signing
 > tools have no equivalent elsewhere, so there is no cross-compile: the two
@@ -361,8 +365,11 @@ Then restart whatever you were running: both terminals, or `npm run tauri dev`.
 
 > **A built `Tilt.app` does not update with `git pull`.** It carries its own
 > frozen copy of the service, so it has to be rebuilt:
-> `./scripts/build-sidecar.sh && cd apps/desktop && npm run tauri build`.
-> Quit the running app first — the old one holds the journal open.
+> `cd apps/desktop && npm run tauri build`. Quit the running app first — the
+> old one holds the journal open.
+>
+> This is the likeliest reason Settings still shows the version you replaced:
+> the app you are looking at is not the checkout you pulled into.
 
 Your journal needs nothing. The index migrates itself on first boot, adding
 columns rather than rebuilding, because a rebuild would discard every folder

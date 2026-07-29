@@ -16,7 +16,9 @@ use std::sync::mpsc;
 use std::sync::Mutex;
 use std::time::Duration;
 
-use tauri::{AppHandle, Manager};
+use tauri::AppHandle;
+#[cfg(not(debug_assertions))]
+use tauri::Manager;
 
 /// The prefix `tilt.serve` writes before its one line of JSON.
 const READY_PREFIX: &str = "TILT_READY ";
@@ -162,14 +164,19 @@ fn forward<R: BufRead + Send + 'static>(reader: R, tag: &'static str) {
     });
 }
 
-/// The packaged core, or — in a development build — the checkout's Python.
+/// The checkout's Python in a development build, the packaged core otherwise.
+///
+/// The order matters, and it used to be the other way round. A frozen sidecar
+/// left in `binaries/` by an earlier `build-sidecar.sh` is a resource of the
+/// debug build too, so checking for it first meant `npm run tauri dev` silently
+/// ran that stale freeze instead of the working tree — you pull, restart, and
+/// the app reports the version you just replaced, with nothing to say why.
+/// Development means the checkout; there is no reading of it under which a
+/// months-old binary is what someone editing `core/` asked to run.
 fn command_for(app: &AppHandle) -> Result<Command, String> {
-    if let Some(binary) = bundled(app) {
-        return Ok(Command::new(binary));
-    }
-
     #[cfg(debug_assertions)]
     {
+        let _ = app;
         let root = PathBuf::from(REPO_CORE);
         let venv = root.join(".venv/bin/python");
         let python = if venv.exists() {
@@ -179,16 +186,21 @@ fn command_for(app: &AppHandle) -> Result<Command, String> {
         };
         let mut command = Command::new(python);
         command.args(["-m", "tilt"]).current_dir(&root);
-        return Ok(command);
+        Ok(command)
     }
 
     #[cfg(not(debug_assertions))]
-    Err("The Tilt core is missing from this build. Run scripts/build-sidecar.sh.".into())
+    {
+        bundled(app).map(Command::new).ok_or_else(|| {
+            "The Tilt core is missing from this build. Run scripts/build-sidecar.sh.".into()
+        })
+    }
 }
 
 /// PyInstaller's `--onedir` output, copied into the bundle as a resource
 /// directory. It cannot be an `externalBin`: those are single files, and the
 /// core ships alongside a folder of native libraries.
+#[cfg(not(debug_assertions))]
 fn bundled(app: &AppHandle) -> Option<PathBuf> {
     let name = if cfg!(windows) {
         "tilt-core/tilt-core.exe"
