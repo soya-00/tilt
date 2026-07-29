@@ -249,3 +249,68 @@ class Activity(BaseModel):
     since: datetime
     filed: int = 0
     connected: int = 0
+
+
+class GraphNode(BaseModel):
+    """One point in the constellation.
+
+    Entries and themes share a list rather than living in two, because the
+    thing being drawn is one graph — a thought belonging to a subject is the
+    same kind of relation as a thought meeting another thought.
+    """
+
+    id: str
+    label: str
+    kind: str
+    """``entry``, ``card``, ``source``, or ``theme``."""
+    provenance: str = "self"
+    created: datetime | None = None
+    weight: int = 1
+    """Members, for a theme. Always 1 for an entry — a graph that sizes nodes by
+    how much you wrote would reward length rather than significance."""
+
+
+class GraphEdge(BaseModel):
+    source: str
+    target: str
+    kind: str
+    """A link kind, or ``member`` for an entry's place in a theme."""
+    rationale: str = ""
+
+
+class Graph(BaseModel):
+    nodes: list[GraphNode] = Field(default_factory=list)
+    edges: list[GraphEdge] = Field(default_factory=list)
+    truncated: bool = False
+    """Set when the node cap was reached.
+
+    Said rather than hidden: an unfiltered graph past a few hundred nodes is an
+    unreadable hairball, and quietly drawing half of one is worse than drawing
+    a bounded one and admitting it."""
+    total: int = 0
+    """Entries the filter matched before the cap, so the view can name the
+    number it is not showing instead of implying there is nothing more."""
+
+
+class Artifact(BaseModel):
+    """Something the agent made that is not an entry — a diagram, for now.
+
+    Deliberately not an ``Entry``. A diagram is a reading of your thoughts, not
+    a thought: putting it in the Stream would mean the agent could write into
+    the record you keep, and having it filed into folders and connected to other
+    entries would let a machine drawing start showing up as evidence of what you
+    think. It lives beside the journal instead.
+    """
+
+    id: str
+    kind: str
+    """The Mermaid diagram type — ``flowchart``, ``mindmap``, and so on."""
+    path: str = ""
+    """Where it sits on disk. Empty until it has been saved."""
+    title: str = ""
+    body: str = ""
+    """The Mermaid source."""
+    note: str = ""
+    """One sentence from the agent on the structure it saw."""
+    subject_ids: list[str] = Field(default_factory=list)
+    created: datetime

@@ -80,6 +80,12 @@ class Settings(BaseSettings):
         return self.data_dir / ".tilt"
 
     @property
+    def diagrams_dir(self) -> Path:
+        """Diagrams the agent drew. Beside the journal rather than inside it —
+        they are readings of your entries, not entries."""
+        return self.data_dir / "artifacts" / "diagrams"
+
+    @property
     def index_path(self) -> Path:
         return self.internal_dir / "index.db"
 

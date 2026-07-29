@@ -133,3 +133,63 @@ export interface Activity {
   filed: number;
   connected: number;
 }
+
+/* ------------------------------------------------------------- constellation */
+
+export interface GraphNode {
+  id: string;
+  label: string;
+  /** An entry kind, or "theme". */
+  kind: EntryKind | "theme";
+  provenance: Provenance;
+  created: string | null;
+  /** Members, for a folder. Always 1 for an entry. */
+  weight: number;
+}
+
+export interface GraphEdge {
+  source: string;
+  target: string;
+  /** A link kind, or "member" for an entry's place in a folder. */
+  kind: LinkKind | "member";
+  rationale: string;
+}
+
+export interface Graph {
+  nodes: GraphNode[];
+  edges: GraphEdge[];
+  /** The node cap bit. The view says so rather than implying there is no more. */
+  truncated: boolean;
+  total: number;
+}
+
+export interface GraphQuery {
+  since?: string;
+  theme_id?: string;
+  include_sources?: boolean;
+  include_themes?: boolean;
+  limit?: number;
+}
+
+/* ------------------------------------------------------------------ diagrams */
+
+export interface Artifact {
+  id: string;
+  /** The Mermaid diagram type — "flowchart", "mindmap", and so on. */
+  kind: string;
+  path: string;
+  title: string;
+  /** The Mermaid source. */
+  body: string;
+  /** One sentence from the agent on the structure it saw. */
+  note: string;
+  subject_ids: string[];
+  created: string;
+}
+
+/** What to draw. One of these, never all of them — see the diagram route. */
+export interface DiagramScope {
+  theme_id?: string;
+  tag?: string;
+  q?: string;
+}

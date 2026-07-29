@@ -88,6 +88,10 @@
   padding: 0 var(--rim) 0 0;
 }
 
+.glass--edge-left::before {
+  padding: 0 0 0 var(--rim);
+}
+
 .glass--edge-top::before {
   padding: var(--rim) 0 0 0;
 }

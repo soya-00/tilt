@@ -14,6 +14,7 @@ from tilt.config import Settings
 from tilt.journal import Journal
 from tilt.persona import PersonaStore
 from tilt.settings_store import SettingsStore
+from tilt.store.artifacts import ArtifactStore
 
 
 def get_journal(request: Request) -> Journal:
@@ -26,6 +27,10 @@ def get_provider(request: Request) -> MeteredProvider:
 
 def get_settings_dep(request: Request) -> Settings:
     return request.app.state.settings
+
+
+def get_artifacts(request: Request) -> ArtifactStore:
+    return request.app.state.artifacts
 
 
 def get_persona_store(request: Request) -> PersonaStore:

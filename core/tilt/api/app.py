@@ -11,13 +11,14 @@ from tilt import __version__
 from tilt.agents import build_provider
 from tilt.agents.ledger import MeteredProvider
 from tilt.api.auth import TokenAuthMiddleware
-from tilt.api.routes import agent, entries, ingest, library, system
+from tilt.api.routes import agent, diagram, entries, graph, ingest, library, system
 from tilt.api.routes import settings as settings_routes
 from tilt.config import Settings, get_settings
 from tilt.jobs import Schedule
 from tilt.journal import Journal
 from tilt.persona import PersonaStore
 from tilt.settings_store import SettingsStore
+from tilt.store.artifacts import ArtifactStore
 from tilt.store.index import Index
 
 
@@ -38,6 +39,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         app.state.index = index
         app.state.journal = journal
         app.state.persona = PersonaStore(settings.internal_dir / "agent.json")
+        app.state.artifacts = ArtifactStore(settings.diagrams_dir)
 
         # Runtime settings win over the environment: a key typed into the app
         # is a more recent intent than one exported in a shell.
@@ -92,6 +94,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(entries.router)
     app.include_router(library.router)
     app.include_router(ingest.router)
+    app.include_router(graph.router)
+    app.include_router(diagram.router)
     app.include_router(settings_routes.router)
     app.include_router(agent.router)
     return app

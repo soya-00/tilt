@@ -8,17 +8,17 @@ what you were actually circling, where today echoes something from March, what
 you now contradict. There are no todos, no boards, and no due dates anywhere in
 it, by design.
 
-> Status: early but real. Writing, categorising, connecting, and distilling
-> sources all work end to end, offline, with no API key, and the agent keeps
-> working on a schedule after you close the window. The constellation graph, the
-> research scout, and weekly synthesis are designed but unbuilt — see the
+> Status: early but real. Writing, categorising, connecting, distilling sources,
+> the constellation and on-demand diagrams all work end to end, offline, with no
+> API key, and the agent keeps working on a schedule after you close the window.
+> The research scout and weekly synthesis are designed but unbuilt — see the
 > roadmap.
 
 ---
 
 ## What exists today
 
-Four loops are in: **inputting, categorising, connecting, distilling.**
+Five loops are in: **inputting, categorising, connecting, distilling, seeing.**
 
 - **The Stream** — one column, oldest to newest, anchored at the bottom so the
   newest thought sits by your hands. Write, press Enter, done.
@@ -36,6 +36,15 @@ Four loops are in: **inputting, categorising, connecting, distilling.**
   nested beneath. Those ideas then join the same connection graph as your own
   writing, which is the point: a talk can answer a question you asked yourself
   in June. Most of what a source says stays quiet — see below.
+- **The constellation** (`⌘G`) — a collapsible rail beside the Stream showing
+  the journal as a graph: entries as rings, folders as discs, the agent's
+  connections as coloured lines. Click a thought and the Stream scrolls to it
+  with the graph still open, so following a chain of connections costs nothing.
+  Filter by time, by folder, and by whether to include what you have read.
+- **Diagram this** — ask the agent to draw the structure of a folder, a tag, or
+  a search, and it picks the form: a mindmap when these are facets of one
+  preoccupation, a flowchart when one thing leads to another, a state diagram
+  when a position moved. Saved as Markdown beside your journal.
 - **Sidebar** — navigate folders and tags the agent produced. Rename a folder to
   pin its name against future agent edits; delete one, in two clicks, when the
   agent's guess about how your thinking divides up is simply wrong. Deleting a
@@ -72,6 +81,47 @@ saying how many there are. They are searchable the moment you go looking, and
 they are never pushed at you.
 
 On an empty journal there is nothing to be relevant to, so everything shows.
+
+### Does the graph ever make you open an old entry?
+
+The constellation was built against that question, because the answer decides
+whether it is a feature or a screensaver. Three things came out of taking it
+seriously:
+
+It is a **rail, not an overlay**. Clicking a node scrolls the Stream to that
+entry with the graph still on screen, so a chain of connections can be followed
+without reopening the picture between each step.
+
+It **reaches entries that are not loaded**. The Stream holds one page of one
+scope, so a node usually names something that is not on screen. Clicking one
+widens the scope, and for anything older than the page it falls back to
+searching for the entry's own opening words. A click that silently lands nowhere
+is exactly what turns a graph into decoration.
+
+It **carries its own filter**. The graph opens on the folder you were browsing,
+but that filter can be cleared from inside the rail without moving the Stream.
+Locked to where you already are, it could never take you anywhere new.
+
+Only connected nodes are drawn. Entries nothing has met yet are reported as a
+count rather than added as a cloud of dust — inventory belongs in the sidebar.
+
+### Diagrams are model output being handed to a parser
+
+A diagram may describe your thinking; it has no business opening pages or
+reconfiguring the renderer. `click` directives, `href`, and `%%{init}%%` blocks
+are stripped server-side before anything is saved, what is left has to open with
+a diagram keyword from an allowlist, and Mermaid runs in strict mode on top of
+that.
+
+Mermaid's parser is JavaScript, so the check can only happen in the app. It
+parses; on failure the parser's own words go back for exactly one repair; on a
+second failure it shows you the error and the source and stops. Two failures
+means the model cannot draw this one, and a third paid attempt is a loop rather
+than a fix.
+
+Diagrams are Markdown files under `artifacts/diagrams/`, not rows in the index —
+a diagram is cheap to list and never searched, so caching it would only add a
+migration and something else that can drift from the files.
 
 ### Reading someone you disagree with
 
@@ -399,7 +449,7 @@ silently re-bills the whole journal for answers already sitting on disk.
 | 1 | Tauri shell, global hotkey, `.dmg` | done |
 | 2 | Scheduled agents: catch-up sweep, theme upkeep | done |
 | 3 | Source distillation — transcript, subtitles, PDF, link | done |
-| 4 | Constellation graph, on-demand diagrams | designed |
+| 4 | Constellation graph, on-demand diagrams | done |
 | 5 | Research scout, daily brief | designed |
 | 6 | Weekly synthesis, growth timeline | designed |
 

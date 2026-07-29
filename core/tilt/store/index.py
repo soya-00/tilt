@@ -686,6 +686,89 @@ class Index:
         rows = self._conn.execute("SELECT * FROM links WHERE dismissed = 0")
         return [_row_to_link(r) for r in rows]
 
+    # ------------------------------------------------------------------ graph
+
+    @staticmethod
+    def _graph_where(
+        since: str | None, theme_id: str | None, include_sources: bool
+    ) -> tuple[str, list[object]]:
+        """The filter shared by the graph query and its count.
+
+        Written once because the two must agree: a count derived from different
+        predicates than the rows would let the view say "showing 300 of 412"
+        when 412 was never drawable in the first place.
+        """
+        clauses = ["e.kind != 'reply'", "e.promoted = 1"]
+        args: list[object] = []
+        if not include_sources:
+            clauses.append("e.provenance = 'self'")
+        if since:
+            clauses.append("e.created >= ?")
+            args.append(since)
+        if theme_id:
+            clauses.append(
+                "EXISTS (SELECT 1 FROM entry_themes et"
+                " WHERE et.entry_id = e.id AND et.theme_id = ?)"
+            )
+            args.append(theme_id)
+        return " AND ".join(clauses), args
+
+    def graph_entries(
+        self,
+        *,
+        limit: int,
+        since: str | None = None,
+        theme_id: str | None = None,
+        include_sources: bool = False,
+    ) -> list[Entry]:
+        """The entries a constellation should draw, newest first.
+
+        Replies are never nodes: a reflection is something the app said about a
+        thought, not a second thought, and drawing both doubles the graph
+        without adding anything to look at.
+
+        Sources are off by default. An unfiltered graph is a hairball, and the
+        first thing worth seeing is your own thinking — borrowed material is a
+        toggle rather than the default.
+        """
+        where, args = self._graph_where(since, theme_id, include_sources)
+        rows = self._conn.execute(
+            f"SELECT e.* FROM entries e WHERE {where} ORDER BY e.created DESC LIMIT ?",
+            [*args, limit],
+        )
+        return [_row_to_entry(r) for r in rows]
+
+    def graph_count(
+        self,
+        *,
+        since: str | None = None,
+        theme_id: str | None = None,
+        include_sources: bool = False,
+    ) -> int:
+        """How many entries the same filter would match, uncapped."""
+        where, args = self._graph_where(since, theme_id, include_sources)
+        row = self._conn.execute(
+            f"SELECT COUNT(*) AS n FROM entries e WHERE {where}", args
+        ).fetchone()
+        return int(row["n"]) if row else 0
+
+    def links_between(self, entry_ids: list[str]) -> list[Link]:
+        """Links with both ends inside the given set.
+
+        Both ends, not either: an edge to a node that was filtered out has
+        nothing to attach to, and force layouts either drop it or invent a
+        phantom node for it.
+        """
+        if not entry_ids:
+            return []
+        marks = ",".join("?" * len(entry_ids))
+        rows = self._conn.execute(
+            f"SELECT * FROM links WHERE dismissed = 0"
+            f" AND src_id IN ({marks}) AND dst_id IN ({marks})",
+            [*entry_ids, *entry_ids],
+        )
+        return [_row_to_link(r) for r in rows]
+
     # ----------------------------------------------------------------- search
 
     def search_fts(self, query: str, *, limit: int = 20) -> list[tuple[Entry, float]]:

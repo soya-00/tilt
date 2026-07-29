@@ -7,7 +7,11 @@
 import type {
   Activity,
   AgentRun,
+  Artifact,
+  DiagramScope,
   Entry,
+  Graph,
+  GraphQuery,
   JobSummary,
   Persona,
   PublicSettings,
@@ -184,6 +188,31 @@ export const api = {
     form.append("title", title);
     return request<Thread>("/ingest/file", { method: "POST", body: form });
   },
+
+  /** The journal as one graph. A pure read — no agent runs, nothing is spent. */
+  graph: (query: GraphQuery = {}) => {
+    const params = new URLSearchParams();
+    for (const [key, value] of Object.entries(query)) {
+      if (value !== undefined) params.set(key, String(value));
+    }
+    const suffix = params.toString();
+    return request<Graph>(`/graph${suffix ? `?${suffix}` : ""}`);
+  },
+
+  /** Draw the structure of a folder, a tag, or a search. Costs a model call. */
+  diagram: (scope: DiagramScope) =>
+    request<Artifact>("/diagram", { method: "POST", body: JSON.stringify(scope) }),
+
+  /** One more attempt, with the renderer's own complaint. Never called twice. */
+  repairDiagram: (id: string, error: string) =>
+    request<Artifact>(`/diagram/${id}/repair`, {
+      method: "POST",
+      body: JSON.stringify({ error }),
+    }),
+
+  diagrams: () => request<Artifact[]>("/diagrams"),
+
+  deleteDiagram: (id: string) => request<void>(`/diagrams/${id}`, { method: "DELETE" }),
 
   rebuildIndex: () => request<{ indexed: number }>("/index/rebuild", { method: "POST" }),
 };

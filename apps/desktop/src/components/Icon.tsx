@@ -27,7 +27,8 @@ export type IconName =
   | "refresh"
   | "pencil"
   | "trash"
-  | "eye-off";
+  | "eye-off"
+  | "constellation";
 
 const PATHS: Record<IconName, string> = {
   home: "M4 10.2 12 4l8 6.2V19a1 1 0 0 1-1 1h-4v-6H9v6H5a1 1 0 0 1-1-1z",
@@ -50,6 +51,8 @@ const PATHS: Record<IconName, string> = {
   refresh: "M20 12a8 8 0 1 1-2.6-5.9M20 4v5h-5",
   pencil: "M4 20h4l10-10a2.8 2.8 0 0 0-4-4L4 16z",
   trash: "M4 7h16M10 7V5h4v2M6 7l1 12a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1l1-12",
+  // Three points and the lines between them — the graph itself, not a star.
+  constellation: "M7 8.5 16 6M8 10.5 15.5 16M17.5 8 16.5 14M6 7.5a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3zM17.5 4.5a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3zM16 14.5a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3z",
   "eye-off": "M3 3l18 18M10.6 10.6a2 2 0 0 0 2.8 2.8M6.7 6.8C4.6 8.1 3 10 2 12c2 3.6 5.6 6 10 6 1.7 0 3.3-.4 4.7-1M9.9 6.2A9.9 9.9 0 0 1 12 6c4.4 0 8 2.4 10 6a14 14 0 0 1-2.8 3.5",
 };
 

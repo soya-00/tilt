@@ -41,6 +41,7 @@ const base = {
   },
   persona: { name: "Tilt", personality: "Direct and unsentimental." },
   onScope: vi.fn(),
+  onOpenGraph: vi.fn(),
   onRenameTheme: vi.fn(),
   onDeleteTheme: vi.fn(),
   onSavePersona: vi.fn(),

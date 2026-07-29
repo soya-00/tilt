@@ -48,6 +48,8 @@ class EchoProvider:
             text = _merge()
         elif task == "distill":
             text = _distill(prompt)
+        elif task == "diagram":
+            text = _diagram(prompt)
         else:
             text = _reflect(prompt, _persona_name(system))
 
@@ -246,5 +248,80 @@ def _distill(prompt: str) -> str:
             f"{len(sentences)} candidate sentences, ranked by keyword overlap.",
             "cards": [{"idea": s, "anchor": ""} for s in seen],
             "questions": [],
+        }
+    )
+
+
+# ------------------------------------------------------------------- diagram
+
+
+def _clip(text: str, limit: int) -> str:
+    """Cut at a word boundary. A node reading "a filter rather than a" looks
+    like the renderer broke rather than like a label that was too long."""
+    if len(text) <= limit:
+        return text
+    return text[:limit].rsplit(" ", 1)[0] + "…"
+
+
+def _mermaid_safe(text: str) -> str:
+    """Mermaid node text cannot carry quotes or brackets, and offline labels are
+    lifted straight out of the writer's sentences."""
+    return re.sub(r'["\[\]{}()<>|]', "", text).strip()
+
+
+def _diagram(prompt: str) -> str:
+    """Offline diagramming: grouping by shared words, and honest about it.
+
+    A mindmap, always. The other diagram types assert a direction — this causes
+    that, this became that — and keyword overlap has no way to know a direction.
+    Drawing a flowchart from it would be inventing an argument the writer never
+    made, which is a worse failure than drawing something plain.
+    """
+    label = _mermaid_safe(_section(prompt, "SUBJECT")) or "This journal"
+    # The "(wrote)" / "(read)" marker is the prompt talking, not the writer.
+    # Left in, it is the most repeated word in the block and every entry groups
+    # under a branch called "wrote" — scaffolding presented as a finding.
+    lines = [
+        re.sub(r"^\(\w+\)\s*", "", ln.strip(" -"))
+        for ln in _section(prompt, "ENTRIES").splitlines()
+        if ln.strip(" -")
+    ]
+    body = "\n".join(lines)
+
+    # The words that recur across entries are the only structure available here.
+    common = keywords(body, 5)
+    grouped: dict[str, list[str]] = {term: [] for term in common}
+    loose: list[str] = []
+    for line in lines:
+        terms = set(keywords(line, 10))
+        hit = next((term for term in common if term in terms), None)
+        opening = _clip(_mermaid_safe(line.split(".")[0]), 52)
+        if not opening:
+            continue
+        if hit:
+            grouped[hit].append(opening)
+        else:
+            loose.append(opening)
+
+    out = ["mindmap", f"  root(({label}))"]
+    for term, members in grouped.items():
+        if not members:
+            continue
+        out.append(f"    {term}")
+        for member in members[:4]:
+            out.append(f"      {member}")
+    for member in loose[:3]:
+        out.append(f"    {member}")
+
+    return json.dumps(
+        {
+            "title": f"{label} by shared words"[:60],
+            "kind": "mindmap",
+            "mermaid": "\n".join(out),
+            "note": (
+                "Offline: grouped by words that recur across these entries, "
+                "not by anything understood about them. Add a Gemini key in "
+                "Settings for a diagram that reads the argument."
+            ),
         }
     )

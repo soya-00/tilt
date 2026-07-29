@@ -6,7 +6,10 @@
 
 .app {
   display: grid;
-  grid-template-columns: var(--sidebar) 1fr;
+  /* The third column is the constellation rail, which sizes itself: an `auto`
+     track lets it animate its own width from nothing, and a grid template
+     cannot be transitioned reliably across engines. */
+  grid-template-columns: var(--sidebar) 1fr auto;
   height: 100dvh;
   overflow: hidden;
   background: var(--bg);
@@ -1559,3 +1562,186 @@
   transition: background var(--dur-base) var(--ease);
 }
 
+
+/* ---- Constellation ------------------------------------------------------- */
+/* A rail rather than an overlay. The graph and the stream are the same subject
+   seen two ways, and putting one on top of the other means every click has to
+   dismiss the picture before it can show you the entry. Side by side, following
+   a chain of connections costs no reopening at all. */
+.rail {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  width: clamp(320px, 28vw, 460px);
+  overflow: hidden;
+  transition: width var(--dur-slow) var(--ease);
+}
+
+/* Visibility, not display: it takes the collapsed rail out of the tab order and
+   the accessibility tree without killing the width animation, and the zero-second
+   transition delays that switch until the panel has finished sliding away. */
+.rail--closed {
+  width: 0;
+  visibility: hidden;
+  transition:
+    width var(--dur-slow) var(--ease),
+    visibility 0s linear var(--dur-slow);
+}
+
+/* Fixed to the open width so the contents do not reflow while collapsing —
+   text rewrapping during the slide reads as the panel tearing itself up. */
+.rail__inner {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-4);
+  flex: 1;
+  min-height: 0;
+  width: clamp(320px, 28vw, 460px);
+  padding: var(--s-4);
+}
+
+.rail__head {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+}
+
+.rail__head .sheet__title {
+  margin-right: auto;
+}
+
+.rail__foot {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-1);
+}
+
+.constellation__strip {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+  flex-wrap: wrap;
+}
+
+/* A filter, not a command: reads as off until it is on, and never as a button
+   waiting to be pressed. */
+.chip-btn {
+  padding: var(--s-1) var(--s-3);
+  border-radius: var(--r-pill);
+  border: 1px solid var(--line);
+  font-size: var(--t-meta);
+  color: var(--ink-secondary);
+  white-space: nowrap;
+  transition:
+    background var(--dur-fast) var(--ease),
+    border-color var(--dur-fast) var(--ease),
+    color var(--dur-fast) var(--ease),
+    transform var(--dur-fast) var(--ease-spring);
+}
+
+.chip-btn:hover {
+  background: var(--bg-hover);
+  color: var(--ink);
+}
+
+.chip-btn:active {
+  transform: scale(0.96);
+}
+
+.chip-btn--on {
+  border-color: transparent;
+  background: var(--bg-active);
+  color: var(--ink);
+  font-weight: var(--w-medium);
+}
+
+.constellation__stage {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  border-radius: var(--r-lg);
+  background: var(--wash-2);
+  overflow: hidden;
+}
+
+.constellation__canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.constellation__empty {
+  position: absolute;
+  inset: var(--s-6);
+  display: grid;
+  place-content: center;
+  font-size: var(--t-meta);
+  color: var(--ink-tertiary);
+  text-align: center;
+  text-wrap: pretty;
+}
+
+/* Anchored to the bottom rather than following the cursor: a readout that
+   chases the pointer covers the node you are trying to look at. */
+.constellation__readout {
+  position: absolute;
+  left: var(--s-3);
+  right: var(--s-3);
+  bottom: var(--s-3);
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-1);
+  padding: var(--s-3);
+  border-radius: var(--r-md);
+  pointer-events: none;
+  animation: pop-in var(--dur-fast) var(--ease) both;
+}
+
+.constellation__label {
+  font-size: var(--t-body);
+  font-weight: var(--w-medium);
+  color: var(--ink);
+  text-wrap: pretty;
+}
+
+/* ---- Diagrams ------------------------------------------------------------ */
+.diagram__stage {
+  display: grid;
+  place-items: center;
+  min-height: 320px;
+}
+
+.diagram__stage svg {
+  max-width: 100%;
+  height: auto;
+}
+
+/* The parser's own words and the source that broke it. Both are shown when a
+   diagram fails: the writer paid for two attempts and is owed the evidence,
+   and a diagram that silently never appears reads as a hung app. */
+.diagram__error,
+.diagram__source {
+  padding: var(--s-3);
+  border-radius: var(--r-sm);
+  background: var(--wash-2);
+  font-family: var(--font-mono);
+  font-size: var(--t-meta);
+  line-height: var(--lh-tight);
+  color: var(--ink-secondary);
+  white-space: pre-wrap;
+  overflow-x: auto;
+}
+
+.diagram__error {
+  color: var(--ink);
+}
+
+.sheet__foot--note {
+  justify-content: flex-start;
+}
+
+/* The graph's own folder filter, and the way out of it. */
+.chip-btn__clear {
+  margin-left: var(--s-1);
+  color: var(--ink-tertiary);
+}

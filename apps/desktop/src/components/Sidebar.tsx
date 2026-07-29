@@ -15,6 +15,7 @@ interface Props {
   status: Status | null;
   persona: Persona | null;
   onScope: (scope: Scope) => void;
+  onOpenGraph: () => void;
   onRenameTheme: (themeId: string, label: string) => void;
   onDeleteTheme: (themeId: string) => void;
   onSavePersona: (payload: Partial<Persona>) => void;
@@ -55,6 +56,7 @@ export function Sidebar({
   status,
   persona,
   onScope,
+  onOpenGraph,
   onRenameTheme,
   onDeleteTheme,
   onSavePersona,
@@ -85,6 +87,13 @@ export function Sidebar({
             count={entryCount}
             selected={scope.type === "all"}
             onClick={() => onScope({ type: "all" })}
+          />
+          {/* A keyboard shortcut nobody discovers is a feature nobody has. */}
+          <NavRow
+            icon="constellation"
+            label="Constellation"
+            title="See how it all connects (⌘G)"
+            onClick={onOpenGraph}
           />
         </div>
 
