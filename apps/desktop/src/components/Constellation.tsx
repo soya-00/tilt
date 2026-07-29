@@ -41,6 +41,24 @@ interface Props {
 
 type Window = "all" | "90d" | "30d";
 
+/* How many dots are named at rest, regardless of how many there are.
+ *
+ * Two budgets rather than one, because folders and thoughts scale in opposite
+ * directions. A folder's degree is its membership, so on a large journal
+ * folders would win every place in a shared budget and no thought would ever
+ * be named; on a small one each folder has a single member and they lose every
+ * place instead, taking the labels that orient you with them. Separate
+ * allowances make the map legible at twenty nodes and at three thousand.
+ *
+ * Everything outside the budget answers to hover, which is the point of
+ * rationing: a picture readable at a glance, and a way to interrogate the rest. */
+const FOLDER_LABELS = 6;
+const THOUGHT_LABELS = 8;
+
+/** Below this a dot is not a hub, it is a thing with a neighbour. Naming those
+ *  is what turns the graph into a wall of text. */
+const HUB_DEGREE = 2;
+
 const WINDOWS: { id: Window; label: string }[] = [
   { id: "all", label: "All time" },
   { id: "90d", label: "90 days" },
@@ -213,13 +231,37 @@ export function Constellation({ open, scope, onClose, onOpenEntry, onScope }: Pr
       ctx.fill();
     }
 
-    // Labels last, biggest dot first, and a label is skipped when its box would
-    // land on one already drawn. Overlapping text is worse than absent text:
-    // two labels on top of each other cost you both, and the node they belong
-    // to is still there to hover. The most connected ones win the space, which
-    // is the same ordering the dots themselves already assert.
+    // Labels are rationed, and the ration is a count rather than a threshold.
+    //
+    // A fixed size threshold does not survive scale: pick one that leaves a
+    // 20-thought journal readable and a 3,000-thought one is a solid mat of
+    // text; pick one for 3,000 and a new journal is unlabelled dots. A budget
+    // self-scales — the busiest dozen are named at any size, which at twenty
+    // nodes is most of them and at three thousand is the handful of hubs you
+    // could actually have been looking for. Everything else answers to hover.
+    const rank = (kind: "theme" | "entry", take: number, floor: number) =>
+      sim.nodes
+        .filter((n) => (n.kind === "theme") === (kind === "theme") && n.degree >= floor)
+        .sort((a, b) => b.degree - a.degree || a.id.localeCompare(b.id))
+        .slice(0, take)
+        .map((n) => n.id);
+
+    const budget = new Set([
+      // A folder with one member is still the name of a cluster, so folders
+      // have no hub floor — there is nothing else on the canvas that says what
+      // you are looking at.
+      ...rank("theme", FOLDER_LABELS, 1),
+      ...rank("entry", THOUGHT_LABELS, HUB_DEGREE),
+    ]);
+
+    // Biggest first, and a label is skipped when its box would land on one
+    // already drawn. Overlapping text is worse than absent text: two labels on
+    // top of each other cost you both, and the node is still there to hover.
     const taken: { x: number; y: number; w: number }[] = [];
     for (const node of [...sim.nodes].sort((a, b) => b.r - a.r)) {
+      const focused = node === hover || near?.has(node.id);
+      if (!focused && !budget.has(node.id)) continue;
+
       const x = Math.min(Math.max(node.x * scale + dx, room / 2 + 8), w - room / 2 - 8);
       const y = node.y * scale + dy + node.r + 5;
       const text = clip(ctx, node.label, room);
@@ -227,11 +269,14 @@ export function Constellation({ open, scope, onClose, onOpenEntry, onScope }: Pr
       const clash = taken.some(
         (box) => Math.abs(box.y - y) < 13 && Math.abs(box.x - x) < (box.w + width) / 2 + 6,
       );
-      if (clash && node !== hover) continue;
+      // A hovered node's label is never dropped. It is the answer to a question
+      // the user just asked, and losing it to a collision would make hovering
+      // feel broken rather than crowded.
+      if (clash && !focused) continue;
       taken.push({ x, y, w: width });
 
       const strength = lit(node.id) * (node.provenance === "source" ? 0.6 : 1);
-      ctx.fillStyle = `rgba(${dot},${strength * 0.62})`;
+      ctx.fillStyle = `rgba(${dot},${strength * (focused ? 0.95 : 0.62)})`;
       ctx.fillText(text, x, y);
     }
   }, [dark, hover]);

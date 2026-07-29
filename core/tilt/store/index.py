@@ -732,8 +732,29 @@ class Index:
         toggle rather than the default.
         """
         where, args = self._graph_where(since, theme_id, include_sources)
+        # Ordered by how connected an entry is, not by how recent it is. The cap
+        # only bites on a large journal, and that is exactly where newest-first
+        # is wrong: the view drops every hub older than the last few hundred
+        # entries and draws the sparsest possible picture of a dense journal.
+        # Ties fall back to recency, so a journal with no links yet still reads
+        # newest-first.
         rows = self._conn.execute(
-            f"SELECT e.* FROM entries e WHERE {where} ORDER BY e.created DESC LIMIT ?",
+            f"""
+            WITH degree AS (
+                SELECT id, SUM(n) AS n FROM (
+                    SELECT src_id AS id, COUNT(*) AS n FROM links
+                     WHERE dismissed = 0 GROUP BY src_id
+                    UNION ALL
+                    SELECT dst_id AS id, COUNT(*) AS n FROM links
+                     WHERE dismissed = 0 GROUP BY dst_id
+                ) GROUP BY id
+            )
+            SELECT e.* FROM entries e
+            LEFT JOIN degree d ON d.id = e.id
+            WHERE {where}
+            ORDER BY COALESCE(d.n, 0) DESC, e.created DESC
+            LIMIT ?
+            """,
             [*args, limit],
         )
         return [_row_to_entry(r) for r in rows]

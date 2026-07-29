@@ -159,7 +159,10 @@ def test_links_between_an_empty_set_asks_nothing(journal: Journal) -> None:
 # --------------------------------------------------------------------- the cap
 
 
-def test_the_cap_keeps_the_newest_and_says_so(journal: Journal) -> None:
+def test_with_nothing_connected_the_cap_keeps_the_newest(journal: Journal) -> None:
+    """Rank is by connections, and every entry here has none — so the tie-break
+    decides, and a journal with no links yet reads newest-first as it always
+    did."""
     made = [journal.create(EntryCreate(body=f"Thought {n}.")) for n in range(5)]
 
     drawn = journal.index.graph_entries(limit=2)
@@ -265,3 +268,30 @@ def test_the_graph_carries_the_rationale_for_each_connection(
 def test_an_empty_journal_draws_nothing_without_failing(client: TestClient) -> None:
     graph = client.get("/graph").json()
     assert graph == {"nodes": [], "edges": [], "truncated": False, "total": 0}
+
+
+def test_the_cap_keeps_the_most_connected_not_the_most_recent(journal: Journal) -> None:
+    """The cap only bites on a large journal, which is exactly where recency is
+    the wrong axis: it drops every hub older than the last few hundred entries
+    and draws the sparsest possible picture of a dense one."""
+    hub = journal.create(EntryCreate(body="Attention is a budget."))
+    spoke = journal.create(EntryCreate(body="Distraction is the interest."))
+    _link(journal, hub.id, spoke.id)
+    # Written later, and connected to nothing.
+    for n in range(4):
+        journal.create(EntryCreate(body=f"An unrelated thought {n}."))
+
+    drawn = journal.index.graph_entries(limit=2)
+    assert hub.id in {e.id for e in drawn}, "the hub outranks four newer entries"
+    assert spoke.id in {e.id for e in drawn}
+
+
+def test_a_dismissed_link_does_not_count_toward_rank(journal: Journal) -> None:
+    a = journal.create(EntryCreate(body="First."))
+    b = journal.create(EntryCreate(body="Second."))
+    _link(journal, a.id, b.id)
+    journal.dismiss_link(journal.index.all_links()[0].id)
+    later = journal.create(EntryCreate(body="Third."))
+
+    # With the link gone all three are equal, so recency decides again.
+    assert journal.index.graph_entries(limit=1)[0].id == later.id
