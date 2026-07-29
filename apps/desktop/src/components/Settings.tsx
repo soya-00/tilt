@@ -1,13 +1,14 @@
 import { useEffect, useState } from "react";
 
 import { useLiquidGlass } from "../lib/useLiquidGlass";
-import type { PublicSettings } from "../lib/types";
+import type { PublicSettings, Status } from "../lib/types";
 import { ActivityLog } from "./ActivityLog";
 import { Icon } from "./Icon";
 
 interface Props {
   open: boolean;
   settings: PublicSettings | null;
+  status: Status | null;
   theme: "light" | "dark";
   onClose: () => void;
   onSave: (payload: { gemini_api_key?: string; gemini_model?: string }) => Promise<void>;
@@ -24,6 +25,7 @@ interface Props {
 export function Settings({
   open,
   settings,
+  status,
   theme,
   onClose,
   onSave,
@@ -75,6 +77,10 @@ export function Settings({
       >
         <header className="sheet__head">
           <h2 className="sheet__title">Settings</h2>
+          {/* The service reports its own version, not the interface's. They are
+              separate processes and can be different builds — which is the only
+              way to tell a rebuilt app from one still running a stale service. */}
+          {status && <span className="sheet__version">Tilt {status.version}</span>}
           <button className="icon-btn" aria-label="Close settings" onClick={onClose}>
             <Icon name="close" size={18} />
           </button>

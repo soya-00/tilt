@@ -232,6 +232,40 @@ Both windows load the same bundle; a query string decides which is which. In a
 browser every shell-specific path is inert, so `npm run dev` still renders the
 design exactly as written.
 
+## Upgrading
+
+Check which build is answering first: **Settings** shows the version next to the
+title. That number comes from the *service*, not the interface — they are
+separate processes and can be different builds, which is the only way to tell a
+rebuilt app from one still running a stale copy of the service.
+
+```bash
+git pull
+cd core && .venv/bin/python -m pip install -e ".[dev]"   # not optional
+```
+
+The reinstall is the step that catches people out. v0.2 added a dependency
+(APScheduler, for the unattended jobs), and without it the service exits at
+startup with `ModuleNotFoundError` — the interface then shows *Cannot reach the
+Tilt service*, which looks like a crash rather than a missing package.
+
+Then restart whatever you were running: both terminals, or `npm run tauri dev`.
+
+> **A built `Tilt.app` does not update with `git pull`.** It carries its own
+> frozen copy of the service, so it has to be rebuilt:
+> `./scripts/build-sidecar.sh && cd apps/desktop && npm run tauri build`.
+> Quit the running app first — the old one holds the journal open.
+
+Your journal needs nothing. The index migrates itself on first boot, adding
+columns rather than rebuilding, because a rebuild would discard every folder
+name you have pinned by renaming it — that lives in the database and nowhere
+else. Entries, folders, and connections are untouched.
+
+One thing does not fix itself. v0.2 corrected the offline provider's stopword
+list, which had been letting words like "than" become tags and folder names.
+That applies to filing from here on; a folder already named `Than` stays until
+you rename it or delete its entries.
+
 ## Trying the MVP
 
 With both processes running, open http://localhost:5173 and walk this path:

@@ -7,6 +7,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from tilt import __version__
 from tilt.agents import build_provider
 from tilt.agents.ledger import MeteredProvider
 from tilt.api.auth import TokenAuthMiddleware
@@ -68,7 +69,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     app = FastAPI(
         title="Tilt",
-        version="0.1.0",
+        version=__version__,
         summary="A thinking instrument, not a productivity tool.",
         lifespan=lifespan,
     )

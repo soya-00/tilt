@@ -1,6 +1,6 @@
 [package]
 name = "tilt"
-version = "0.1.0"
+version = "0.2.0"
 description = "A thinking instrument, not a productivity tool."
 authors = ["soya-00"]
 edition = "2021"

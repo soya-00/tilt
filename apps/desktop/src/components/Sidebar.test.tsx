@@ -30,6 +30,7 @@ const base = {
   entryCount: 6,
   status: {
     ok: true,
+    version: "0.2.0",
     provider: "echo",
     offline: true,
     model: "offline",

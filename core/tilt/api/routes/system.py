@@ -5,6 +5,7 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel
 
+from tilt import __version__
 from tilt.agents.ledger import MeteredProvider
 from tilt.api.deps import get_journal, get_provider, get_settings_dep
 from tilt.config import Settings
@@ -15,6 +16,12 @@ router = APIRouter(tags=["system"])
 
 class Status(BaseModel):
     ok: bool
+    version: str
+    """Which build is actually answering.
+
+    Reported by the service rather than the interface, because those are two
+    separate processes that can be different versions — a rebuilt app bundle
+    still carrying a stale frozen service is the exact confusion this settles."""
     provider: str
     offline: bool
     model: str
@@ -38,6 +45,7 @@ def status(
     offline = provider.name == "echo"
     return Status(
         ok=True,
+        version=__version__,
         provider=provider.name,
         offline=offline,
         model="offline" if offline else settings.gemini_model,

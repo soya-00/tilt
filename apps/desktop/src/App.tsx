@@ -237,6 +237,7 @@ export default function App() {
       <Settings
         open={settingsOpen}
         settings={settings}
+        status={status}
         theme={theme}
         onClose={() => setSettingsOpen(false)}
         onSave={journal.saveSettings}

@@ -85,6 +85,8 @@ export type Scope =
 
 export interface Status {
   ok: boolean;
+  /** The version of the *service*, which is a separate process from this UI. */
+  version: string;
   provider: string;
   offline: boolean;
   model: string;

@@ -1159,13 +1159,22 @@
 
 .sheet__head {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
+  align-items: baseline;
+  gap: var(--s-2);
 }
 
 .sheet__title {
   font-size: var(--t-entry);
   font-weight: var(--w-semi);
+}
+
+/* Sits with the title; the auto margin is what pushes the close button right.
+   Machine-reported, so it is set in the machine's voice. */
+.sheet__version {
+  margin-right: auto;
+  font-family: var(--font-mono);
+  font-size: var(--t-meta);
+  color: var(--ink-tertiary);
 }
 
 .sheet__section {
