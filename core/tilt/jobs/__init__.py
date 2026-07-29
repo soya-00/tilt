@@ -12,8 +12,17 @@ from __future__ import annotations
 
 from tilt.jobs.runner import JOBS, run_job
 from tilt.jobs.scheduler import Schedule
+from tilt.jobs.scout import scout
 from tilt.jobs.sweep import sweep
 from tilt.jobs.themes import keep_themes
 from tilt.jobs.vectors import embed_pending
 
-__all__ = ["JOBS", "Schedule", "embed_pending", "keep_themes", "run_job", "sweep"]
+__all__ = [
+    "JOBS",
+    "Schedule",
+    "embed_pending",
+    "keep_themes",
+    "run_job",
+    "scout",
+    "sweep",
+]

@@ -1389,6 +1389,18 @@
   line-height: 1.55;
 }
 
+/* Short, and never grows on its own: a feed list that pushed the rest of
+   Settings off the screen would be a list that punished you for following
+   things. It scrolls, like the brief it fills. */
+.field__input--feeds {
+  min-height: 76px;
+  max-height: 160px;
+  resize: vertical;
+  font-family: var(--font-mono);
+  font-size: var(--t-meta);
+  line-height: 1.6;
+}
+
 /* ---- Liquid toggle ------------------------------------------------------- */
 /* The theme switch is the one control in the app whose whole job is to be
  * touched, so it is the one that behaves most like liquid.
@@ -1795,4 +1807,118 @@
 .dormant__why {
   color: var(--ink-tertiary);
   text-wrap: pretty;
+}
+
+/* ---- Brief ---------------------------------------------------------------
+   A shelf, not an inbox. No counts, no progress, no tick boxes — the visual
+   grammar has to carry "these are candidates" on its own, because a list of
+   rows with buttons on the right reads as a queue unless it is told not to. */
+.brief__add {
+  padding-bottom: var(--s-3);
+  border-bottom: 1px solid var(--line);
+}
+
+.brief__list {
+  display: flex;
+  flex-direction: column;
+  list-style: none;
+}
+
+.brief__item {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: var(--s-2);
+  border-radius: var(--r-md);
+}
+
+.brief__item:hover {
+  background: var(--wash-1);
+}
+
+.brief__title {
+  font-weight: var(--w-medium);
+  line-height: var(--lh-tight);
+  text-wrap: pretty;
+}
+
+.brief__title a {
+  color: inherit;
+  text-decoration: none;
+}
+
+.brief__title a:hover {
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+/* Why it is here, in the voice of whoever put it there. The most useful line
+   on the row a fortnight later, so it is not the quietest. */
+.brief__why {
+  font-size: var(--t-meta);
+  color: var(--ink-secondary);
+  line-height: var(--lh-tight);
+  text-wrap: pretty;
+}
+
+.brief__foot {
+  display: flex;
+  align-items: baseline;
+  gap: var(--s-2);
+  margin-top: 3px;
+  min-height: 18px;
+}
+
+.brief__meta {
+  flex: 1;
+  font-size: var(--t-meta);
+  color: var(--ink-tertiary);
+}
+
+/* Held back until the row is hovered. Buttons standing permanently beside
+   every row is what makes a list look like work to get through. */
+.brief__actions {
+  display: flex;
+  gap: var(--s-3);
+  opacity: 0;
+  transition: opacity var(--dur-fast) var(--ease);
+}
+
+.brief__item:hover .brief__actions,
+.brief__item:focus-within .brief__actions {
+  opacity: 1;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .brief__actions {
+    opacity: 1;
+  }
+}
+
+/* Text, not a chip. These sit on the metadata line and a bordered button there
+   would outweigh the title above it. */
+.link-btn {
+  font-size: var(--t-meta);
+  font-weight: var(--w-medium);
+  color: var(--ink);
+  background: none;
+  transition: color var(--dur-fast) var(--ease);
+}
+
+.link-btn:hover {
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.link-btn--quiet {
+  font-weight: 400;
+  color: var(--ink-tertiary);
+}
+
+.link-btn:disabled {
+  opacity: 0.5;
+}
+
+.brief__error {
+  color: var(--ink);
 }

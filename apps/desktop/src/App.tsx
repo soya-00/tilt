@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 
+import { Brief } from "./components/Brief";
 import { CommandPalette, type Command } from "./components/CommandPalette";
 import { Composer, type ComposerHandle } from "./components/Composer";
 import { Constellation } from "./components/Constellation";
@@ -52,6 +53,7 @@ export default function App() {
   const [sourceOpen, setSourceOpen] = useState(false);
   const [graphOpen, setGraphOpen] = useState(false);
   const [diagramOpen, setDiagramOpen] = useState(false);
+  const [briefOpen, setBriefOpen] = useState(false);
   const [sourcePrefill, setSourcePrefill] = useState<{ title: string; text: string } | null>(null);
   const composer = useRef<ComposerHandle>(null);
   const scroller = useRef<HTMLDivElement>(null);
@@ -145,6 +147,12 @@ export default function App() {
             : `Diagram ${scopeName(scope)}`,
         run: () => scope.type !== "all" && setDiagramOpen(true),
       },
+      {
+        id: "brief",
+        label: "Open the brief",
+        hint: "⌘B",
+        run: () => setBriefOpen(true),
+      },
       { id: "all", label: "Show everything", run: () => setScope({ type: "all" }) },
       ...themes.map((theme) => ({
         id: `theme-${theme.id}`,
@@ -183,6 +191,9 @@ export default function App() {
       } else if (mod && e.key.toLowerCase() === "g") {
         e.preventDefault();
         setGraphOpen((o) => !o);
+      } else if (mod && e.key.toLowerCase() === "b") {
+        e.preventDefault();
+        setBriefOpen((o) => !o);
       } else if (mod && e.key === ",") {
         e.preventDefault();
         setSettingsOpen(true);
@@ -214,6 +225,7 @@ export default function App() {
         persona={persona}
         onScope={setScope}
         onOpenGraph={() => setGraphOpen(true)}
+        onOpenBrief={() => setBriefOpen(true)}
         onRenameTheme={journal.renameTheme}
         onDeleteTheme={journal.deleteTheme}
         onSavePersona={journal.savePersona}
@@ -325,6 +337,12 @@ export default function App() {
         open={diagramOpen}
         scope={scope}
         onClose={() => setDiagramOpen(false)}
+      />
+
+      <Brief
+        open={briefOpen}
+        onClose={() => setBriefOpen(false)}
+        onRead={() => void journal.refresh()}
       />
 
       <SourceSheet

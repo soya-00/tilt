@@ -11,7 +11,16 @@ from tilt import __version__
 from tilt.agents import build_provider
 from tilt.agents.ledger import MeteredProvider
 from tilt.api.auth import TokenAuthMiddleware
-from tilt.api.routes import agent, diagram, entries, graph, ingest, library, system
+from tilt.api.routes import (
+    agent,
+    brief,
+    diagram,
+    entries,
+    graph,
+    ingest,
+    library,
+    system,
+)
 from tilt.api.routes import settings as settings_routes
 from tilt.config import Settings, get_settings
 from tilt.embed import build_embedder
@@ -20,6 +29,7 @@ from tilt.journal import Journal
 from tilt.persona import PersonaStore
 from tilt.settings_store import SettingsStore
 from tilt.store.artifacts import ArtifactStore
+from tilt.store.brief import BriefStore
 from tilt.store.index import Index
 from tilt.store.vectors import VectorStore
 
@@ -60,6 +70,10 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         app.state.settings_store = store
         app.state.persona = PersonaStore(settings.internal_dir / "agent.json")
         app.state.artifacts = ArtifactStore(settings.diagrams_dir)
+        # Not hung off the journal, and not indexed. Nothing in the brief is
+        # part of the journal until it is read, and giving it a place inside
+        # would blur the line the whole feature depends on.
+        app.state.brief = BriefStore(settings.brief_dir)
 
         provider = MeteredProvider(build_provider(settings), index, ceiling)
         app.state.provider = provider
@@ -106,6 +120,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(ingest.router)
     app.include_router(graph.router)
     app.include_router(diagram.router)
+    app.include_router(brief.router)
     app.include_router(settings_routes.router)
     app.include_router(agent.router)
     return app

@@ -91,6 +91,11 @@ class GeminiProvider:
             # alternative is a scraper here, which would need maintaining
             # against every site that changes its markup.
             tools = [types.Tool(url_context=types.UrlContext())]
+        elif reference is not None and reference.kind == "search":
+            # The scout's gather pass. Same bargain as url_context: the model
+            # goes and looks rather than this file growing an API client for
+            # somebody's search product.
+            tools = [types.Tool(google_search=types.GoogleSearch())]
 
         if system is None and tools is None:
             return None

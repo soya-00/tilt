@@ -50,6 +50,8 @@ class EchoProvider:
             text = _distill(prompt)
         elif task == "diagram":
             text = _diagram(prompt)
+        elif task == "scout":
+            text = _scout(prompt)
         else:
             text = _reflect(prompt, _persona_name(system))
 
@@ -323,5 +325,47 @@ def _diagram(prompt: str) -> str:
                 "not by anything understood about them. Add a Gemini key in "
                 "Settings for a diagram that reads the argument."
             ),
+        }
+    )
+
+
+# --------------------------------------------------------------------- scout
+
+
+def _scout(prompt: str) -> str:
+    """Offline triage: word overlap between a candidate and what you have asked.
+
+    Deliberately stingy, and for the same reason the real prompt is. Offline
+    this cannot read either the question or the paper — it can only notice that
+    they use some of the same words, which is a far weaker claim than "this
+    might answer that". One pick at most, and only on a real overlap.
+    """
+    asked = set(keywords(_section(prompt, "OPEN QUESTIONS"), 12))
+    asked |= set(keywords(_section(prompt, "SUBJECTS"), 8))
+    candidates = _section(prompt, "TURNED UP TODAY")
+
+    best_n, best_shared = None, set()
+    for block in re.split(r"\n\n(?=\[\d+\])", candidates):
+        match = re.match(r"\[(\d+)\]", block.strip())
+        if not match:
+            continue
+        shared = asked & set(keywords(block, 12))
+        if len(shared) > len(best_shared):
+            best_n, best_shared = int(match.group(1)), shared
+
+    # Three shared words rather than the connector's two: proposing something
+    # to read costs the reader an afternoon, where proposing a link costs them
+    # a glance.
+    if best_n is None or len(best_shared) < 3:
+        return json.dumps({"picks": []})
+    return json.dumps(
+        {
+            "picks": [
+                {
+                    "n": best_n,
+                    "why": f"shares {_join(sorted(best_shared)[:3])} with what you have asked"
+                    " — matched offline by keyword, not by reading either",
+                }
+            ]
         }
     )

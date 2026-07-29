@@ -77,6 +77,9 @@ export interface PublicSettings {
   key_hint: string;
   gemini_model: string;
   monthly_cost_ceiling_usd: number;
+  /** Atom or RSS the scout watches. Not a secret — these are public addresses,
+   *  and seeing which ones are set is the point of them living here. */
+  feeds: string[];
 }
 
 /** What the view is currently showing. */
@@ -199,4 +202,26 @@ export interface DiagramScope {
   theme_id?: string;
   tag?: string;
   q?: string;
+}
+
+/* -------------------------------------------------------------------- brief */
+
+/** Reading that has not happened yet.
+ *
+ *  Not an entry, and not a task. Nothing here is completed — an item leaves by
+ *  being read, at which point the usual distil path turns it into a source
+ *  entry, or by being dismissed as not worth it. One that simply sits there is
+ *  in no way a failure. */
+export interface BriefItem {
+  id: string;
+  title: string;
+  url: string | null;
+  /** What made this worth proposing — the question it might answer, or your own
+   *  note. Without it a list of links is unreadable a fortnight later. */
+  why: string;
+  /** `scout` if the agent went looking, `you` if you put it there. */
+  origin: "scout" | "you";
+  created: string;
+  dismissed: boolean;
+  path: string;
 }

@@ -84,6 +84,47 @@ def test_settings_endpoints(client: TestClient) -> None:
     assert saved.json()["key_hint"] == "…4321"
 
 
+def test_feeds_round_trip_through_the_api(client: TestClient) -> None:
+    """The scout is only worth pointing somewhere if you can point it. Feeds go
+    out in the clear, unlike the key — they are addresses of public pages, and
+    hiding them would mean nobody could tell what was being watched."""
+    saved = client.patch(
+        "/settings", json={"feeds": ["https://example.com/feed.xml", "  "]}
+    )
+
+    assert saved.json()["feeds"] == ["https://example.com/feed.xml"]
+    assert client.get("/settings").json()["feeds"] == ["https://example.com/feed.xml"]
+
+
+def test_a_feed_must_be_an_http_url(tmp_path) -> None:
+    """A file:// or data: URL here would point the scout at the machine it runs
+    on, which is not what "watch a publication" means to anyone typing it."""
+    store = SettingsStore(tmp_path / "settings.json")
+
+    store.update(
+        RuntimeSettingsUpdate(
+            feeds=[
+                "file:///etc/passwd",
+                "javascript:alert(1)",
+                "https://ok.example/feed",
+                "https://ok.example/feed",
+            ]
+        )
+    )
+
+    assert store.load().feeds == ["https://ok.example/feed"]
+
+
+def test_saving_a_key_leaves_the_feeds_alone(tmp_path) -> None:
+    """Every field the UI does not send has to survive the ones it does."""
+    store = SettingsStore(tmp_path / "settings.json")
+    store.update(RuntimeSettingsUpdate(feeds=["https://ok.example/feed"]))
+
+    store.update(RuntimeSettingsUpdate(gemini_api_key="AIzaABC"))
+
+    assert store.load().feeds == ["https://ok.example/feed"]
+
+
 def test_persona_endpoints(client: TestClient) -> None:
     updated = client.patch("/agent/persona", json={"name": "Neo", "personality": "Terse."})
     assert updated.json() == {"name": "Neo", "personality": "Terse."}
