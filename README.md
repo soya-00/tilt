@@ -343,12 +343,19 @@ rebuilt app from one still running a stale copy of the service.
 ```bash
 git pull
 cd core && .venv/bin/python -m pip install -e ".[dev]"   # not optional
+cd ../apps/desktop && npm install                        # also not optional
 ```
 
-The reinstall is the step that catches people out. v0.2 added a dependency
-(APScheduler, for the unattended jobs), and without it the service exits at
-startup with `ModuleNotFoundError` — the interface then shows *Cannot reach the
-Tilt service*, which looks like a crash rather than a missing package.
+The reinstall is the step that catches people out, on either side. `git pull`
+updates `pyproject.toml` and `package.json`; it does not touch your `.venv` or
+`node_modules`, so a new dependency in either one is invisible until you
+reinstall. v0.2 added a Python dependency (APScheduler, for the unattended
+jobs) — skip that reinstall and the service exits at startup with
+`ModuleNotFoundError`, which the interface reports as *Cannot reach the Tilt
+service*, reading like a crash rather than a missing package. v0.3 added a
+frontend one (`mermaid`, for Diagram-this) — skip that one and `npm run tauri
+build` or `npm run dev` fails at compile time with `Cannot find module
+'mermaid'`.
 
 Then restart whatever you were running: both terminals, or `npm run tauri dev`.
 
