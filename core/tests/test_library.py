@@ -89,6 +89,52 @@ def test_prune_removes_empty_themes(index: Index) -> None:
     assert index.themes() == []
 
 
+def test_deleting_a_theme_keeps_every_entry_in_it(journal: Journal) -> None:
+    """The point of the control. A folder is the agent's opinion about your
+    writing; deleting it must discard the opinion and nothing else."""
+    theme = journal.index.upsert_theme(_theme("Attention"))
+    entries = [journal.create(EntryCreate(body=f"Thought {i}.")) for i in range(3)]
+    for entry in entries:
+        journal.index.set_entry_themes(entry.id, [theme.id])
+
+    assert journal.delete_theme(theme.id) is True
+
+    assert journal.index.themes() == []
+    for entry in entries:
+        assert journal.get(entry.id) is not None
+        assert journal.thread(entry.id).themes == []
+
+
+def test_deleting_a_theme_leaves_an_entry_s_other_folders_alone(journal: Journal) -> None:
+    keep = journal.index.upsert_theme(_theme("Memory"))
+    drop = journal.index.upsert_theme(_theme("Attention"))
+    entry = journal.create(EntryCreate(body="Filed under both."))
+    journal.index.set_entry_themes(entry.id, [keep.id, drop.id])
+
+    journal.delete_theme(drop.id)
+
+    assert [t.label for t in journal.thread(entry.id).themes] == ["Memory"]
+
+
+def test_a_deleted_theme_does_not_come_back_on_rebuild(journal: Journal) -> None:
+    """Themes are restored from each entry's own Markdown at boot. A delete
+    that only touched SQLite would resurrect the folder on the next start,
+    which is the failure mode this rewrite exists to prevent."""
+    theme = journal.index.upsert_theme(_theme("Attention"))
+    entry = journal.create(EntryCreate(body="A thought about attention."))
+    journal.index.set_entry_themes(entry.id, [theme.id])
+    journal.set_themes(entry.id, ["Attention"])
+
+    journal.delete_theme(theme.id)
+    journal.rebuild()
+
+    assert journal.index.themes() == []
+
+
+def test_deleting_a_theme_that_does_not_exist_reports_it(journal: Journal) -> None:
+    assert journal.delete_theme("nope") is False
+
+
 # ---------------------------------------------------------------------- tags
 
 

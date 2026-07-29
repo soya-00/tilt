@@ -13,7 +13,6 @@ import { api } from "./lib/api";
 import { onCaptured } from "./lib/shell";
 import { describe, useAway } from "./lib/useAway";
 import { useJournal } from "./lib/useJournal";
-import { useLiquidGlass } from "./lib/useLiquidGlass";
 import { useTheme } from "./lib/useTheme";
 
 /** Past this distance from the bottom, the user is reading history — never
@@ -31,7 +30,6 @@ export default function App() {
   const [sourcePrefill, setSourcePrefill] = useState<{ title: string; text: string } | null>(null);
   const composer = useRef<ComposerHandle>(null);
   const scroller = useRef<HTMLDivElement>(null);
-  const paneGlass = useLiquidGlass<HTMLElement>();
   const atBottom = useRef(true);
 
   const { scope, setScope, themes, tags, status, persona, settings, threads } = journal;
@@ -148,15 +146,12 @@ export default function App() {
         persona={persona}
         onScope={setScope}
         onRenameTheme={journal.renameTheme}
+        onDeleteTheme={journal.deleteTheme}
         onSavePersona={journal.savePersona}
       />
 
-      <main
-        ref={paneGlass.ref}
-        className="pane glass-live"
-        onPointerMove={paneGlass.onPointerMove}
-        onPointerLeave={paneGlass.onPointerLeave}
-      >
+      {/* Flat paper, never glass: what you wrote does not sit on a card. */}
+      <main className="pane">
         {/* Not a header: transparent, no border, scrolls nothing. */}
         <div className="pane__strip">
           <SearchBar scope={scope} onScope={setScope} />
@@ -206,7 +201,7 @@ export default function App() {
           </div>
         </div>
 
-        <div className="pane__composer">
+        <div className="pane__composer glass glass--edge-top">
           <div className="pane__composer-inner">
             <Composer
               ref={composer}

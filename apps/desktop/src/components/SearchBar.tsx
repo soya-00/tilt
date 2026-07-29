@@ -14,6 +14,10 @@ interface Props {
  * Debounced so a query fires once you pause rather than on every keystroke,
  * and it sets the scope rather than opening a separate results view — searching
  * is just another way of narrowing the same thread.
+ *
+ * It is the one piece of glass floating in open space rather than anchored to a
+ * window edge, so it takes the full rim: a closed pill lit all the way round,
+ * hottest on the edge facing the light.
  */
 export function SearchBar({ scope, onScope }: Props) {
   const [value, setValue] = useState(scope.type === "search" ? scope.q : "");
@@ -40,7 +44,7 @@ export function SearchBar({ scope, onScope }: Props) {
   }, [value, onScope]);
 
   return (
-    <div className={"search" + (value ? " search--active" : "")}>
+    <div className={"search glass" + (value ? " search--active" : "")}>
       <Icon name="search" size={17} className="search__glyph" />
       <input
         ref={input}

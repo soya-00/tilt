@@ -161,6 +161,26 @@ class Journal:
         entry.theme_labels = labels
         self._rewrite(entry)
 
+    def delete_theme(self, theme_id: str) -> bool:
+        """Drop a folder, keeping every entry that was in it.
+
+        The agent's guess about how a body of writing divides up is sometimes
+        just wrong, and this is the only way to say so. What is removed is the
+        categorisation, never the thought: each affected entry is rewritten with
+        the folder struck from its frontmatter and is otherwise untouched.
+
+        The rewrite is the whole job, not bookkeeping around it. Themes are
+        rebuilt from each entry's own Markdown on boot, so a delete confined to
+        SQLite would resurrect the folder the next time Tilt started.
+        """
+        members = self.index.entries_in_theme(theme_id)
+        if not self.index.delete_theme(theme_id):
+            return False
+        for entry in members:
+            remaining = self.index.themes_for([entry.id]).get(entry.id, [])
+            self.set_themes(entry.id, [t.label for t in remaining])
+        return True
+
     def record_link(self, entry_id: str, record: LinkRecord) -> None:
         """Append a connection to the source entry's frontmatter."""
         entry = self._from_disk(entry_id)

@@ -6,6 +6,7 @@ import { CaptureWindow } from "./components/CaptureWindow";
 import { inShell, isCaptureWindow } from "./lib/shell";
 import "./styles/tokens.css";
 import "./styles/reset.css";
+import "./styles/glass.css";
 import "./styles/app.css";
 import "./styles/overlay.css";
 import "./styles/shell.css";

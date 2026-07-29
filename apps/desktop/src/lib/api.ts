@@ -101,6 +101,9 @@ export const api = {
   renameTheme: (id: string, label: string) =>
     request<Theme>(`/themes/${id}`, { method: "PATCH", body: JSON.stringify({ label }) }),
 
+  /** Removes the folder and its filing. The entries in it are untouched. */
+  deleteTheme: (id: string) => request<void>(`/themes/${id}`, { method: "DELETE" }),
+
   tags: () => request<TagCount[]>("/tags"),
 
   dismissLink: (id: string) => request<void>(`/links/${id}`, { method: "DELETE" }),

@@ -1,0 +1,239 @@
+/* The glass material.
+ *
+ * One class, three layers, in the order light meets them:
+ *
+ *   1. Refraction — `backdrop-filter` blurs and saturates whatever is behind,
+ *      so a panel carries the colour of the room rather than a tint of its own.
+ *   2. Body — a translucent fill under a broad sheen: light scattering inside
+ *      the slab, brightest on the side facing the lamp.
+ *   3. Rim — the specular highlight, and the part that actually sells it. A
+ *      glass edge is a curved surface, so how bright it is at any point is a
+ *      function of the angle between that point's surface normal and the light.
+ *      Facing the light it is nearly white; ninety degrees off it reflects
+ *      almost nothing; on the far side it lights up a second, weaker time where
+ *      light leaves through the back face.
+ *
+ * The light is fixed in the window (--light in tokens.css). It deliberately
+ * does not follow the pointer. A highlight that chases the cursor only tells
+ * you where your cursor is, which you already know, and it breaks the one
+ * illusion the material depends on: that these panels are objects sitting in a
+ * lit room rather than rectangles reacting to input.
+ *
+ * The rim lives on ::before, so ::after stays free for whatever the component
+ * it is applied to already needed.
+ */
+
+.glass {
+  position: relative;
+  isolation: isolate;
+  background:
+    linear-gradient(var(--sheen-angle), var(--sheen), transparent 52%),
+    var(--glass);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+  box-shadow: var(--glass-edge), var(--glass-depth);
+}
+
+/* Floating over arbitrary content rather than sitting against the wash, so it
+   has to stay legible on top of anything. */
+.glass--heavy {
+  background:
+    linear-gradient(var(--sheen-angle), var(--sheen), transparent 46%),
+    var(--glass-strong);
+  backdrop-filter: var(--glass-blur-heavy);
+  -webkit-backdrop-filter: var(--glass-blur-heavy);
+}
+
+/* The rim.
+ *
+ * A conic gradient, swept from the light's own bearing so the ramp is written
+ * in the light's frame: 0deg is the edge pointing straight at the lamp, 180deg
+ * the edge pointing directly away. Between them the normal turns away from the
+ * light and the reflection falls off. Then the ring is masked down to its own
+ * border so only the edge is painted — `exclude` subtracts the content box from
+ * the padding box, which leaves a band exactly --rim wide that follows the
+ * corner radius instead of cutting across it. */
+.glass::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  padding: var(--rim);
+  border-radius: inherit;
+  pointer-events: none;
+  background: conic-gradient(
+    from var(--light),
+    var(--rim-hi) 0deg,
+    var(--rim-lo) 74deg,
+    var(--rim-mid) 152deg,
+    var(--rim-mid) 208deg,
+    var(--rim-lo) 286deg,
+    var(--rim-hi) 360deg
+  );
+  -webkit-mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  mask-composite: exclude;
+  transition: opacity var(--dur-base) var(--ease);
+}
+
+/* Panels that meet the window edge have one real edge to light. Collapsing the
+   ring to that side keeps the highlight honest — a full outline on something
+   running off-screen reads as a border, which is the opposite of the point. */
+.glass--edge-right::before {
+  padding: 0 var(--rim) 0 0;
+}
+
+.glass--edge-top::before {
+  padding: var(--rim) 0 0 0;
+}
+
+/* ---- Interactive glass --------------------------------------------------- */
+/* A control made of the same material, which means it also has to behave like
+   it: the rim flares as it turns toward the light on hover, and it compresses
+   under a press rather than merely getting darker. */
+.glass-btn {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  border-radius: var(--r-pill);
+  background:
+    linear-gradient(var(--sheen-angle), var(--sheen), transparent 58%),
+    var(--glass);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+  box-shadow: var(--glass-edge), var(--glass-depth);
+  transition:
+    transform var(--dur-slow) var(--ease-spring),
+    box-shadow var(--dur-base) var(--ease),
+    color var(--dur-fast) var(--ease);
+}
+
+.glass-btn::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  padding: var(--rim);
+  border-radius: inherit;
+  pointer-events: none;
+  background: conic-gradient(
+    from var(--light),
+    var(--rim-hi) 0deg,
+    var(--rim-lo) 74deg,
+    var(--rim-mid) 152deg,
+    var(--rim-mid) 208deg,
+    var(--rim-lo) 286deg,
+    var(--rim-hi) 360deg
+  );
+  -webkit-mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  mask-composite: exclude;
+  transition: filter var(--dur-base) var(--ease);
+}
+
+/* The travelling highlight: a narrow band of light crossing the face, parked
+   off the left edge until the control is hovered. This is the one specular
+   that moves, and it moves because the object moved, not because the pointer
+   did. */
+.glass-btn::after {
+  content: "";
+  position: absolute;
+  inset: -40%;
+  z-index: 1;
+  pointer-events: none;
+  transform: translateX(-120%) rotate(18deg);
+  background: linear-gradient(
+    90deg,
+    transparent,
+    var(--rim-mid) 46%,
+    var(--rim-hi) 50%,
+    var(--rim-mid) 54%,
+    transparent
+  );
+  opacity: 0;
+}
+
+.glass-btn > * {
+  position: relative;
+  z-index: 3;
+}
+
+.glass-btn:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: var(--glass-edge), var(--glass-depth), 0 0 0 4px var(--bg-hover);
+}
+
+.glass-btn:hover:not(:disabled)::before {
+  filter: brightness(1.35);
+}
+
+.glass-btn:hover:not(:disabled)::after {
+  opacity: 0.55;
+  animation: glass-sweep 720ms var(--ease) both;
+}
+
+/* Glass under pressure: it squashes across the axis of the press and springs
+   back, which is what makes it read as a soft solid rather than a button
+   graphic that got smaller. */
+.glass-btn:active:not(:disabled) {
+  transform: translateY(0) scale(0.92);
+  transition-duration: var(--dur-fast);
+}
+
+.glass-btn:disabled {
+  color: var(--ink-tertiary);
+  cursor: default;
+  box-shadow: var(--glass-edge);
+}
+
+.glass-btn:disabled::before {
+  opacity: 0.4;
+}
+
+@keyframes glass-sweep {
+  from {
+    transform: translateX(-120%) rotate(18deg);
+  }
+  to {
+    transform: translateX(120%) rotate(18deg);
+  }
+}
+
+/* ---- Fallbacks ----------------------------------------------------------- */
+/* Without a masked ring there is no way to paint an edge-only gradient, so the
+   rim degrades to a plain hairline rather than a filled rectangle over the
+   panel — which is what an unsupported mask would otherwise leave behind. */
+@supports not ((mask-composite: exclude) or (-webkit-mask-composite: xor)) {
+  .glass::before,
+  .glass-btn::before {
+    padding: 0;
+    background: none;
+    box-shadow: inset 0 0 0 1px var(--glass-border);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .glass-btn,
+  .glass-btn::before {
+    transition: none;
+  }
+
+  .glass-btn:hover:not(:disabled) {
+    transform: none;
+  }
+
+  .glass-btn:hover:not(:disabled)::after {
+    animation: none;
+    opacity: 0;
+  }
+}

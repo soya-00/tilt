@@ -42,6 +42,7 @@ const base = {
   persona: { name: "Tilt", personality: "Direct and unsentimental." },
   onScope: vi.fn(),
   onRenameTheme: vi.fn(),
+  onDeleteTheme: vi.fn(),
   onSavePersona: vi.fn(),
 };
 
@@ -111,6 +112,40 @@ describe("Sidebar", () => {
     render(<Sidebar {...base} />);
     const labels = screen.getAllByRole("button").map((b) => b.textContent ?? "");
     expect(labels.some((l) => /new|add|\+/i.test(l))).toBe(false);
+  });
+
+  it("requires a second click to delete a folder", async () => {
+    const user = userEvent.setup();
+    const onDeleteTheme = vi.fn();
+    render(<Sidebar {...base} onDeleteTheme={onDeleteTheme} />);
+
+    await user.click(screen.getByRole("button", { name: "Delete Attention" }));
+    expect(onDeleteTheme).not.toHaveBeenCalled();
+
+    await user.click(screen.getByRole("button", { name: "Confirm deleting Attention" }));
+    expect(onDeleteTheme).toHaveBeenCalledWith("Attention");
+  });
+
+  it("says that deleting a folder keeps the entries in it", () => {
+    // The whole reason this control can exist. If it read as "delete these
+    // thoughts" nobody should ever click it, and nobody would.
+    render(<Sidebar {...base} />);
+    expect(screen.getByRole("button", { name: "Delete Attention" })).toHaveAttribute(
+      "title",
+      expect.stringContaining("entries in it are kept"),
+    );
+  });
+
+  it("deletes the folder it was armed on, not the next one clicked", async () => {
+    const user = userEvent.setup();
+    const onDeleteTheme = vi.fn();
+    render(<Sidebar {...base} onDeleteTheme={onDeleteTheme} />);
+
+    await user.click(screen.getByRole("button", { name: "Delete Attention" }));
+    await user.click(screen.getByRole("button", { name: "Delete Memory" }));
+
+    expect(onDeleteTheme).not.toHaveBeenCalled();
+    expect(screen.getByRole("button", { name: "Delete Attention" })).toBeInTheDocument();
   });
 
   it("marks the active scope", () => {

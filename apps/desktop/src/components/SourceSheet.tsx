@@ -1,6 +1,5 @@
 import { useEffect, useState } from "react";
 
-import { useLiquidGlass } from "../lib/useLiquidGlass";
 import { Icon } from "./Icon";
 
 interface Props {
@@ -25,7 +24,6 @@ export function SourceSheet({ open, initial, onClose, onIngest }: Props) {
   const [text, setText] = useState("");
   const [url, setUrl] = useState("");
   const [busy, setBusy] = useState(false);
-  const glass = useLiquidGlass<HTMLDivElement>();
 
   useEffect(() => {
     if (!open) return;
@@ -57,16 +55,17 @@ export function SourceSheet({ open, initial, onClose, onIngest }: Props) {
   const chars = text.length;
 
   return (
-    <div className="sheet-scrim fade" onMouseDown={() => !busy && onClose()} role="presentation">
+    <div
+      className="sheet-scrim fade"
+      onMouseDown={() => !busy && onClose()}
+      role="presentation"
+    >
       <div
-        ref={glass.ref}
-        className="sheet sheet--wide glass-live"
+        className="sheet sheet--wide glass glass--heavy"
         role="dialog"
         aria-modal="true"
         aria-label="Add source material"
         onMouseDown={(e) => e.stopPropagation()}
-        onPointerMove={glass.onPointerMove}
-        onPointerLeave={glass.onPointerLeave}
       >
         <header className="sheet__head">
           <h2 className="sheet__title">Add source</h2>
@@ -75,45 +74,47 @@ export function SourceSheet({ open, initial, onClose, onIngest }: Props) {
           </button>
         </header>
 
-        <section className="sheet__section">
-          <input
-            className="field__input"
-            value={title}
-            placeholder="Title — what is this?"
-            aria-label="Source title"
-            onChange={(e) => setTitle(e.target.value)}
-          />
-        </section>
+        <div className="sheet__body sheet__body--grow scroll">
+          <section className="sheet__section">
+            <input
+              className="field__input"
+              value={title}
+              placeholder="Title — what is this?"
+              aria-label="Source title"
+              onChange={(e) => setTitle(e.target.value)}
+            />
+          </section>
 
-        <section className="sheet__section sheet__section--grow">
-          <textarea
-            className="field__input field__input--source"
-            value={text}
-            placeholder="Paste a transcript, an article, or notes…"
-            aria-label="Source text"
-            onChange={(e) => setText(e.target.value)}
-          />
-          <p className="sheet__note sheet__note--quiet">
-            {chars.toLocaleString()} characters
-            {chars > WARN_CHARS && (
-              <>
-                {" — "}
-                only the opening and closing {WARN_CHARS.toLocaleString()} go to the model, but
-                the full text is saved beside your journal.
-              </>
-            )}
-          </p>
-        </section>
+          <section className="sheet__section sheet__section--grow">
+            <textarea
+              className="field__input field__input--source"
+              value={text}
+              placeholder="Paste a transcript, an article, or notes…"
+              aria-label="Source text"
+              onChange={(e) => setText(e.target.value)}
+            />
+            <p className="sheet__note sheet__note--quiet">
+              {chars.toLocaleString()} characters
+              {chars > WARN_CHARS && (
+                <>
+                  {" — "}
+                  only the opening and closing {WARN_CHARS.toLocaleString()} go to the model,
+                  but the full text is saved beside your journal.
+                </>
+              )}
+            </p>
+          </section>
 
-        <section className="sheet__section">
-          <input
-            className="field__input"
-            value={url}
-            placeholder="Where it came from (optional)"
-            aria-label="Source URL"
-            onChange={(e) => setUrl(e.target.value)}
-          />
-        </section>
+          <section className="sheet__section">
+            <input
+              className="field__input"
+              value={url}
+              placeholder="Where it came from (optional)"
+              aria-label="Source URL"
+              onChange={(e) => setUrl(e.target.value)}
+            />
+          </section>
+        </div>
 
         <footer className="sheet__foot">
           <button className="ghost-btn" onClick={onClose} disabled={busy}>
