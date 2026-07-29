@@ -154,9 +154,9 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer(
               e.target.value = "";
             }}
           />
-          {/* The one control in the composer made of glass rather than drawn
-              on it, because adding material is the only action here that opens
-              something rather than acting on what is already typed. */}
+          {/* All three controls in this row are cut from the material — this
+              one, attach, and keep. It is the row you act in, and it is the
+              only place in the app that gets the treatment. */}
           <GlassButton
             name="plus"
             label="Add source material"

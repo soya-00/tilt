@@ -37,19 +37,22 @@ Five loops are in: **inputting, categorising, connecting, distilling, seeing.**
   writing, which is the point: a talk can answer a question you asked yourself
   in June. Most of what a source says stays quiet — see below.
 - **The constellation** (`⌘G`) — a collapsible rail beside the Stream showing
-  the journal as a graph: entries as rings, folders as discs, the agent's
-  connections as coloured lines. Click a thought and the Stream scrolls to it
-  with the graph still open, so following a chain of connections costs nothing.
-  Filter by time, by folder, and by whether to include what you have read.
+  the journal as a graph: every thought and folder a dot, sized by how
+  connected it is, joined by the lines the agent drew. Greyscale throughout,
+  and only the hubs are named — everything else answers to hover. Click a
+  thought and the Stream scrolls to it with the graph still open, so following
+  a chain of connections costs nothing. Filter by time, by folder, and by
+  whether to include what you have read.
 - **Diagram this** — ask the agent to draw the structure of a folder, a tag, or
   a search, and it picks the form: a mindmap when these are facets of one
   preoccupation, a flowchart when one thing leads to another, a state diagram
   when a position moved. Saved as Markdown beside your journal.
-- **Sidebar** — navigate folders and tags the agent produced. Rename a folder to
-  pin its name against future agent edits; delete one, in two clicks, when the
-  agent's guess about how your thinking divides up is simply wrong. Deleting a
-  folder keeps every entry that was in it. There is deliberately no way to
-  create one by hand — a folder you maintain is filing work.
+- **Sidebar** — navigate folders and tags the agent produced, kept deliberately
+  few (see below). Rename a folder to pin its name against future agent edits;
+  delete one, in two clicks, when the agent's guess about how your thinking
+  divides up is simply wrong. Deleting a folder keeps every entry that was in
+  it. There is deliberately no way to create one by hand — a folder you
+  maintain is filing work.
 - **Search** — full-text from the bar at the top; results arrive as whole
   threads, folders and connections intact.
 - **One agent, yours** — a single reflective voice with a name and a personality
@@ -105,6 +108,18 @@ Locked to where you already are, it could never take you anywhere new.
 Only connected nodes are drawn. Entries nothing has met yet are reported as a
 count rather than added as a cloud of dust — inventory belongs in the sidebar.
 
+Two things are rationed rather than thresholded, because a threshold that suits
+twenty thoughts is wrong at three thousand and the reverse. **Labels** are a
+budget: six folders and eight thoughts are named at rest, ranked by how
+connected they are, and hovering names anything. There are two budgets rather
+than one because a folder's degree is its membership — on a large journal
+folders would take every place in a shared budget and no thought would ever be
+named, and on a small one they would lose every place and take your bearings
+with them. **The node cap** is ranked the same way. It only bites past a few
+hundred entries, which is exactly where drawing the most recent ones is wrong:
+it discards every hub older than the recent window and makes a dense journal
+look sparse.
+
 ### Diagrams are model output being handed to a parser
 
 A diagram may describe your thinking; it has no business opening pages or
@@ -122,6 +137,27 @@ than a fix.
 Diagrams are Markdown files under `artifacts/diagrams/`, not rows in the index —
 a diagram is cheap to list and never searched, so caching it would only add a
 migration and something else that can drift from the files.
+
+### The sidebar is a vocabulary, not an index
+
+Folders and tags are only worth having if there are few enough of them to
+recognise. Left to itself a model mints "Attention", "Attentional Control" and
+"Attention Economy" across three nights, each holding one entry, and the
+sidebar becomes a list of things you wrote once. Nothing groups, which is the
+only thing a tag is for.
+
+So the agent is shown the vocabulary already in use — the folders and the
+commonest tags, with their counts — and asked to place the entry among them,
+extending the list only when it genuinely does not reach. Asking is not a
+mechanism, so what comes back is normalised too: case, punctuation and
+plurality collapse, and a near-miss folds onto the term already in use.
+
+That folding is deliberately timid, because the costs are not symmetric. A
+duplicate folder is cheap to fix — the nightly keeper merges it, and you can
+delete one in two clicks — while merging two subjects wrongly destroys a
+distinction you were making and cannot be undone from the interface. When
+unsure it mints the duplicate. Tags fold more readily than folders: a tag is a
+label, a folder is a place.
 
 ### Reading someone you disagree with
 
@@ -450,10 +486,17 @@ not come back.
 A family of them exists because the same mistake keeps being available: writing
 something to SQLite and calling it saved. Each is phrased as the failure rather
 than the feature — dismiss a connection, throw the index away, rebuild, and it
-must still be dismissed; edit an entry's text and it must keep its folders and
-its connections; delete the index entirely and the sweep must still report
-nothing waiting. That last one is the expensive failure: without it a rebuild
-silently re-bills the whole journal for answers already sitting on disk.
+must still be dismissed; rename a folder and the new name must still be there
+after a restart, with no copy of the old one beside it; edit an entry's text
+and it must keep its folders and its connections; delete the index entirely and
+the sweep must still report nothing waiting. That last one is the expensive
+failure: without it a rebuild silently re-bills the whole journal for answers
+already sitting on disk.
+
+The rename case was found the way these usually are — by using the app rather
+than by reading it. A folder renamed while taking screenshots was back under
+its old name after the next restart, with the renamed one standing empty
+beside it.
 
 ## Roadmap
 

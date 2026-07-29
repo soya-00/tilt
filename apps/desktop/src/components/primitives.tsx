@@ -61,9 +61,10 @@ interface GlassButtonProps {
 /**
  * A control cut from the same glass as the panels.
  *
- * Reserved for actions that open something. Everything else in the app is a
- * bare glyph — if this treatment were applied twice on one surface it would
- * stop meaning anything.
+ * Reserved for the composer's row, where the three controls you act with live.
+ * Everything else in the app is a bare glyph: applied everywhere this stops
+ * being a material and becomes a texture, and the row that matters stops
+ * standing out at all.
  */
 export function GlassButton({ name, label, onClick, disabled, size = 20 }: GlassButtonProps) {
   return (
