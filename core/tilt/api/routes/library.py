@@ -55,7 +55,9 @@ def dismiss_link(link_id: str, journal: Journal = Depends(get_journal)) -> None:
     """Dismiss a connection.
 
     Kept as a tombstone rather than deleted, so the pair is never proposed
-    again and the dismissal remains available as quality signal.
+    again and the dismissal remains available as quality signal. Written to
+    both entries' frontmatter as well as the index, because the index is
+    disposable and the promise is not.
     """
-    if not journal.index.dismiss_link(link_id):
+    if not journal.dismiss_link(link_id):
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Link not found.")

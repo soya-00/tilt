@@ -89,6 +89,19 @@ export function Stream({ threads, loading, scope, freshReplies, ...on }: Props) 
                     connected={thread.links.length + i < below - 1}
                   />
                 ))}
+                {/* Said rather than hidden. The rest of the source is still
+                    indexed and still turns up in search — this is the app
+                    admitting it filtered, not pretending it didn't. */}
+                {thread.quiet > 0 && (
+                  <button
+                    className="thread__quiet"
+                    onClick={() => on.onScope({ type: "search", q: thread.entry.body.split("\n")[0] ?? "" })}
+                    title="Search this source's other ideas"
+                  >
+                    {thread.quiet} more {thread.quiet === 1 ? "idea" : "ideas"} from this source,
+                    kept quiet
+                  </button>
+                )}
               </div>
             );
           })}

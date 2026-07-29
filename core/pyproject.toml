@@ -17,6 +17,13 @@ dependencies = [
     # Unattended jobs need a scheduler that survives a sleeping laptop: missed
     # runs coalesce instead of stampeding on wake.
     "apscheduler>=3.11,<4",
+    # Pure Python, no native build, no system library. Text extraction only —
+    # anything needing OCR is out of scope and says so rather than guessing.
+    "pypdf>=5.1",
+    # Uploading a PDF is a multipart POST, and FastAPI refuses to define such a
+    # route at import time without this — a missing extra would take the whole
+    # service down, not just the upload.
+    "python-multipart>=0.0.18",
 ]
 
 [project.scripts]

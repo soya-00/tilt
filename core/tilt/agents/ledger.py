@@ -11,7 +11,7 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 
-from tilt.agents.base import AgentError, AgentProvider, Completion
+from tilt.agents.base import AgentError, AgentProvider, Completion, Reference
 from tilt.models import AgentRun, utcnow
 from tilt.store.files import new_id
 from tilt.store.index import Index
@@ -43,6 +43,10 @@ class MeteredProvider:
     def name(self) -> str:
         return self._provider.name
 
+    @property
+    def follows_references(self) -> bool:
+        return getattr(self._provider, "follows_references", False)
+
     def spend_this_month(self) -> float:
         return self._index.spend_since(month_start())
 
@@ -56,7 +60,13 @@ class MeteredProvider:
             )
 
     async def complete(
-        self, prompt: str, *, job: str, system: str | None = None, interactive: bool = True
+        self,
+        prompt: str,
+        *,
+        job: str,
+        system: str | None = None,
+        interactive: bool = True,
+        reference: Reference | None = None,
     ) -> Completion:
         self._check_budget(interactive)
 
@@ -68,7 +78,12 @@ class MeteredProvider:
             started=utcnow(),
         )
         try:
-            completion = await self._provider.complete(prompt, system=system)
+            # Only passed when there is one. `follows_references` is what the
+            # caller checks before setting it, so a provider that cannot take
+            # the argument is never handed it — and a plain provider stays a
+            # two-argument function.
+            extra = {"reference": reference} if reference is not None else {}
+            completion = await self._provider.complete(prompt, system=system, **extra)
         except Exception as exc:
             run.status = "error"
             run.finished = utcnow()

@@ -13,10 +13,15 @@ interface Props {
   compact?: boolean;
   /** Opens the source sheet, optionally pre-filled from a picked file. */
   onAddSource?: (prefill?: { title: string; text: string }) => void;
+  /** Hands a file the browser cannot read straight to the service, which can. */
+  onUploadSource?: (file: File) => Promise<void>;
 }
 
-/** Text-like files we can read in the browser without a parser. */
+/** Text-like files we can read here and show in the sheet before sending. */
 const TEXT_TYPES = [".txt", ".md", ".markdown", ".srt", ".vtt", ".csv", ".json", ".log"];
+
+/** Files the service extracts. Nothing in the browser can open a PDF. */
+const UPLOAD_TYPES = [".pdf"];
 
 const MAX_LINES = 8;
 
@@ -32,7 +37,14 @@ const MAX_LINES = 8;
  * affordance.
  */
 export const Composer = forwardRef<ComposerHandle, Props>(function Composer(
-  { onSubmit, placeholder = "What are you thinking?", autoFocus, compact, onAddSource },
+  {
+    onSubmit,
+    placeholder = "What are you thinking?",
+    autoFocus,
+    compact,
+    onAddSource,
+    onUploadSource,
+  },
   ref,
 ) {
   const [value, setValue] = useState("");
@@ -69,15 +81,33 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer(
   const takeFile = async (file: File | undefined) => {
     if (!file) return;
     const named = file.name.toLowerCase();
-    if (!TEXT_TYPES.some((ext) => named.endsWith(ext)) && !file.type.startsWith("text/")) {
-      // Be explicit rather than silently doing nothing: PDFs and audio need a
-      // parser Tilt does not have yet.
-      setRejected(`${file.name} is not a text file. Paste its contents instead.`);
+
+    // Readable here: show it in the sheet first, so the source can be checked
+    // and titled before anything is spent on distilling it.
+    if (TEXT_TYPES.some((ext) => named.endsWith(ext)) || file.type.startsWith("text/")) {
+      setRejected(null);
+      const text = await file.text();
+      onAddSource?.({ title: file.name.replace(/\.[^.]+$/, ""), text });
       return;
     }
-    setRejected(null);
-    const text = await file.text();
-    onAddSource?.({ title: file.name.replace(/\.[^.]+$/, ""), text });
+
+    // Not readable here, but readable there. The service owns every extractor,
+    // so the honest move is to send the file rather than to refuse it.
+    if (UPLOAD_TYPES.some((ext) => named.endsWith(ext)) || file.type === "application/pdf") {
+      setRejected(null);
+      setBusy(true);
+      try {
+        await onUploadSource?.(file);
+      } catch (err) {
+        setRejected(err instanceof Error ? err.message : `${file.name} could not be read.`);
+      } finally {
+        setBusy(false);
+      }
+      return;
+    }
+
+    // Be explicit rather than silently doing nothing.
+    setRejected(`Tilt cannot read ${file.name}. Paste its contents instead.`);
   };
 
   const ready = value.trim().length > 0;
@@ -117,7 +147,8 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer(
             ref={filePicker}
             type="file"
             className="visually-hidden"
-            accept=".txt,.md,.markdown,.srt,.vtt,.csv,.json,.log,text/*"
+            aria-label="Choose a file"
+            accept=".txt,.md,.markdown,.srt,.vtt,.csv,.json,.log,.pdf,text/*,application/pdf"
             onChange={(e) => {
               void takeFile(e.target.files?.[0]);
               e.target.value = "";
@@ -133,7 +164,7 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer(
           />
           <IconButton
             name="paperclip"
-            label="Attach a text file"
+            label="Attach a file"
             outlined
             onClick={() => filePicker.current?.click()}
           />

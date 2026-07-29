@@ -72,7 +72,15 @@ class Journal:
         return entry
 
     def update(self, entry_id: str, payload: EntryUpdate) -> Entry | None:
-        entry = self.index.get(entry_id)
+        """Edit an entry's body or tags, keeping everything else it carries.
+
+        Read from disk, not from the index. Folders, connections and the agent's
+        considered-marks have no SQLite columns and live only in frontmatter, so
+        an entry loaded from the index carries them empty — and writing that back
+        would erase them. Fixing a typo would quietly cost the entry its filing
+        and every connection anyone had found for it.
+        """
+        entry = self._from_disk(entry_id)
         if entry is None:
             return None
         if payload.body is not None:
@@ -80,9 +88,7 @@ class Journal:
         if payload.tags is not None:
             entry.tags = payload.tags
         entry.updated = utcnow()
-        old_path = self.index.path_of(entry_id)
-        path = files.write(entry, self.entries_root, preserve_extra_from=old_path)
-        self.index.upsert(entry, path)
+        self._rewrite(entry)
         return entry
 
     def add_card(
@@ -92,12 +98,18 @@ class Journal:
         body: str,
         anchor: str | None = None,
         card_kind: str = "idea",
+        promoted: bool = True,
     ) -> Entry:
         """An atomic idea extracted from a source, nested beneath it.
 
         Cards are children of the source so the Stream shows one item rather
         than a flood, and they carry ``provenance=source`` so the connector can
         always tell borrowed thinking from your own.
+
+        Born already filed. A card belongs to the source it came out of, not to
+        a folder of your preoccupations — filing borrowed material into those
+        would dilute every one of them. It still gets judged, because meeting
+        your earlier thinking is the entire point of pulling it out.
         """
         now = utcnow()
         entry = Entry(
@@ -110,11 +122,17 @@ class Journal:
             source_id=source_id,
             anchor=anchor,
             reply_kind=ReplyKind.QUESTION if card_kind == "question" else None,
+            filed=now,
+            promoted=promoted,
             body=body.strip(),
         )
         path = files.write(entry, self.entries_root)
         self.index.upsert(entry, path)
+        self.index.mark_considered(entry.id, filed=True)
         return entry
+
+    def source_text_path(self, source_id: str) -> Path:
+        return self.data_dir / "sources" / f"{source_id}.txt"
 
     def write_source_text(self, source_id: str, text: str) -> Path:
         """Keep the untruncated source beside the journal.
@@ -122,13 +140,13 @@ class Journal:
         Only a bounded window is ever sent to a model, but the original must
         survive intact — it is the thing the cards are anchored to.
         """
-        path = self.data_dir / "sources" / f"{source_id}.txt"
+        path = self.source_text_path(source_id)
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(text, encoding="utf-8")
         return path
 
     def read_source_text(self, source_id: str) -> str | None:
-        path = self.data_dir / "sources" / f"{source_id}.txt"
+        path = self.source_text_path(source_id)
         return path.read_text(encoding="utf-8") if path.exists() else None
 
     def _from_disk(self, entry_id: str) -> Entry | None:
@@ -181,6 +199,31 @@ class Journal:
             self.set_themes(entry.id, [t.label for t in remaining])
         return True
 
+    def mark_considered(self, entry_id: str, *, filed: bool = False, judged: bool = False) -> None:
+        """Record that an agent has finished with this entry, on disk and in the index.
+
+        "Looked, found nothing" is the only agent result that leaves no other
+        trace — no folder, no connection — and it is not free to reach. Keeping
+        it in SQLite alone meant that throwing away the index, which the design
+        explicitly invites, silently re-billed the whole journal.
+
+        So it goes in the entry's own frontmatter alongside the folders and
+        connections, which are agent output for the same reason.
+        """
+        self.index.mark_considered(entry_id, filed=filed, judged=judged)
+        entry = self._from_disk(entry_id)
+        if entry is None:
+            return
+        now = utcnow()
+        stamped = entry.model_copy(
+            update={
+                "filed": entry.filed or now if filed else entry.filed,
+                "judged": entry.judged or now if judged else entry.judged,
+            }
+        )
+        if (stamped.filed, stamped.judged) != (entry.filed, entry.judged):
+            self._rewrite(stamped)
+
     def record_link(self, entry_id: str, record: LinkRecord) -> None:
         """Append a connection to the source entry's frontmatter."""
         entry = self._from_disk(entry_id)
@@ -191,7 +234,36 @@ class Journal:
         entry.links = [*entry.links, record]
         self._rewrite(entry)
 
+    def dismiss_link(self, link_id: str) -> bool:
+        """Reject a connection, on disk as well as in the index.
+
+        The index keeps the row as a tombstone so the pair is never proposed
+        again. That promise only holds as long as the index does, and the index
+        is explicitly disposable — so the dismissal has to reach Markdown too,
+        or rebuilding from disk would restore the link and the connector would
+        pay to judge the same pair a second time.
+
+        Both endpoints are rewritten. A link is undirected and either entry may
+        be the one carrying the record.
+        """
+        link = self.index.get_link(link_id)
+        if link is None or not self.index.dismiss_link(link_id):
+            return False
+        for entry_id, other_id in ((link.src_id, link.dst_id), (link.dst_id, link.src_id)):
+            entry = self._from_disk(entry_id)
+            if entry is None:
+                continue
+            records = [
+                r.model_copy(update={"dismissed": True}) if r.to == other_id else r
+                for r in entry.links
+            ]
+            if records != entry.links:
+                entry.links = records
+                self._rewrite(entry)
+        return True
+
     def delete(self, entry_id: str) -> bool:
+        entry = self.index.get(entry_id)
         path = self.index.path_of(entry_id)
         # Cascade to replies so deleting a thought does not orphan its replies.
         for child in self.index.children([entry_id]).get(entry_id, []):
@@ -200,6 +272,10 @@ class Journal:
             return False
         if path and path.exists():
             path.unlink()
+        # A source keeps its untruncated text in a second file. Leaving that
+        # behind would hoard a transcript nothing can reach or show again.
+        if entry is not None and entry.kind is EntryKind.SOURCE:
+            self.source_text_path(entry_id).unlink(missing_ok=True)
         return True
 
     # ---------------------------------------------------------------- reading
@@ -238,17 +314,24 @@ class Journal:
         replies = self.index.children(ids)
         themes = self.index.themes_for(ids)
         links = self.index.links_for(ids)
-        return [
-            Thread(
-                entry=e,
-                replies=replies.get(e.id, []),
-                themes=themes.get(e.id, []),
-                links=[
-                    LinkedEntry(link=link, entry=other) for link, other in links.get(e.id, [])
-                ],
+
+        threads = []
+        for e in entries:
+            children = replies.get(e.id, [])
+            shown = [c for c in children if c.promoted]
+            threads.append(
+                Thread(
+                    entry=e,
+                    replies=shown,
+                    quiet=len(children) - len(shown),
+                    themes=themes.get(e.id, []),
+                    links=[
+                        LinkedEntry(link=link, entry=other)
+                        for link, other in links.get(e.id, [])
+                    ],
+                )
             )
-            for e in entries
-        ]
+        return threads
 
     def search(self, query: str, *, limit: int = 20) -> list[Entry]:
         return search.search(self.index, query, limit=limit)
@@ -257,7 +340,8 @@ class Journal:
         """Prior entries an agent should consider when responding to this one.
 
         Blends lexical neighbours of the entry with plain recency, so an agent
-        reply is grounded in related history rather than the last thing typed.
+        reply is grounded in related history rather than the last thing typed,
+        then orders the result by whose thinking is on each side.
         """
         entry = self.index.get(entry_id)
         if entry is None:
@@ -266,9 +350,33 @@ class Journal:
         recent = self.index.recent_bodies(limit=limit, exclude=entry_id)
         merged: dict[str, Entry] = {}
         for candidate in [*related, *recent]:
-            if candidate.kind is not EntryKind.REPLY:
-                merged.setdefault(candidate.id, candidate)
-        return list(merged.values())[:limit]
+            if candidate.kind is EntryKind.REPLY:
+                continue
+            # Two ideas lifted out of the same document are not a discovery.
+            # They were adjacent in one argument before Tilt ever saw them.
+            if entry.source_id and candidate.source_id == entry.source_id:
+                continue
+            if candidate.id == entry.source_id or candidate.source_id == entry.id:
+                continue
+            merged.setdefault(candidate.id, candidate)
+
+        ranked = sorted(merged.values(), key=lambda c: self._pairing(entry, c))
+        return ranked[:limit]
+
+    @staticmethod
+    def _pairing(entry: Entry, candidate: Entry) -> int:
+        """How much a pairing is worth looking at, lowest first.
+
+        Your own thinking meeting itself is the thing this app is for. Your
+        thinking meeting something you read comes next — that is the payoff of
+        ingesting anything. Two sources agreeing with each other is not your
+        insight, so it goes last and is only judged when nothing better is
+        waiting.
+        """
+        borrowed = sum(
+            e.provenance is Provenance.SOURCE for e in (entry, candidate)
+        )
+        return borrowed
 
     # --------------------------------------------------------------- lifecycle
 

@@ -165,7 +165,10 @@ export function EntryRow({
 const KIND_LABEL: Record<LinkKind, string> = {
   echo: "echoes",
   elaboration: "builds on",
+  // Kept for the writer disagreeing with the writer. Something they only read
+  // pulling the other way is a counterpoint — worth holding, not a mistake.
   contradiction: "contradicts",
+  counterpoint: "offers a counterpoint to",
   bridge: "bridges to",
 };
 

@@ -133,6 +133,27 @@ async def test_an_entry_with_no_connections_is_still_settled(
     assert journal.index.backlog(limit=10, settled_before=utcnow().isoformat()) == []
 
 
+async def test_settled_work_is_recovered_when_the_index_is_thrown_away(
+    journal: Journal, provider: MeteredProvider
+) -> None:
+    """index.db is documented as a disposable cache. Deleting it must not
+    hand the agent a bill for work it already did.
+
+    Themes and links come back from each entry's frontmatter, so a rebuilt
+    journal that still looked unexamined would re-file and re-judge everything
+    in it — at full price, for answers already on disk.
+    """
+    written(journal, "Attention behaves like a filter, not a spotlight.")
+    written(journal, "A spotlight metaphor for attention explains too little.")
+    await sweep(journal, provider)
+
+    journal.index._conn.execute("DELETE FROM entry_state")
+    journal.index._conn.commit()
+    journal.rebuild()
+
+    assert (await sweep(journal, provider)).considered == 0
+
+
 async def test_sweep_is_bounded(journal: Journal, provider: MeteredProvider) -> None:
     """A first run against an imported journal must not fire a call per entry."""
     for i in range(8):

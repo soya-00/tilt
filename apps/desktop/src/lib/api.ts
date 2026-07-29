@@ -45,11 +45,16 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const token = window.__TILT__?.token;
   let response: Response;
 
+  // An upload must not declare its own content type: only the browser knows
+  // the multipart boundary it is about to generate, and setting the header by
+  // hand produces a body the server cannot parse.
+  const isUpload = init?.body instanceof FormData;
+
   try {
     response = await fetch(`${BASE_URL}${path}`, {
       ...init,
       headers: {
-        "Content-Type": "application/json",
+        ...(isUpload ? {} : { "Content-Type": "application/json" }),
         ...(token ? { Authorization: `Bearer ${token}` } : {}),
         ...init?.headers,
       },
@@ -170,6 +175,15 @@ export const api = {
 
   ingest: (payload: { title: string; text: string; url?: string }) =>
     request<Thread>("/ingest", { method: "POST", body: JSON.stringify(payload) }),
+
+  /** Sends the file itself. A PDF has no text the browser can read, and the
+   *  service has the extractor. */
+  ingestFile: (file: File, title = "") => {
+    const form = new FormData();
+    form.append("file", file);
+    form.append("title", title);
+    return request<Thread>("/ingest/file", { method: "POST", body: form });
+  },
 
   rebuildIndex: () => request<{ indexed: number }>("/index/rebuild", { method: "POST" }),
 };

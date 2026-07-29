@@ -398,6 +398,24 @@
   margin-top: var(--s-6);
 }
 
+/* What the bar held back. Deliberately the quietest thing in the thread: it is
+   an admission that filtering happened, not an invitation to undo it. */
+.thread__quiet {
+  display: block;
+  margin: var(--s-2) 0 0 var(--s-6);
+  padding: var(--s-1) 0;
+  font-size: var(--t-meta);
+  color: var(--ink-tertiary, var(--ink-secondary));
+  text-align: left;
+  opacity: 0.75;
+  transition: opacity var(--dur-fast) var(--ease), color var(--dur-fast) var(--ease);
+}
+
+.thread__quiet:hover {
+  opacity: 1;
+  color: var(--ink);
+}
+
 /* ---- Date rule ---------------------------------------------------------- */
 .date-rule {
   display: flex;

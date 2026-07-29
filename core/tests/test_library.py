@@ -5,11 +5,20 @@ from __future__ import annotations
 import pytest
 
 from tilt.agents.categorize import categorize
-from tilt.agents.connect import connect
+from tilt.agents.connect import _settle_kind, connect
 from tilt.agents.ledger import MeteredProvider
 from tilt.agents.parsing import clean_label, clean_tags, extract_json
 from tilt.journal import Journal
-from tilt.models import EntryCreate, Link, LinkKind, Theme, utcnow
+from tilt.models import (
+    Entry,
+    EntryCreate,
+    Link,
+    LinkKind,
+    LinkRecord,
+    Provenance,
+    Theme,
+    utcnow,
+)
 from tilt.store.files import new_id
 from tilt.store.index import Index, pair_key
 
@@ -217,6 +226,33 @@ def test_dismissed_links_are_hidden_but_still_block_reproposal(journal: Journal)
     assert b.id in journal.index.judged_pairs(a.id), "a dismissal must be permanent"
 
 
+def test_a_dismissal_survives_losing_the_index(journal: Journal) -> None:
+    """Permanent has to mean permanent, and the index is disposable.
+
+    A dismissal written only to SQLite lasts until someone deletes index.db.
+    The link would come back on the next rebuild, the pair would drop out of
+    judged_pairs, and the connector would pay to reach the same verdict again.
+    """
+    a = journal.create(EntryCreate(body="Attention is a filter."))
+    b = journal.create(EntryCreate(body="Memory is reconstruction."))
+    link_id = new_id()
+    journal.index.add_link(
+        Link(id=link_id, src_id=a.id, dst_id=b.id, kind=LinkKind.ECHO,
+             rationale="both about the mind", created=utcnow())
+    )
+    journal.record_link(a.id, LinkRecord(to=b.id, kind="echo", why="both about the mind"))
+
+    assert journal.dismiss_link(link_id) is True
+    journal.rebuild()
+
+    assert journal.index.links_for([a.id])[a.id] == []
+    assert b.id in journal.index.judged_pairs(a.id)
+
+
+def test_dismissing_a_link_that_does_not_exist_reports_it(journal: Journal) -> None:
+    assert journal.dismiss_link("nope") is False
+
+
 # ----------------------------------------------------------- agents, offline
 
 
@@ -248,6 +284,43 @@ async def test_categorize_on_missing_entry_returns_none(
     journal: Journal, provider: MeteredProvider
 ) -> None:
     assert await categorize(journal, provider, "nope") is None
+
+
+def test_reading_someone_you_disagree_with_is_not_contradicting_yourself() -> None:
+    """A source arguing the other way is a counterpoint, not a self-contradiction.
+
+    Exploring an opposing view is how a position gets tested. Labelling it as
+    the writer disagreeing with themself is both wrong and a reason to read
+    less widely, so the model's word is not taken on it.
+    """
+    mine = Entry(id=new_id(), created=utcnow(), updated=utcnow(), body="Attention is a filter.")
+    read = Entry(
+        id=new_id(),
+        created=utcnow(),
+        updated=utcnow(),
+        provenance=Provenance.SOURCE,
+        body="Attention is better understood as a spotlight.",
+    )
+
+    assert _settle_kind(LinkKind.CONTRADICTION, mine, read) is LinkKind.COUNTERPOINT
+    assert _settle_kind(LinkKind.CONTRADICTION, read, mine) is LinkKind.COUNTERPOINT
+
+
+def test_disagreeing_with_your_own_earlier_self_stays_a_contradiction() -> None:
+    """The case the word is reserved for. Noticing a changed mind is the point."""
+    then = Entry(id=new_id(), created=utcnow(), updated=utcnow(), body="Attention is a filter.")
+    now = Entry(id=new_id(), created=utcnow(), updated=utcnow(), body="No — it is a spotlight.")
+
+    assert _settle_kind(LinkKind.CONTRADICTION, now, then) is LinkKind.CONTRADICTION
+
+
+def test_other_link_kinds_are_left_alone_whatever_the_provenance() -> None:
+    mine = Entry(id=new_id(), created=utcnow(), updated=utcnow(), body="A thought.")
+    read = Entry(
+        id=new_id(), created=utcnow(), updated=utcnow(), provenance=Provenance.SOURCE, body="Read."
+    )
+    for kind in (LinkKind.ECHO, LinkKind.ELABORATION, LinkKind.BRIDGE):
+        assert _settle_kind(kind, mine, read) is kind
 
 
 async def test_connect_links_entries_sharing_concepts(

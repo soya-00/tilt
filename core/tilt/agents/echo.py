@@ -15,54 +15,10 @@ from __future__ import annotations
 import json
 import re
 
-from tilt.agents.base import Completion, Pricing, estimate_tokens
+from tilt.agents.base import Completion, Pricing, Reference, estimate_tokens
+from tilt.agents.parsing import keywords
 
 _SENTENCE = re.compile(r"(?<=[.!?])\s+")
-
-# A wrapped string reads far better here than sixty quoted list items.
-_STOPWORDS = frozenset(
-    """
-    a an and are as at be but by for from has have how i if in is it its of on or that the
-    their them then there these they this to was were what when where which who why will with
-    you your my me we our not no so just about like really very can could would should
-    been being was were does did done make makes made get gets got take takes took
-    thing things something anything nothing everything way ways much more most less least
-    again also even still yet ever never always often sometimes perhaps maybe
-    because since while during before after between through into onto over under
-    keeps keep kept feels feel felt seems seem seemed looks look looked
-    than such each both upon unto whom whose shall must might rather instead
-    however though although unless whether toward towards across among beyond
-    within without many some thus hence therefore else other others another
-    either neither here itself himself herself themselves myself ourselves
-    yourself everyone anyone someone nobody having
-    """.split()  # noqa: SIM905
-)
-
-# Adverbs are almost never the subject of a thought; they inflate the keyword
-# list with words like "accidentally" and "deliberately".
-_ADVERB = re.compile(r"ly$")
-
-
-def _keywords(text: str, n: int = 4) -> list[str]:
-    """Rank terms by repetition, then by length.
-
-    Repetition is the only signal available without a model, and it is a
-    surprisingly good one: a word used twice in a short entry is usually what
-    the entry is about. Single-use words are kept but rank below it, with
-    longer words preferred — an alphabetical tiebreak is what produced tags
-    like "again" and "being".
-
-    Ranking rather than filtering matters: discarding every single-use word
-    would leave too few terms for the connector to find overlap with.
-    """
-    counts: dict[str, int] = {}
-    for word in re.findall(r"[a-zA-Z][a-zA-Z'-]{3,}", text.lower()):
-        if word in _STOPWORDS or _ADVERB.search(word):
-            continue
-        counts[word] = counts.get(word, 0) + 1
-
-    ranked = sorted(counts.items(), key=lambda kv: (-kv[1], -len(kv[0]), kv[0]))
-    return [w for w, _ in ranked[:n]]
 
 
 class EchoProvider:
@@ -71,7 +27,18 @@ class EchoProvider:
     name = "echo"
     pricing = Pricing(input_per_m=0.0, output_per_m=0.0)
 
-    async def complete(self, prompt: str, *, system: str | None = None) -> Completion:
+    # No network, so no page to open and no video to watch. Declared rather
+    # than discovered: the ingest route checks this and says plainly that a
+    # link needs a key, instead of storing an empty source that looks read.
+    follows_references = False
+
+    async def complete(
+        self,
+        prompt: str,
+        *,
+        system: str | None = None,
+        reference: Reference | None = None,
+    ) -> Completion:
         task = _task_of(prompt)
         if task == "categorize":
             text = _categorize(prompt)
@@ -117,7 +84,7 @@ def _reflect(prompt: str, name: str = "Tilt") -> str:
     subject = _section(prompt, "ENTRY")
     context = _section(prompt, "EARLIER ENTRIES")
 
-    terms = _keywords(subject)
+    terms = keywords(subject)
     sentences = [s.strip() for s in _SENTENCE.split(subject) if s.strip()]
     opening = sentences[0] if sentences else subject.strip()
 
@@ -130,7 +97,7 @@ def _reflect(prompt: str, name: str = "Tilt") -> str:
         trimmed = opening if len(opening) <= 120 else opening[:117].rstrip() + "..."
         lines.append(f'The claim underneath this looks like: "{trimmed}"')
 
-    overlap = sorted(set(terms) & set(_keywords(context, 12))) if context else []
+    overlap = sorted(set(terms) & set(keywords(context, 12))) if context else []
     if overlap:
         lines.append(f"This echoes earlier writing on {_join(overlap[:3])}.")
 
@@ -152,7 +119,7 @@ def _reflect(prompt: str, name: str = "Tilt") -> str:
 def _categorize(prompt: str) -> str:
     entry = _section(prompt, "ENTRY")
     existing = _section(prompt, "EXISTING THEMES")
-    terms = _keywords(entry, 4)
+    terms = keywords(entry, 4)
 
     # Reuse an existing theme when its label appears in the entry, mirroring
     # the reuse-before-invent rule the real prompt asks for.
@@ -191,7 +158,7 @@ def _merge() -> str:
 
 
 def _connect(prompt: str) -> str:
-    entry_terms = set(_keywords(_section(prompt, "ENTRY"), 8))
+    entry_terms = set(keywords(_section(prompt, "ENTRY"), 8))
     candidates = _section(prompt, "CANDIDATES")
 
     best_n, best_shared = 0, set()
@@ -199,7 +166,7 @@ def _connect(prompt: str) -> str:
         match = re.match(r"\[(\d+)\]", block.strip())
         if not match:
             continue
-        shared = entry_terms & set(_keywords(block, 10))
+        shared = entry_terms & set(keywords(block, 10))
         if len(shared) > len(best_shared):
             best_n, best_shared = int(match.group(1)), shared
 
@@ -230,8 +197,17 @@ def _join(words: list[str]) -> str:
 
 
 def _section(prompt: str, header: str) -> str:
-    """Pull one labelled block out of the structured prompt."""
-    match = re.search(rf"^{header}:?\s*\n(.*?)(?=\n[A-Z][A-Z ]{{2,}}:|\Z)", prompt, re.S | re.M)
+    """Pull one labelled block out of the structured prompt.
+
+    A header may carry a parenthetical — ``ENTRY (yours):`` tells the connector
+    whose words these are — so the annotation is skipped rather than treated as
+    part of the name.
+    """
+    match = re.search(
+        rf"^{header}(?:\s*\([^)]*\))?:?\s*\n(.*?)(?=\n[A-Z][A-Z ]{{2,}}[ (]*:|\Z)",
+        prompt,
+        re.S | re.M,
+    )
     return match.group(1).strip() if match else ""
 
 
@@ -247,10 +223,10 @@ def _distill(prompt: str) -> str:
     title = _section(prompt, "TITLE")
     sentences = [s.strip() for s in _SENTENCE.split(source) if 40 <= len(s.strip()) <= 300]
 
-    terms = set(_keywords(source, 12))
+    terms = set(keywords(source, 12))
     scored = sorted(
         sentences,
-        key=lambda s: -len(terms & set(_keywords(s, 8))),
+        key=lambda s: -len(terms & set(keywords(s, 8))),
     )
 
     seen: list[str] = []
@@ -260,6 +236,10 @@ def _distill(prompt: str) -> str:
         if not any(sentence[:40] == s[:40] for s in seen):
             seen.append(sentence)
 
+    # No verdict on relevance. Offline this is sentence-ranking, not reading,
+    # and it has no basis for saying which of these speaks to the writer —
+    # omitting the field hands that back to the caller's lexical fallback
+    # rather than guessing "yes" and promoting the lot.
     return json.dumps(
         {
             "summary": f"Offline extract of {title or 'this source'}: "

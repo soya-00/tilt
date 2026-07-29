@@ -54,6 +54,7 @@ export interface JournalState {
   savePersona: (payload: Partial<Persona>) => Promise<void>;
   saveSettings: (payload: { gemini_api_key?: string; gemini_model?: string }) => Promise<void>;
   ingest: (payload: { title: string; text: string; url?: string }) => Promise<void>;
+  ingestFile: (file: File) => Promise<void>;
   refresh: () => Promise<void>;
   dismissError: () => void;
 }
@@ -182,7 +183,7 @@ export function useJournal(): JournalState {
 
       const pending = optimisticEntry(trimmed);
       setThreads((prev) => [
-        { entry: pending, replies: [], themes: [], links: [] },
+        { entry: pending, replies: [], themes: [], links: [], quiet: 0 },
         ...prev,
       ]);
 
@@ -359,6 +360,22 @@ export function useJournal(): JournalState {
     [refreshLibrary],
   );
 
+  const ingestFile = useCallback(
+    async (file: File) => {
+      try {
+        const source = await api.ingestFile(file, file.name.replace(/\.[^.]+$/, ""));
+        setThreads((prev) => [source, ...prev]);
+        await refreshLibrary();
+      } catch (err) {
+        // Rethrown as well as recorded: the composer shows the reason inline,
+        // beside the file that caused it, which is where it means something.
+        setError(describe(err));
+        throw err;
+      }
+    },
+    [refreshLibrary],
+  );
+
   return {
     threads,
     themes,
@@ -384,6 +401,7 @@ export function useJournal(): JournalState {
     savePersona,
     saveSettings,
     ingest,
+    ingestFile,
     refresh,
     dismissError: () => setError(null),
   };

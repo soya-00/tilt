@@ -8,9 +8,9 @@ what you were actually circling, where today echoes something from March, what
 you now contradict. There are no todos, no boards, and no due dates anywhere in
 it, by design.
 
-> Status: early but real. Writing, categorising, and connecting all work end to
-> end, offline, with no API key, and the agent keeps working on a schedule after
-> you close the window. Source distillation, the constellation graph, the
+> Status: early but real. Writing, categorising, connecting, and distilling
+> sources all work end to end, offline, with no API key, and the agent keeps
+> working on a schedule after you close the window. The constellation graph, the
 > research scout, and weekly synthesis are designed but unbuilt — see the
 > roadmap.
 
@@ -18,7 +18,7 @@ it, by design.
 
 ## What exists today
 
-The three core loops are in: **inputting, categorising, connecting.**
+Four loops are in: **inputting, categorising, connecting, distilling.**
 
 - **The Stream** — one column, oldest to newest, anchored at the bottom so the
   newest thought sits by your hands. Write, press Enter, done.
@@ -27,8 +27,15 @@ The three core loops are in: **inputting, categorising, connecting.**
   anything by hand.
 - **Connecting** — the agent looks for meaningful relationships with earlier
   entries and threads them under the entry as `echoes`, `builds on`,
-  `contradicts`, or `bridges to`, each with a one-line reason. Dismiss in one
-  click; a dismissed pair is never proposed again.
+  `contradicts`, `offers a counterpoint to`, or `bridges to`, each with a
+  one-line reason. Dismiss in one click; a dismissed pair is never proposed
+  again, and the dismissal is written to disk so that stays true after the
+  index is rebuilt.
+- **Distilling** — drop in a transcript, a subtitle file, a PDF, or pasted
+  notes, and it becomes **one** entry in the Stream with the ideas it contains
+  nested beneath. Those ideas then join the same connection graph as your own
+  writing, which is the point: a talk can answer a question you asked yourself
+  in June. Most of what a source says stays quiet — see below.
 - **Sidebar** — navigate folders and tags the agent produced. Rename a folder to
   pin its name against future agent edits; delete one, in two clicks, when the
   agent's guess about how your thinking divides up is simply wrong. Deleting a
@@ -51,7 +58,28 @@ The three core loops are in: **inputting, categorising, connecting.**
   anything you asked for yourself always proceeds.
 
 Your journal is a folder of Markdown files. The database is a cache that can be
-deleted and rebuilt at any time.
+deleted and rebuilt at any time — folders, connections, dismissals, the
+promotion bar, and the record of what the agent has already examined all live
+in each entry's own frontmatter, so nothing is re-derived and nothing is
+re-billed.
+
+### Ingesting is filtering
+
+A thirty-card video that shows you thirty cards has filtered nothing. Every
+idea a source contains is extracted and indexed, but only the ones that meet
+something you have actually written are surfaced; the rest sit under a line
+saying how many there are. They are searchable the moment you go looking, and
+they are never pushed at you.
+
+On an empty journal there is nothing to be relevant to, so everything shows.
+
+### Reading someone you disagree with
+
+`contradicts` is reserved for you disagreeing with yourself — a changed mind is
+worth noticing. When a source pulls against something you wrote, that is a
+`counterpoint`, and it is a different thing. Holding two opposed views at once
+is how a position gets tested, and an app that logged it as self-contradiction
+would be punishing exactly the reading habit worth having.
 
 ## Design
 
@@ -114,6 +142,7 @@ apps/desktop/src-tauri/  Tauri v2 shell: windows, hotkey, tray, sidecar lifetime
 core/                    Python service: Markdown store, SQLite index, agents
 core/tilt/agents/        What runs because you asked
 core/tilt/jobs/          What runs because time passed
+core/tilt/ingest/        What a source is, and how to read it
 scripts/                 Packaging the sidecar, rendering the icon
 ```
 
@@ -128,6 +157,7 @@ process behind them.
 | Retrieval | BM25 today, fused via RRF | Vector ranking drops in without reworking callers |
 | Models | Provider protocol | Offline provider by default; Gemini when a key is present |
 | Unattended work | APScheduler in the service | Missed runs coalesce rather than stampede when a laptop wakes |
+| Reading sources | Route on metadata, extract in the service | A pure function decides *what this is*; the browser never needs a parser |
 
 ### What runs on its own
 
@@ -153,6 +183,13 @@ whether it succeeded, failed, or stopped at the ceiling.
 The sweep also leaves entries alone for their first three minutes. The interface
 is already filing anything just written, and without a quiet period the two
 would race and the same judgement would be paid for twice.
+
+Ideas pulled out of a source go through the sweep too, but only its connecting
+half. They are born filed, because a card belongs to the source it came out of
+rather than to a folder of your preoccupations, and filing borrowed material
+into those would dilute every one of them. Two ideas from the same document are
+never proposed to each other: they were adjacent in one argument before Tilt
+ever saw them, and that is not a discovery.
 
 Two details do most of the work. The service records that it has *considered* an
 entry, so a thought the connector correctly found nothing for is never judged a
@@ -326,7 +363,7 @@ cd apps/desktop && npm test && npm run typecheck && npm run build
 cd apps/desktop/src-tauri && cargo build
 ```
 
-200 tests: 135 backend, 65 frontend.
+270 tests: 194 backend, 76 frontend.
 
 The load-bearing one writes entries, deletes the database, rebuilds from disk,
 and asserts nothing was lost — that guarantee is what the file-as-truth design
@@ -346,6 +383,14 @@ without changing anything and would never show up as a bug. The other merges two
 folders, rebuilds the index from disk, and asserts the merged-away folder does
 not come back.
 
+A family of them exists because the same mistake keeps being available: writing
+something to SQLite and calling it saved. Each is phrased as the failure rather
+than the feature — dismiss a connection, throw the index away, rebuild, and it
+must still be dismissed; edit an entry's text and it must keep its folders and
+its connections; delete the index entirely and the sweep must still report
+nothing waiting. That last one is the expensive failure: without it a rebuild
+silently re-bills the whole journal for answers already sitting on disk.
+
 ## Roadmap
 
 | Phase | Scope | State |
@@ -353,12 +398,21 @@ not come back.
 | 0 | Store, index, search, the Stream | done |
 | 1 | Tauri shell, global hotkey, `.dmg` | done |
 | 2 | Scheduled agents: catch-up sweep, theme upkeep | done |
-| 3 | Source distillation — video, transcript, PDF, article | designed |
+| 3 | Source distillation — transcript, subtitles, PDF, link | done |
 | 4 | Constellation graph, on-demand diagrams | designed |
 | 5 | Research scout, daily brief | designed |
 | 6 | Weekly synthesis, growth timeline | designed |
 
 Some of what is designed is deliberately still open.
+
+Phase 3 ships without audio or video transcription. Doing it locally means MLX,
+which is Apple-Silicon-only and around a gigabyte of native libraries in the
+bundle, and a recorded talk is served today by pasting its transcript. Dropping
+an `.mp3` says that rather than failing.
+
+Reading a link — a page, or a YouTube video the model watches directly — is
+wired but needs a key: there is no page to fetch offline, and storing an empty
+source would imply something had been read.
 
 The API key lives in `~/Tilt/.tilt/settings.json` at mode 600 rather than in the
 macOS Keychain — moving it there means the key stops travelling through the

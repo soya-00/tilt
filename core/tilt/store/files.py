@@ -34,6 +34,9 @@ _KNOWN_KEYS = {
     "tags",
     "themes",
     "links",
+    "filed",
+    "judged",
+    "promoted",
 }
 
 
@@ -49,7 +52,7 @@ def path_for(entry_id: str, created: datetime, root: Path) -> Path:
     return root / f"{created:%Y}" / f"{created:%m}" / f"{_slug_time(created)}-{entry_id}.md"
 
 
-def _as_datetime(value: object, fallback: datetime) -> datetime:
+def _as_datetime(value: object, fallback: datetime | None) -> datetime | None:
     if isinstance(value, datetime):
         return value
     if isinstance(value, str):
@@ -106,8 +109,13 @@ def parse(path: Path) -> Entry:
         source_url=meta.get("source_url") or None,
         reply_kind=_enum(ReplyKind, "reply_kind", None),
         tags=[str(t) for t in tags],
+        # Absent means promoted: everything written before the bar existed, and
+        # everything the writer typed themselves, belongs in the Stream.
+        promoted=meta.get("promoted") is not False,
         theme_labels=[str(t) for t in themes],
         links=links,
+        filed=_as_datetime(meta.get("filed"), None) if meta.get("filed") else None,
+        judged=_as_datetime(meta.get("judged"), None) if meta.get("judged") else None,
         body=post.content.strip(),
     )
 
@@ -138,8 +146,13 @@ def write(entry: Entry, root: Path, *, preserve_extra_from: Path | None = None) 
         **({"source_url": entry.source_url} if entry.source_url else {}),
         **({"reply_kind": entry.reply_kind.value} if entry.reply_kind else {}),
         "tags": entry.tags,
+        # Only written when false. A key on every entry saying "yes, show this"
+        # is noise in a file the user is meant to be able to read.
+        **({} if entry.promoted else {"promoted": False}),
         **({"themes": entry.theme_labels} if entry.theme_labels else {}),
         **({"links": [link.model_dump() for link in entry.links]} if entry.links else {}),
+        **({"filed": entry.filed.isoformat()} if entry.filed else {}),
+        **({"judged": entry.judged.isoformat()} if entry.judged else {}),
         **extra,
     }
 

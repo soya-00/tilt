@@ -36,12 +36,37 @@ class Pricing:
         ) * self.output_per_m
 
 
+@dataclass(frozen=True)
+class Reference:
+    """Something the model should read or watch for itself.
+
+    Not every source arrives as text. A hosted model can open a page or watch a
+    video directly, and anything we assembled locally — a scraped article body,
+    a transcript stitched from captions — would be a worse copy of what it can
+    already see. A provider that cannot follow references ignores this, and the
+    caller is told so rather than being handed a plausible empty result.
+    """
+
+    url: str
+    kind: str
+    """``video`` or ``article``. Decided by :mod:`tilt.ingest.route`."""
+
+
 @runtime_checkable
 class AgentProvider(Protocol):
     name: str
     pricing: Pricing
 
-    async def complete(self, prompt: str, *, system: str | None = None) -> Completion: ...
+    #: Whether :meth:`complete` can follow a :class:`Reference`.
+    follows_references: bool
+
+    async def complete(
+        self,
+        prompt: str,
+        *,
+        system: str | None = None,
+        reference: Reference | None = None,
+    ) -> Completion: ...
 
 
 def estimate_tokens(text: str) -> int:

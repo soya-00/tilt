@@ -2,12 +2,15 @@
 
 from __future__ import annotations
 
+from datetime import timedelta
+
 from fastapi.testclient import TestClient
 
 from tilt.agents.distill import MAX_CHARS, _window, distill
 from tilt.agents.ledger import MeteredProvider
+from tilt.jobs.sweep import sweep
 from tilt.journal import Journal
-from tilt.models import EntryKind, Provenance
+from tilt.models import EntryCreate, EntryKind, Provenance, utcnow
 from tilt.persona import Persona, PersonaStore, PersonaUpdate
 from tilt.settings_store import RuntimeSettingsUpdate, SettingsStore
 
@@ -148,6 +151,210 @@ async def test_distill_preserves_the_full_text_on_disk(
     assert stored == text
     assert "Unique marker phrase." in stored
     assert "Closing marker phrase." in stored
+
+
+def _settle(journal: Journal) -> None:
+    """Age everything past the sweep's quiet period.
+
+    Ingest writes its cards in the same instant the test asks for them, and the
+    sweep deliberately ignores anything that new. Nothing else about the
+    behaviour under test depends on the clock.
+    """
+    when = (utcnow() - timedelta(hours=1)).isoformat()
+    journal.index._conn.execute("UPDATE entries SET created = ?", (when,))
+    journal.index._conn.commit()
+
+
+async def test_an_idea_from_a_source_can_meet_something_you_wrote(
+    journal: Journal, provider: MeteredProvider
+) -> None:
+    """The reason to ingest anything at all.
+
+    An extracted idea that never joins the graph is a nicer bookmark. This is
+    a talk answering a question you asked yourself months earlier.
+    """
+    mine = journal.create(
+        EntryCreate(body="Memory is reconstructive; every recall rewrites the memory.")
+    )
+    journal.mark_considered(mine.id, filed=True, judged=True)
+
+    text = "Recall rewrites memory, so memory is reconstructive rather than stored. " * 8
+    source = await distill(journal, provider, title="A talk on memory", text=text)
+    _settle(journal)
+
+    await sweep(journal, provider)
+
+    linked = {
+        other.id
+        for card in journal.index.children([source.id])[source.id]
+        for _, other in journal.index.links_for([card.id]).get(card.id, [])
+    }
+    assert mine.id in linked, "an idea from the source should have found the earlier thought"
+
+
+async def test_a_card_is_never_filed_into_one_of_your_folders(
+    journal: Journal, provider: MeteredProvider
+) -> None:
+    """Folders describe your preoccupations. Filing borrowed material into them
+    dilutes every one of them."""
+    text = "Attention is a filter that discards most of what reaches it. " * 8
+    source = await distill(journal, provider, title="A talk", text=text)
+    _settle(journal)
+
+    await sweep(journal, provider)
+
+    cards = journal.index.children([source.id])[source.id]
+    assert cards, "the source should have produced at least one card"
+    for card in cards:
+        assert journal.index.themes_for([card.id])[card.id] == []
+
+
+async def test_two_ideas_from_the_same_source_are_not_a_discovery(
+    journal: Journal, provider: MeteredProvider
+) -> None:
+    """They sat next to each other in one argument before Tilt ever saw them.
+    Proposing that as a connection is noise, and it is not free."""
+    text = (
+        "Attention is a filter that discards most input. "
+        "Memory is reconstructive and rewrites itself on every recall. "
+    ) * 8
+    source = await distill(journal, provider, title="A talk", text=text)
+    cards = journal.index.children([source.id])[source.id]
+    assert len(cards) >= 2, "need at least two cards for this to mean anything"
+
+    siblings = {c.id for c in cards}
+    assert not siblings & {c.id for c in journal.context_for(cards[0].id)}
+
+
+async def test_an_empty_journal_promotes_everything(
+    journal: Journal, provider: MeteredProvider
+) -> None:
+    """There is nothing to be relevant to yet. Filtering the first source you
+    ever add down to silence is not a bar, it is a broken feature."""
+    text = "Attention is a filter that discards most input. " * 10
+    source = await distill(journal, provider, title="A talk", text=text)
+
+    thread = journal.thread(source.id)
+    assert thread.replies, "the first ingest must show something"
+    assert thread.quiet == 0
+
+
+async def test_a_source_unrelated_to_your_writing_stays_quiet(
+    journal: Journal, provider: MeteredProvider
+) -> None:
+    """Ingesting is meant to be filtering. A source that meets nothing you
+    think should leave the Stream almost untouched."""
+    journal.create(EntryCreate(body="Memory is reconstructive; recall rewrites the memory."))
+    journal.create(EntryCreate(body="Recall rewrites memory rather than replaying it."))
+
+    text = (
+        "Sourdough needs a wetter starter through the winter months. "
+        "Cold flour slows fermentation more than most bakers expect. "
+    ) * 10
+    source = await distill(journal, provider, title="On bread", text=text)
+
+    thread = journal.thread(source.id)
+    assert thread.quiet > 0, "none of this speaks to what they write about"
+    assert thread.entry.id, "the source itself still appears in the Stream"
+
+
+async def test_a_quiet_card_is_still_findable(
+    journal: Journal, provider: MeteredProvider
+) -> None:
+    """Quiet is not deleted. Not clearing the bar means it is not pushed at
+    you — going looking for it must still work."""
+    journal.create(EntryCreate(body="Memory is reconstructive; recall rewrites the memory."))
+    text = "Cold flour slows fermentation more than most bakers expect. " * 10
+    source = await distill(journal, provider, title="On bread", text=text)
+
+    quiet = [c for c in journal.index.children([source.id])[source.id] if not c.promoted]
+    assert quiet, "this source should have produced something quiet"
+
+    found = {e.id for e in journal.search("fermentation")}
+    assert found & {c.id for c in quiet}
+
+
+async def test_the_bar_survives_a_rebuild(journal: Journal, provider: MeteredProvider) -> None:
+    """Promotion lives in frontmatter like everything else the agent decides.
+    A rebuild that forgot it would dump every quiet card into the Stream."""
+    journal.create(EntryCreate(body="Memory is reconstructive; recall rewrites the memory."))
+    text = "Cold flour slows fermentation more than most bakers expect. " * 10
+    source = await distill(journal, provider, title="On bread", text=text)
+    before = journal.thread(source.id).quiet
+    assert before > 0
+
+    journal.rebuild()
+
+    assert journal.thread(source.id).quiet == before
+
+
+async def test_a_source_is_filed_by_its_ideas_not_by_its_filename(
+    journal: Journal, provider: MeteredProvider
+) -> None:
+    """Found by looking at the sidebar: folders called "Talk" and "Paper".
+
+    A source entry's body is a filename and a summary of itself, so filing on
+    it categorises the packaging. The ideas pulled out of it are its content.
+    """
+    text = (
+        "Attention is a filter that discards most of what arrives. "
+        "What reaches awareness is the residue of that discarding. "
+    ) * 8
+    source = await distill(journal, provider, title="talk", text=text)
+    _settle(journal)
+
+    await sweep(journal, provider)
+
+    labels = [t.label for t in journal.thread(source.id).themes]
+    assert labels, "a source should still be filed somewhere"
+    assert "Talk" not in labels, "filed by its own filename"
+    assert not (set(source.tags) & {"talk", "sentences", "candidate"})
+
+
+async def test_the_source_entry_itself_is_never_judged(
+    journal: Journal, provider: MeteredProvider
+) -> None:
+    """Its body is a title and a summary — a container, not a thought.
+
+    Found by running it: two unrelated sources were linked to each other on the
+    word "extract", which appeared only in the summaries the app had written
+    about them. The ideas inside a source are the atoms worth judging.
+    """
+    journal.create(EntryCreate(body="Attention is a filter that discards most input."))
+    first = await distill(journal, provider, title="A talk", text="Attention discards. " * 20)
+    second = await distill(journal, provider, title="A paper", text="Memory rewrites. " * 20)
+    _settle(journal)
+
+    await sweep(journal, provider)
+
+    for source in (first, second):
+        assert journal.index.links_for([source.id])[source.id] == []
+
+
+async def test_a_card_is_never_paired_with_the_source_it_came_out_of(
+    journal: Journal, provider: MeteredProvider
+) -> None:
+    text = "Attention is a filter that discards most input. " * 10
+    source = await distill(journal, provider, title="A talk", text=text)
+    card = journal.index.children([source.id])[source.id][0]
+
+    assert source.id not in {c.id for c in journal.context_for(card.id)}
+
+
+async def test_deleting_a_source_takes_its_stored_text_with_it(
+    journal: Journal, provider: MeteredProvider
+) -> None:
+    """Otherwise the transcript outlives everything that could reach it.
+
+    The entry goes, its cards cascade, and a full transcript stays behind in
+    sources/ that nothing can search, show, or ever delete.
+    """
+    source = await distill(journal, provider, title="Talk", text="A thought. " * 40)
+    stored = journal.source_text_path(source.id)
+    assert stored.exists()
+
+    assert journal.delete(source.id) is True
+    assert not stored.exists()
 
 
 async def test_distill_rejects_empty_input(journal: Journal, provider: MeteredProvider) -> None:

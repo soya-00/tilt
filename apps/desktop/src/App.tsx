@@ -211,6 +211,7 @@ export default function App() {
                 setSourcePrefill(prefill ?? null);
                 setSourceOpen(true);
               }}
+              onUploadSource={journal.ingestFile}
             />
           </div>
         </div>

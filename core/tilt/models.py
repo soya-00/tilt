@@ -69,11 +69,24 @@ class Entry(BaseModel):
     tags: list[str] = Field(default_factory=list)
     body: str = ""
 
+    # Whether this earned a place in the Stream. Only extracted cards are ever
+    # demoted: ingesting is meant to be filtering, not accumulation, and a
+    # thirty-card video that shows you thirty cards has filtered nothing. A
+    # demoted card is quiet, never gone — still indexed, still searchable.
+    promoted: bool = True
+
     # Agent-derived structure, persisted to frontmatter so a full index rebuild
     # restores it. Without this, deleting index.db would silently discard every
     # folder assignment and connection the agent ever made.
     theme_labels: list[str] = Field(default_factory=list)
     links: list[LinkRecord] = Field(default_factory=list)
+
+    # When each agent last finished with this entry. Also frontmatter, and for
+    # the same reason: "examined, found nothing" is a result that cost money to
+    # reach, and it is the one result that leaves no other trace. An entry
+    # missing these looks untouched, and the sweep would judge it again.
+    filed: datetime | None = None
+    judged: datetime | None = None
 
     @property
     def is_machine(self) -> bool:
@@ -103,7 +116,18 @@ class LinkKind(StrEnum):
     ELABORATION = "elaboration"
     """One develops the other."""
     CONTRADICTION = "contradiction"
-    """You have changed your mind, or not noticed that you disagree."""
+    """You have changed your mind, or not noticed that you disagree.
+
+    Only ever between two things *you* wrote. Reserved deliberately: the word
+    should keep its weight, and it only means anything when both sides are
+    yours."""
+    COUNTERPOINT = "counterpoint"
+    """Something you read pulls against something you think.
+
+    Distinct from a contradiction, and the distinction is the point. Reading an
+    argument you disagree with is not changing your mind and should not be
+    logged as though it were — holding two opposed views at once is how you
+    work out what you actually believe."""
     BRIDGE = "bridge"
     """Two unrelated areas that turn out to touch."""
 
@@ -172,6 +196,13 @@ class Thread(BaseModel):
     replies: list[Entry] = Field(default_factory=list)
     themes: list[Theme] = Field(default_factory=list)
     links: list[LinkedEntry] = Field(default_factory=list)
+
+    quiet: int = 0
+    """Ideas from this source that did not clear the bar.
+
+    Reported rather than hidden. They are still indexed and still turn up in
+    search — the writer should know the rest of the source is there, without
+    the Stream handing them thirty cards to read."""
 
 
 class AgentRun(BaseModel):

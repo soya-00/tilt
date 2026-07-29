@@ -10,7 +10,7 @@ from __future__ import annotations
 from tilt.agents.ledger import MeteredProvider
 from tilt.agents.parsing import clean_label, clean_tags, extract_json
 from tilt.journal import Journal
-from tilt.models import Entry, EntryUpdate, Theme, utcnow
+from tilt.models import Entry, EntryKind, EntryUpdate, Theme, utcnow
 from tilt.store.files import new_id
 
 JOB = "categorize"
@@ -34,12 +34,31 @@ Rules:
   thought, not things to do."""
 
 
-def build_prompt(entry: Entry, existing: list[Theme]) -> str:
+def build_prompt(entry: Entry, existing: list[Theme], body: str | None = None) -> str:
     themes = (
         "\n".join(f"- {t.label} ({t.count} entries)" for t in existing[:40])
         or "(none yet)"
     )
-    return f"TASK: categorize\n\nEXISTING THEMES:\n{themes}\n\nENTRY:\n{entry.body}"
+    return f"TASK: categorize\n\nEXISTING THEMES:\n{themes}\n\nENTRY:\n{body or entry.body}"
+
+
+def _filing_text(journal: Journal, entry: Entry) -> str:
+    """What to file this entry on.
+
+    Its own words, except for a source — whose body is a filename and a summary
+    of itself. Filing on that produced folders called "Talk" and "Paper" and
+    tags like "sentences": the entry was categorised by its packaging rather
+    than by anything in it. The ideas pulled out of it are its content, so a
+    source is filed on those and the packaging is left out entirely.
+
+    A source with no ideas in it yet falls back to its body — better a folder
+    named after a filename than no folder at all.
+    """
+    if entry.kind is not EntryKind.SOURCE:
+        return entry.body
+    cards = journal.index.children([entry.id]).get(entry.id, [])
+    ideas = "\n".join(c.body for c in cards).strip()
+    return ideas or entry.body
 
 
 async def categorize(
@@ -61,14 +80,17 @@ async def categorize(
 
     existing = journal.index.themes()
     completion = await provider.complete(
-        build_prompt(entry, existing), job=JOB, system=SYSTEM, interactive=interactive
+        build_prompt(entry, existing, _filing_text(journal, entry)),
+        job=JOB,
+        system=SYSTEM,
+        interactive=interactive,
     )
 
     # Recorded on the strength of the call having returned, not on it having
     # produced tags. A response the parser could not use is this model's answer
     # for this entry, and paying for the same answer again every night is worse
     # than leaving one thought untagged.
-    journal.index.mark_considered(entry_id, filed=True)
+    journal.mark_considered(entry_id, filed=True)
 
     payload = extract_json(completion.text)
     if not isinstance(payload, dict):

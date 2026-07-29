@@ -16,6 +16,7 @@ import json
 import sqlite3
 from collections.abc import Iterator
 from contextlib import contextmanager
+from datetime import datetime
 from pathlib import Path
 
 from pydantic import ValidationError
@@ -23,7 +24,7 @@ from pydantic import ValidationError
 from tilt.models import AgentRun, Entry, Link, TagCount, Theme, ThemeStatus, utcnow
 from tilt.store import files
 
-SCHEMA_VERSION = 3
+SCHEMA_VERSION = 4
 
 
 def pair_key(a: str, b: str) -> str:
@@ -45,6 +46,9 @@ CREATE TABLE IF NOT EXISTS entries (
     source_url   TEXT,
     reply_kind   TEXT,
     tags         TEXT NOT NULL DEFAULT '[]',
+    -- Whether an extracted idea earned a place in the Stream. Only cards are
+    -- ever demoted; everything you wrote yourself is promoted by definition.
+    promoted     INTEGER NOT NULL DEFAULT 1,
     body         TEXT NOT NULL,
     content_hash TEXT NOT NULL
 );
@@ -134,6 +138,9 @@ CREATE TABLE IF NOT EXISTS entry_state (
 _ADDED_COLUMNS = (
     ("themes", "status", "TEXT NOT NULL DEFAULT 'active'"),
     ("agent_runs", "detail", "TEXT NOT NULL DEFAULT ''"),
+    # Defaults to 1 so every card in a journal that predates the promotion bar
+    # keeps showing exactly where it already shows. Nothing vanishes on upgrade.
+    ("entries", "promoted", "INTEGER NOT NULL DEFAULT 1"),
 )
 
 
@@ -214,6 +221,7 @@ class Index:
             entry.source_url,
             entry.reply_kind.value if entry.reply_kind else None,
             json.dumps(entry.tags),
+            int(entry.promoted),
             entry.body,
             content_hash(entry.body),
         )
@@ -232,15 +240,15 @@ class Index:
                 conn.execute(
                     "UPDATE entries SET path=?, created=?, updated=?, kind=?, provenance=?,"
                     " parent=?, source_id=?, anchor=?, source_url=?, reply_kind=?, tags=?,"
-                    " body=?, content_hash=? WHERE id=?",
+                    " promoted=?, body=?, content_hash=? WHERE id=?",
                     (*payload[1:], entry.id),
                 )
                 rowid = existing["rowid"]
             else:
                 cur = conn.execute(
                     "INSERT INTO entries (id, path, created, updated, kind, provenance, parent,"
-                    " source_id, anchor, source_url, reply_kind, tags, body, content_hash)"
-                    " VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                    " source_id, anchor, source_url, reply_kind, tags, promoted, body,"
+                    " content_hash) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
                     payload,
                 )
                 rowid = cur.lastrowid
@@ -523,6 +531,28 @@ class Index:
                 (entry_id, now if filed else None, now if judged else None),
             )
 
+    def _restore_considered(
+        self, entry_id: str, *, filed: datetime | None, judged: datetime | None
+    ) -> None:
+        """Replay the marks recorded in an entry's frontmatter.
+
+        Separate from :meth:`mark_considered` because that one stamps *now*,
+        which is right when an agent has just finished and wrong when a rebuild
+        is recovering something that happened last March.
+        """
+        with self.tx() as conn:
+            conn.execute(
+                "INSERT INTO entry_state (entry_id, filed_at, judged_at) VALUES (?, ?, ?)"
+                " ON CONFLICT(entry_id) DO UPDATE SET"
+                "   filed_at  = COALESCE(filed_at,  excluded.filed_at),"
+                "   judged_at = COALESCE(judged_at, excluded.judged_at)",
+                (
+                    entry_id,
+                    filed.isoformat() if filed else None,
+                    judged.isoformat() if judged else None,
+                ),
+            )
+
     def backlog(self, *, limit: int, settled_before: str) -> list[tuple[Entry, bool, bool]]:
         """Entries no agent has finished with, newest first.
 
@@ -531,12 +561,18 @@ class Index:
         a quiet period the sweep would race that request and pay for the same
         judgement twice.
 
+        Cards are the one kind of child that qualifies. An idea pulled out of
+        something you read is exactly what should meet a thought you had in
+        March — that meeting is the whole reason to ingest anything. Replies and
+        every other child stay out.
+
         Returns each entry with whether it still needs filing and judging.
         """
         rows = self._conn.execute(
             "SELECT e.*, s.filed_at, s.judged_at FROM entries e"
             " LEFT JOIN entry_state s ON s.entry_id = e.id"
-            " WHERE e.parent IS NULL AND e.kind != 'reply' AND e.created < ?"
+            " WHERE (e.parent IS NULL OR e.kind = 'card') AND e.kind != 'reply'"
+            "   AND e.created < ?"
             "   AND (s.filed_at IS NULL OR s.judged_at IS NULL)"
             " ORDER BY e.created DESC LIMIT ?",
             (settled_before, limit),
@@ -580,6 +616,10 @@ class Index:
                 return True
             except sqlite3.IntegrityError:
                 return False
+
+    def get_link(self, link_id: str) -> Link | None:
+        row = self._conn.execute("SELECT * FROM links WHERE id = ?", (link_id,)).fetchone()
+        return _row_to_link(row) if row else None
 
     def judged_pairs(self, entry_id: str) -> set[str]:
         """Every entry already linked to or dismissed against this one."""
@@ -724,7 +764,7 @@ class Index:
         return len(parsed)
 
     def _restore_structure(self, parsed: list[tuple[Entry, Path]]) -> None:
-        """Re-derive themes and links from frontmatter.
+        """Re-derive themes, links, and what has already been considered.
 
         Only fills gaps: an entry whose membership is already present is left
         alone, so this is safe to run on every boot.
@@ -732,6 +772,14 @@ class Index:
         by_label: dict[str, str] = {t.label.lower(): t.id for t in self.themes()}
 
         for entry, _ in parsed:
+            # Without this a journal rebuilt from a deleted index would look
+            # entirely unexamined, and the next sweep would re-file and
+            # re-judge every thought in it at full price — for answers already
+            # sitting on disk. Timestamps are carried over rather than
+            # regenerated, so a rebuild does not pretend the work happened now.
+            if entry.filed or entry.judged:
+                self._restore_considered(entry.id, filed=entry.filed, judged=entry.judged)
+
             if entry.theme_labels:
                 theme_ids: list[str] = []
                 for label in entry.theme_labels:
@@ -804,5 +852,6 @@ def _row_to_entry(row: sqlite3.Row) -> Entry:
         source_url=row["source_url"],
         reply_kind=row["reply_kind"],
         tags=json.loads(row["tags"]),
+        promoted=bool(row["promoted"]),
         body=row["body"],
     )

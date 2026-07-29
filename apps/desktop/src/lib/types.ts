@@ -19,7 +19,7 @@ export interface Entry {
   body: string;
 }
 
-export type LinkKind = "echo" | "elaboration" | "contradiction" | "bridge";
+export type LinkKind = "echo" | "elaboration" | "contradiction" | "counterpoint" | "bridge";
 
 export interface Link {
   id: string;
@@ -62,6 +62,9 @@ export interface Thread {
   replies: Entry[];
   themes: Theme[];
   links: LinkedEntry[];
+  /** Ideas from this source that did not clear the relevance bar. Still
+   *  indexed and still searchable — just not pushed at you. */
+  quiet: number;
 }
 
 export interface Persona {

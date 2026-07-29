@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import asyncio
 
-from tilt.agents.base import AgentError, Completion, Pricing, estimate_tokens
+from tilt.agents.base import AgentError, Completion, Pricing, Reference, estimate_tokens
 
 # USD per million tokens, keyed by model family prefix.
 PRICING: dict[str, Pricing] = {
@@ -30,6 +30,10 @@ def pricing_for(model: str) -> Pricing:
 class GeminiProvider:
     name = "gemini"
 
+    # It can open a page and watch a video itself, which is why neither has a
+    # scraper or a caption-stitcher on this side.
+    follows_references = True
+
     def __init__(self, api_key: str, model: str, fallback_model: str | None = None) -> None:
         try:
             from google import genai
@@ -43,24 +47,63 @@ class GeminiProvider:
         self.fallback_model = fallback_model
         self.pricing = pricing_for(model)
 
-    async def complete(self, prompt: str, *, system: str | None = None) -> Completion:
+    async def complete(
+        self,
+        prompt: str,
+        *,
+        system: str | None = None,
+        reference: Reference | None = None,
+    ) -> Completion:
         for candidate in filter(None, (self.model, self.fallback_model)):
             try:
-                return await self._generate(candidate, prompt, system)
+                return await self._generate(candidate, prompt, system, reference)
             except Exception as exc:  # noqa: BLE001 - fall back, then surface
                 if candidate == (self.fallback_model or self.model):
                     raise AgentError(f"Gemini request failed: {exc}") from exc
         raise AgentError("No Gemini model configured.")
 
-    async def _generate(self, model: str, prompt: str, system: str | None) -> Completion:
+    def _contents(self, prompt: str, reference: Reference | None):
+        """The prompt, plus the video the model should watch alongside it.
+
+        A YouTube URL goes in as ``FileData`` rather than as a link in the
+        text: that is what makes the model actually watch it instead of
+        reasoning about the URL. Articles are not attached this way — they
+        travel as a tool, below.
+        """
         from google.genai import types
 
-        config = types.GenerateContentConfig(system_instruction=system) if system else None
+        if reference is None or reference.kind != "video":
+            return prompt
+        return types.Content(
+            role="user",
+            parts=[
+                types.Part(file_data=types.FileData(file_uri=reference.url)),
+                types.Part(text=prompt),
+            ],
+        )
+
+    def _config(self, system: str | None, reference: Reference | None):
+        from google.genai import types
+
+        tools = None
+        if reference is not None and reference.kind == "article":
+            # url_context lets the model fetch and read the page itself. The
+            # alternative is a scraper here, which would need maintaining
+            # against every site that changes its markup.
+            tools = [types.Tool(url_context=types.UrlContext())]
+
+        if system is None and tools is None:
+            return None
+        return types.GenerateContentConfig(system_instruction=system, tools=tools)
+
+    async def _generate(
+        self, model: str, prompt: str, system: str | None, reference: Reference | None = None
+    ) -> Completion:
         response = await asyncio.to_thread(
             self._client.models.generate_content,
             model=model,
-            contents=prompt,
-            config=config,
+            contents=self._contents(prompt, reference),
+            config=self._config(system, reference),
         )
         text = (getattr(response, "text", None) or "").strip()
         if not text:

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from tilt.journal import Journal
-from tilt.models import EntryCreate, EntryKind, EntryUpdate, ReplyKind
+from tilt.models import EntryCreate, EntryKind, EntryUpdate, LinkRecord, ReplyKind
 
 
 def test_create_returns_entry_and_indexes_it(journal: Journal) -> None:
@@ -31,6 +31,26 @@ def test_update_changes_body_and_bumps_timestamp(journal: Journal) -> None:
     assert updated.body == "Revised."
     assert updated.updated >= entry.updated
     assert journal.get(entry.id).body == "Revised."
+
+
+def test_editing_an_entry_keeps_its_folders_and_connections(journal: Journal) -> None:
+    """Fixing a typo must not cost the entry everything the agent found for it.
+
+    Folders and connections have no SQLite columns — they live only in
+    frontmatter. An edit that loaded the entry from the index would write back
+    empty ones, and nothing would look wrong until the next rebuild read the
+    truth off disk.
+    """
+    a = journal.create(EntryCreate(body="Attention is a filter."))
+    b = journal.create(EntryCreate(body="Memory is reconstruction."))
+    journal.set_themes(a.id, ["Attention"])
+    journal.record_link(a.id, LinkRecord(to=b.id, kind="echo", why="both about the mind"))
+
+    journal.update(a.id, EntryUpdate(body="Attention is a filter, not a spotlight."))
+    journal.rebuild()
+
+    assert [t.label for t in journal.thread(a.id).themes] == ["Attention"]
+    assert journal.index.links_for([a.id])[a.id], "the connection must survive an edit"
 
 
 def test_delete_cascades_to_replies(journal: Journal) -> None:
