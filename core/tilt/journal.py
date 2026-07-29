@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from tilt.embed import Embedder
 from tilt.models import (
     Entry,
     EntryCreate,
@@ -24,13 +25,34 @@ from tilt.models import (
 )
 from tilt.store import files, search
 from tilt.store.index import Index
+from tilt.store.vectors import VectorStore
+
+NEIGHBOUR_FLOOR = 0.55
+"""How alike two entries must be before one is offered as context for the other.
+
+A nearest-neighbour query always returns something. On a journal circling one
+subject the sixth-nearest entry may have nothing to do with the fifth, and
+handing it to the connector spends a model call proposing a link between two
+unrelated thoughts. Cosine on a normalised embedding is comparable across
+journals, so a fixed floor is meaningful here in a way a fixed rank is not."""
 
 
 class Journal:
-    def __init__(self, data_dir: Path, index: Index) -> None:
+    def __init__(
+        self,
+        data_dir: Path,
+        index: Index,
+        vectors: VectorStore | None = None,
+        embedder: Embedder | None = None,
+    ) -> None:
         self.data_dir = data_dir
         self.entries_root = data_dir / "entries"
         self.index = index
+        # Both optional and both absent without a key. Every use is guarded, so
+        # the journal is the same object with or without them — retrieval is
+        # simply narrower.
+        self.vectors = vectors
+        self.embedder = embedder
 
     # ---------------------------------------------------------------- writing
 
@@ -295,6 +317,10 @@ class Journal:
         # behind would hoard a transcript nothing can reach or show again.
         if entry is not None and entry.kind is EntryKind.SOURCE:
             self.source_text_path(entry_id).unlink(missing_ok=True)
+        # Otherwise the store accumulates vectors for thoughts that no longer
+        # exist, and they keep turning up as neighbours of the ones that do.
+        if self.vectors is not None:
+            self.vectors.forget(entry_id)
         return True
 
     # ---------------------------------------------------------------- reading
@@ -353,22 +379,60 @@ class Journal:
         return threads
 
     def search(self, query: str, *, limit: int = 20) -> list[Entry]:
-        return search.search(self.index, query, limit=limit)
+        return search.search(
+            self.index, query, limit=limit, vectors=self.vectors, embedder=self.embedder
+        )
+
+    def neighbours(self, entry_id: str, *, limit: int = 6) -> list[Entry]:
+        """Entries nearest this one by meaning, or nothing without a key.
+
+        The one path to a candidate that does not require shared vocabulary.
+        Everything else here finds entries that use the same words or were
+        written at the same time, which is why `bridges to` — the link kind that
+        by definition spans two vocabularies — could not fire on anything older
+        than the recency window before this existed.
+
+        Reads a stored vector rather than embedding the entry again: the text
+        has not changed since the job embedded it, and paying to ask the same
+        question twice is the sort of thing that makes a feature expensive for
+        no reason.
+        """
+        if self.vectors is None or self.embedder is None:
+            return []
+        vector = self.vectors.get(entry_id, self.embedder.signature)
+        if vector is None:
+            return []
+        near = self.vectors.nearest(
+            vector,
+            self.embedder.signature,
+            limit=limit,
+            exclude=entry_id,
+            floor=NEIGHBOUR_FLOOR,
+        )
+        found = [self.index.get(eid) for eid, _ in near]
+        return [e for e in found if e is not None]
 
     def context_for(self, entry_id: str, *, limit: int = 12) -> list[Entry]:
         """Prior entries an agent should consider when responding to this one.
 
-        Blends lexical neighbours of the entry with plain recency, so an agent
-        reply is grounded in related history rather than the last thing typed,
-        then orders the result by whose thinking is on each side.
+        Three sources, each covering a failure of the other two. Lexical
+        neighbours find the same words; recency finds what you are working on
+        now; vector neighbours find what is *about* the same thing while sharing
+        no words, which neither of the others can reach.
+
+        The total stays bounded rather than growing by a third. Every candidate
+        is prompt tokens on every connect call, and the vector slice is taken
+        out of the budget rather than added to it — a more expensive connector
+        that ran less often would be a worse trade than a sharper one.
         """
         entry = self.index.get(entry_id)
         if entry is None:
             return []
+        near = self.neighbours(entry_id, limit=max(1, limit // 3))
         related = [e for e in self.search(entry.body, limit=limit) if e.id != entry_id]
         recent = self.index.recent_bodies(limit=limit, exclude=entry_id)
         merged: dict[str, Entry] = {}
-        for candidate in [*related, *recent]:
+        for candidate in [*near, *related, *recent]:
             if candidate.kind is EntryKind.REPLY:
                 continue
             # Two ideas lifted out of the same document are not a discovery.

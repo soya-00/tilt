@@ -14,11 +14,12 @@ it, in three passes that get progressively more expensive:
 3. **Merge** — near-duplicate names, judged by the model and folded together.
    The only step that costs anything, and the only one that changes your files.
 
-The full re-clustering in the plan — every entry embedded, HDBSCAN over the
-vectors, themes split as well as merged — needs an embedding layer that does not
-exist yet. Splitting on lexical evidence alone would be guesswork, and a bad
-split scatters a subject across two folders with no way for the user to see why.
-Merging is the half that can be done honestly today.
+The full re-clustering in the plan — every entry embedded, clustered over the
+vectors, themes split as well as merged — now has the embedding layer it was
+waiting for, and is simply not built yet. Splitting on lexical evidence alone
+would be guesswork, and a bad split scatters a subject across two folders with
+no way for the user to see why. Merging is the half that was honest without
+vectors.
 """
 
 from __future__ import annotations

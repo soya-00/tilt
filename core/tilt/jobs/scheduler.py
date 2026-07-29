@@ -70,6 +70,18 @@ class Schedule:
             id="themes",
             name="Tidy the folders",
         )
+        # An interval rather than a cron, like the sweep and for the same
+        # reason: this drains a backlog, and a backlog appears whenever you
+        # write. Slower than the sweep because nothing waits on it — an entry
+        # embedded an hour late is only missing from the vector half of
+        # retrieval for that hour, whereas an unfiled one is invisible.
+        scheduler.add_job(
+            self._run,
+            IntervalTrigger(minutes=self._settings.embed_interval_minutes),
+            args=["vectors"],
+            id="vectors",
+            name="Embed new entries",
+        )
         scheduler.start()
         self._scheduler = scheduler
         log.info(

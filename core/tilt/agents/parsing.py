@@ -42,6 +42,21 @@ STOPWORDS = frozenset(
 _ADVERB = re.compile(r"ly$")
 
 
+def content_words(text: str) -> list[str]:
+    """Every word that might be what a passage is about, in order.
+
+    One definition of "content word" for the whole app. The offline embedder
+    builds its vocabulary from this, and :func:`keywords` ranks it — if the two
+    disagreed, a term could carry weight in a vector and be invisible to every
+    other lexical path, which is a hard class of bug to see.
+    """
+    return [
+        word
+        for word in re.findall(r"[a-zA-Z][a-zA-Z'-]{3,}", text.lower())
+        if word not in STOPWORDS and not _ADVERB.search(word)
+    ]
+
+
 def keywords(text: str, n: int = 4) -> list[str]:
     """Rank terms by repetition, then by length.
 
@@ -55,9 +70,7 @@ def keywords(text: str, n: int = 4) -> list[str]:
     would leave too few terms for the connector to find overlap with.
     """
     counts: dict[str, int] = {}
-    for word in re.findall(r"[a-zA-Z][a-zA-Z'-]{3,}", text.lower()):
-        if word in STOPWORDS or _ADVERB.search(word):
-            continue
+    for word in content_words(text):
         counts[word] = counts.get(word, 0) + 1
 
     ranked = sorted(counts.items(), key=lambda kv: (-kv[1], -len(kv[0]), kv[0]))

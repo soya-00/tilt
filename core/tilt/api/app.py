@@ -14,12 +14,14 @@ from tilt.api.auth import TokenAuthMiddleware
 from tilt.api.routes import agent, diagram, entries, graph, ingest, library, system
 from tilt.api.routes import settings as settings_routes
 from tilt.config import Settings, get_settings
+from tilt.embed import build_embedder
 from tilt.jobs import Schedule
 from tilt.journal import Journal
 from tilt.persona import PersonaStore
 from tilt.settings_store import SettingsStore
 from tilt.store.artifacts import ArtifactStore
 from tilt.store.index import Index
+from tilt.store.vectors import VectorStore
 
 
 def create_app(settings: Settings | None = None) -> FastAPI:
@@ -28,8 +30,24 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     @asynccontextmanager
     async def lifespan(app: FastAPI):
         settings.ensure_dirs()
+
+        # Read before anything is constructed. A key typed into the app is a
+        # more recent intent than one exported in a shell, and both the provider
+        # and the embedder are chosen by whether one exists — so the settings
+        # file has to be consulted before either is built.
+        store = SettingsStore(settings.internal_dir / "settings.json")
+        runtime = store.load()
+        if runtime.has_key:
+            settings.gemini_api_key = runtime.gemini_api_key
+            settings.gemini_model = runtime.gemini_model
+            settings.provider = "auto"
+        ceiling = runtime.monthly_cost_ceiling_usd or settings.monthly_cost_ceiling_usd
+
         index = Index(settings.index_path)
-        journal = Journal(settings.data_dir, index)
+        # Its own file, so the disposable cache and the vectors that cost money
+        # can be thrown away independently.
+        vectors = VectorStore(settings.vectors_path)
+        journal = Journal(settings.data_dir, index, vectors, build_embedder(settings))
 
         # Files are authoritative; reconcile on boot so entries added by hand
         # (or by another machine syncing the folder) are picked up.
@@ -37,20 +55,11 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
         app.state.settings = settings
         app.state.index = index
+        app.state.vectors = vectors
         app.state.journal = journal
+        app.state.settings_store = store
         app.state.persona = PersonaStore(settings.internal_dir / "agent.json")
         app.state.artifacts = ArtifactStore(settings.diagrams_dir)
-
-        # Runtime settings win over the environment: a key typed into the app
-        # is a more recent intent than one exported in a shell.
-        store = SettingsStore(settings.internal_dir / "settings.json")
-        app.state.settings_store = store
-        runtime = store.load()
-        if runtime.has_key:
-            settings.gemini_api_key = runtime.gemini_api_key
-            settings.gemini_model = runtime.gemini_model
-            settings.provider = "auto"
-        ceiling = runtime.monthly_cost_ceiling_usd or settings.monthly_cost_ceiling_usd
 
         provider = MeteredProvider(build_provider(settings), index, ceiling)
         app.state.provider = provider
@@ -68,6 +77,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         finally:
             schedule.shutdown()
             index.close()
+            vectors.close()
 
     app = FastAPI(
         title="Tilt",

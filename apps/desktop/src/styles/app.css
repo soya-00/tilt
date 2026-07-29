@@ -1766,3 +1766,33 @@
   margin-left: var(--s-1);
   color: var(--ink-tertiary);
 }
+
+/* What is asleep without a key. A list rather than a warning: nothing is wrong,
+   there is simply less of the app, and the tone should say that. */
+.dormant {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-2);
+  margin-top: var(--s-2);
+  padding: var(--s-3);
+  border-radius: var(--r-md);
+  background: var(--wash-2);
+}
+
+.dormant__item {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: var(--t-meta);
+  line-height: var(--lh-tight);
+}
+
+.dormant__what {
+  color: var(--ink-secondary);
+  font-weight: var(--w-medium);
+}
+
+.dormant__why {
+  color: var(--ink-tertiary);
+  text-wrap: pretty;
+}
