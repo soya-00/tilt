@@ -18,6 +18,7 @@ from tilt.models import (
     LinkRecord,
     Provenance,
     ReplyKind,
+    Theme,
     Thread,
     utcnow,
 )
@@ -178,6 +179,24 @@ class Journal:
             return
         entry.theme_labels = labels
         self._rewrite(entry)
+
+    def rename_theme(self, theme_id: str, label: str) -> Theme | None:
+        """Rename a folder, in the index and in every entry filed under it.
+
+        The rewrite is the whole job, exactly as it is for a delete. Folders are
+        rebuilt from each entry's own Markdown on boot, so a rename confined to
+        SQLite survives only until the next restart — at which point the old
+        name is recreated from the frontmatter that still carries it, the
+        entries follow it there, and the renamed folder is left standing empty
+        beside it. Renaming twice would leave three.
+        """
+        theme = self.index.rename_theme(theme_id, label)
+        if theme is None:
+            return None
+        for entry in self.index.entries_in_theme(theme_id):
+            current = self.index.themes_for([entry.id]).get(entry.id, [])
+            self.set_themes(entry.id, [t.label for t in current])
+        return theme
 
     def delete_theme(self, theme_id: str) -> bool:
         """Drop a folder, keeping every entry that was in it.

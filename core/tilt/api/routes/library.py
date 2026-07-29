@@ -26,8 +26,12 @@ def list_themes(journal: Journal = Depends(get_journal)) -> list[Theme]:
 def rename_theme(
     theme_id: str, payload: RenameTheme, journal: Journal = Depends(get_journal)
 ) -> Theme:
-    """Rename a theme. This pins the label so the agent stops rewriting it."""
-    theme = journal.index.rename_theme(theme_id, payload.label.strip())
+    """Rename a theme. This pins the label so the agent stops rewriting it.
+
+    Goes through the journal rather than the index: the new name has to reach
+    every member's frontmatter, or the old one comes back on the next boot.
+    """
+    theme = journal.rename_theme(theme_id, payload.label.strip())
     if theme is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Theme not found.")
     return theme

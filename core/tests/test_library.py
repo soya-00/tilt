@@ -19,6 +19,7 @@ from tilt.models import (
     Theme,
     utcnow,
 )
+from tilt.store import files
 from tilt.store.files import new_id
 from tilt.store.index import Index, pair_key
 
@@ -436,3 +437,31 @@ async def test_connect_survives_unusable_model_output(
     metered = MeteredProvider(Garbage(), index, ceiling_usd=1.0)
 
     assert await connect(journal, metered, entry.id) == []
+
+
+def test_a_rename_survives_losing_the_index(journal: Journal, settings) -> None:
+    """Folders are rebuilt from each entry's own Markdown on boot, so a rename
+    confined to SQLite lasts until the next restart — and then the old name is
+    recreated from the frontmatter that still carries it, the entries follow it
+    back, and the renamed folder is left standing empty beside it."""
+    entry = journal.create(EntryCreate(body="Attention is a budget."))
+    now = utcnow()
+    theme = journal.index.upsert_theme(
+        Theme(id=new_id(), label="Attention", created=now, updated=now)
+    )
+    journal.index.set_entry_themes(entry.id, [theme.id])
+    journal.set_themes(entry.id, [theme.label])
+
+    assert journal.rename_theme(theme.id, "Personal Computing") is not None
+    journal.rebuild()
+
+    labels = [t.label for t in journal.index.themes()]
+    assert labels == ["Personal Computing"], f"the old folder came back: {labels}"
+    # Read from the file, not the index: the index has no column for folder
+    # membership, and the file is the copy the rebuild will read next time.
+    on_disk = files.parse(journal.index.path_of(entry.id))
+    assert on_disk.theme_labels == ["Personal Computing"]
+
+
+def test_renaming_something_that_is_gone_changes_nothing(journal: Journal) -> None:
+    assert journal.rename_theme("nope", "Whatever") is None
