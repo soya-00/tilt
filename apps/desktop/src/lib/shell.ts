@@ -48,6 +48,29 @@ export async function dismiss(): Promise<void> {
   await getCurrentWindow().hide();
 }
 
+/**
+ * Open a link in the real browser.
+ *
+ * Under the shell a plain `target="_blank"` does nothing at all: Tauri does not
+ * create the window, and the app's CSP has no `navigate-to`. That is a link
+ * that works perfectly in `npm run dev` and is silently dead in the shipped
+ * app, which is the worst shape a bug can take.
+ *
+ * The plugin command is invoked by name rather than through
+ * `@tauri-apps/plugin-opener`. `@tauri-apps/api` is already a dependency and
+ * this needs exactly one call, so the npm package would be a second copy of the
+ * same thing.
+ */
+export async function openExternal(url: string): Promise<void> {
+  if (!/^https?:\/\//i.test(url)) return;
+  if (!inShell()) {
+    window.open(url, "_blank", "noopener,noreferrer");
+    return;
+  }
+  const { invoke } = await import("@tauri-apps/api/core");
+  await invoke("plugin:opener|open_url", { url });
+}
+
 export async function announceCapture(): Promise<void> {
   if (!inShell()) return;
   const { emit } = await import("@tauri-apps/api/event");

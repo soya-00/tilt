@@ -22,6 +22,7 @@ fn capture_shortcut() -> Shortcut {
 
 fn main() {
     let app = tauri::Builder::default()
+        .plugin(tauri_plugin_opener::init())
         .plugin(
             tauri_plugin_global_shortcut::Builder::new()
                 .with_handler(|app, shortcut, event| {

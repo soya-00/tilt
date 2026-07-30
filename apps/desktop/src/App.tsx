@@ -343,6 +343,7 @@ export default function App() {
         open={briefOpen}
         onClose={() => setBriefOpen(false)}
         onRead={() => void journal.refresh()}
+        onScope={setScope}
       />
 
       <SourceSheet

@@ -6,21 +6,23 @@
  * no completion, and it does not congratulate anyone for emptying it.
  */
 
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { api } from "../lib/api";
+import * as shell from "../lib/shell";
 import type { BriefItem } from "../lib/types";
 import { Brief } from "./Brief";
 
 function item(over: Partial<BriefItem> = {}): BriefItem {
   return {
     id: "b1",
-    title: "Attention is not a spotlight",
+    title: "Attention as a filter",
     url: "https://arxiv.org/abs/2401.00001",
     why: "argues against the filter model you settled on in June",
     origin: "scout",
+    tags: ["attention", "memory"],
     created: new Date().toISOString(),
     dismissed: false,
     path: "/tmp/b1.md",
@@ -28,12 +30,13 @@ function item(over: Partial<BriefItem> = {}): BriefItem {
   };
 }
 
-const props = { open: true, onClose: vi.fn(), onRead: vi.fn() };
+const props = { open: true, onClose: vi.fn(), onRead: vi.fn(), onScope: vi.fn() };
 
 beforeEach(() => {
   vi.restoreAllMocks();
   props.onClose = vi.fn();
   props.onRead = vi.fn();
+  props.onScope = vi.fn();
 });
 
 describe("Brief", () => {
@@ -42,10 +45,33 @@ describe("Brief", () => {
 
     render(<Brief {...props} />);
 
-    expect(await screen.findByText("Attention is not a spotlight")).toBeInTheDocument();
+    expect(await screen.findByText("Attention as a filter")).toBeInTheDocument();
     expect(
       screen.getByText(/argues against the filter model you settled on in June/),
     ).toBeInTheDocument();
+  });
+
+  it("gives each item the Stream's dot", async () => {
+    /* A candidate is a thought you have not had yet, and it should look like
+       one. Reusing the class rather than copying it is what keeps that true. */
+    vi.spyOn(api, "brief").mockResolvedValue([item()]);
+
+    const { container } = render(<Brief {...props} />);
+    await screen.findByText("Attention as a filter");
+
+    expect(container.querySelectorAll(".brief__item .row__dot")).toHaveLength(1);
+    // No connector: that line claims two rows belong to one thread.
+    expect(container.querySelector(".row__connector")).toBeNull();
+  });
+
+  it("tags go to what you have already written under them", async () => {
+    vi.spyOn(api, "brief").mockResolvedValue([item()]);
+
+    render(<Brief {...props} />);
+    await userEvent.click(await screen.findByRole("button", { name: "attention" }));
+
+    expect(props.onScope).toHaveBeenCalledWith({ type: "tag", tag: "attention" });
+    expect(props.onClose).toHaveBeenCalled();
   });
 
   it("says who put each item there", async () => {
@@ -64,7 +90,7 @@ describe("Brief", () => {
     /* There is no page to open, and a Read button that always failed would be
        a promise the app cannot keep. */
     vi.spyOn(api, "brief").mockResolvedValue([
-      item({ url: null, title: "", why: "the second half of that book" }),
+      item({ url: null, title: "", why: "the second half of that book", tags: [] }),
     ]);
 
     render(<Brief {...props} />);
@@ -74,25 +100,27 @@ describe("Brief", () => {
     expect(screen.getByRole("button", { name: "Dismiss" })).toBeInTheDocument();
   });
 
-  it("lets you put something there yourself", async () => {
+  it("takes one box and files a link, tags and a note", async () => {
+    /* The whole point of the composer: you type the way you would tell someone
+       about it, and the parts get sorted out here rather than by you. */
     vi.spyOn(api, "brief").mockResolvedValue([]);
-    const add = vi
-      .spyOn(api, "addToBrief")
-      .mockResolvedValue(item({ id: "mine", origin: "you", title: "" }));
+    const add = vi.spyOn(api, "addToBrief").mockResolvedValue(item({ id: "mine", origin: "you" }));
 
     render(<Brief {...props} />);
-    await screen.findByPlaceholderText(/A link you have been meaning to read/);
+    await screen.findByLabelText("Title");
 
+    await userEvent.type(screen.getByLabelText("Title"), "Seeing Like a State");
     await userEvent.type(
-      screen.getByLabelText("Link to add"),
-      "https://example.com/essay",
+      screen.getByLabelText("Why this is here"),
+      "Kate says it argues the opposite https://example.com/essay #attention",
     );
-    await userEvent.type(screen.getByLabelText("Why this is here"), "been meaning to");
     await userEvent.click(screen.getByRole("button", { name: "Add" }));
 
     expect(add).toHaveBeenCalledWith({
+      title: "Seeing Like a State",
       url: "https://example.com/essay",
-      why: "been meaning to",
+      tags: ["attention"],
+      why: "Kate says it argues the opposite",
     });
   });
 
@@ -100,9 +128,43 @@ describe("Brief", () => {
     vi.spyOn(api, "brief").mockResolvedValue([]);
 
     render(<Brief {...props} />);
-    await screen.findByLabelText("Link to add");
+    await screen.findByLabelText("Title");
 
     expect(screen.getByRole("button", { name: "Add" })).toBeDisabled();
+  });
+
+  it("opens a pasted link in the browser without shelving it", async () => {
+    /* Checking it is the right thing before saving it is a different act from
+       deciding to read it, and it costs nothing. */
+    vi.spyOn(api, "brief").mockResolvedValue([]);
+    const opened = vi.spyOn(shell, "openExternal").mockResolvedValue();
+    const add = vi.spyOn(api, "addToBrief");
+
+    render(<Brief {...props} />);
+    await screen.findByLabelText("Title");
+
+    expect(screen.getByRole("button", { name: "Open" })).toBeDisabled();
+    await userEvent.type(
+      screen.getByLabelText("Why this is here"),
+      "https://example.com/essay",
+    );
+
+    await userEvent.click(screen.getByRole("button", { name: "Open" }));
+
+    expect(opened).toHaveBeenCalledWith("https://example.com/essay");
+    expect(add).not.toHaveBeenCalled();
+  });
+
+  it("a title opens in the browser rather than inside the app", async () => {
+    /* A page that opened in the webview would be a browser nobody asked for,
+       sitting on top of the journal with no way back. */
+    vi.spyOn(api, "brief").mockResolvedValue([item()]);
+    const opened = vi.spyOn(shell, "openExternal").mockResolvedValue();
+
+    render(<Brief {...props} />);
+    await userEvent.click(await screen.findByText("Attention as a filter"));
+
+    expect(opened).toHaveBeenCalledWith("https://arxiv.org/abs/2401.00001");
   });
 
   it("reading one takes it off the list and reloads the journal", async () => {
@@ -118,7 +180,7 @@ describe("Brief", () => {
     await userEvent.click(await screen.findByRole("button", { name: "Read" }));
 
     await waitFor(() => expect(read).toHaveBeenCalledWith("b1"));
-    expect(screen.queryByText("Attention is not a spotlight")).not.toBeInTheDocument();
+    expect(screen.queryByText("Attention as a filter")).not.toBeInTheDocument();
     expect(props.onRead).toHaveBeenCalled();
   });
 
@@ -134,18 +196,20 @@ describe("Brief", () => {
     await userEvent.click(await screen.findByRole("button", { name: "Read" }));
 
     expect(await screen.findByRole("alert")).toHaveTextContent("needs a Gemini key");
-    expect(screen.getByText("Attention is not a spotlight")).toBeInTheDocument();
+    expect(screen.getByText("Attention as a filter")).toBeInTheDocument();
   });
 
   it("dismissing removes it from view", async () => {
     vi.spyOn(api, "brief").mockResolvedValue([item()]);
-    const dismiss = vi.spyOn(api, "dismissBriefItem").mockResolvedValue(item({ dismissed: true }));
+    const dismiss = vi
+      .spyOn(api, "dismissBriefItem")
+      .mockResolvedValue(item({ dismissed: true }));
 
     render(<Brief {...props} />);
     await userEvent.click(await screen.findByRole("button", { name: "Dismiss" }));
 
     await waitFor(() => expect(dismiss).toHaveBeenCalledWith("b1"));
-    expect(screen.queryByText("Attention is not a spotlight")).not.toBeInTheDocument();
+    expect(screen.queryByText("Attention as a filter")).not.toBeInTheDocument();
   });
 
   it("treats an empty brief as the resting state rather than an achievement", async () => {
@@ -157,25 +221,23 @@ describe("Brief", () => {
 
     const note = await screen.findByText(/Nothing waiting/);
     expect(note.textContent).not.toMatch(/caught up|done|complete|inbox zero/i);
-  });
-
-  it("says plainly that none of this is in the journal yet", async () => {
-    vi.spyOn(api, "brief").mockResolvedValue([item()]);
-
-    render(<Brief {...props} />);
-
-    expect(
-      await screen.findByText(/Nothing here is in your journal/),
-    ).toBeInTheDocument();
+    // The assurance the removed footer used to carry, kept where someone
+    // seeing the brief for the first time actually reads it.
+    expect(note.textContent).toMatch(/nothing here is in your journal until you read it/i);
   });
 
   it("never shows a count of what is outstanding", async () => {
     /* A number beside a list is what turns a shelf into a backlog. */
-    vi.spyOn(api, "brief").mockResolvedValue([item(), item({ id: "b2" }), item({ id: "b3" })]);
+    vi.spyOn(api, "brief").mockResolvedValue([
+      item(),
+      item({ id: "b2" }),
+      item({ id: "b3" }),
+    ]);
 
-    render(<Brief {...props} />);
-    await screen.findAllByText("Attention is not a spotlight");
+    const { container } = render(<Brief {...props} />);
+    await screen.findAllByText("Attention as a filter");
 
-    expect(screen.queryByText(/\b3\b/)).not.toBeInTheDocument();
+    const head = within(container.querySelector(".sheet__head") as HTMLElement);
+    expect(head.queryByText(/\d/)).not.toBeInTheDocument();
   });
 });

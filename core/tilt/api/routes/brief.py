@@ -19,6 +19,7 @@ from pydantic import BaseModel, Field
 
 from tilt.agents.base import Reference
 from tilt.agents.ledger import MeteredProvider
+from tilt.agents.scout import snap_tags
 from tilt.api.deps import get_brief, get_journal, get_persona_store, get_provider
 from tilt.api.routes.ingest import _distil
 from tilt.ingest import Medium, classify
@@ -37,6 +38,10 @@ class AddRequest(BaseModel):
     why: str = Field(default="", max_length=1000)
     """Optional, and worth filling in. A link with no note is unreadable to you
     a fortnight later — the reason you saved it is the first thing to go."""
+    tags: list[str] = Field(default_factory=list, max_length=8)
+    """Typed inline as ``#tags`` and parsed out by the composer. Snapped
+    against the journal's existing vocabulary here rather than there, so the
+    rule holds whoever is calling — a typo lands on the tag you meant."""
 
 
 @router.get("", response_model=list[BriefItem])
@@ -49,6 +54,7 @@ def list_brief(brief: BriefStore = Depends(get_brief)) -> list[BriefItem]:
 def add_to_brief(
     payload: AddRequest,
     brief: BriefStore = Depends(get_brief),
+    journal: Journal = Depends(get_journal),
 ) -> BriefItem:
     """Put something here yourself.
 
@@ -92,6 +98,7 @@ def add_to_brief(
             url=url or None,
             why=why,
             origin=BriefOrigin.YOU,
+            tags=snap_tags(payload.tags, [t.tag for t in journal.index.tags()]),
             created=utcnow(),
         )
     )

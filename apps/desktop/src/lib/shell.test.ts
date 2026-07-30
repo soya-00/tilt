@@ -1,6 +1,13 @@
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { bridge, dismiss, inShell, isCaptureWindow, onCaptured } from "./shell";
+import {
+  bridge,
+  dismiss,
+  inShell,
+  isCaptureWindow,
+  onCaptured,
+  openExternal,
+} from "./shell";
 
 function setLocation(search: string) {
   // jsdom allows replacing the URL, which is the only part of `location` these
@@ -57,5 +64,30 @@ describe("outside the shell", () => {
       throw new Error("must never fire without a shell");
     });
     expect(() => stop()).not.toThrow();
+  });
+});
+
+describe("opening a link", () => {
+  it("hands an http link to the browser", async () => {
+    const open = vi.spyOn(window, "open").mockReturnValue(null);
+
+    await openExternal("https://example.com/essay");
+
+    expect(open).toHaveBeenCalledWith(
+      "https://example.com/essay",
+      "_blank",
+      "noopener,noreferrer",
+    );
+  });
+
+  it("refuses anything that is not http", async () => {
+    // The brief's links arrive from feeds, which is to say from strangers.
+    const open = vi.spyOn(window, "open").mockReturnValue(null);
+
+    await openExternal("file:///etc/passwd");
+    await openExternal("javascript:alert(1)");
+    await openExternal("");
+
+    expect(open).not.toHaveBeenCalled();
   });
 });

@@ -13,7 +13,15 @@ import httpx
 
 from tilt.agents.base import Completion, Pricing
 from tilt.agents.ledger import MeteredProvider
-from tilt.agents.scout import MAX_PICKS, build_prompt, gather, interests, triage, unseen
+from tilt.agents.scout import (
+    MAX_PICKS,
+    build_prompt,
+    gather,
+    interests,
+    snap_tags,
+    triage,
+    unseen,
+)
 from tilt.feeds import Finding, arxiv_query, parse
 from tilt.jobs.scout import look
 from tilt.journal import Journal
@@ -34,7 +42,8 @@ ATOM = """<?xml version="1.0" encoding="UTF-8"?>
   <entry>
     <id>http://arxiv.org/abs/2401.00002v1</id>
     <title>Memory consolidation during sleep</title>
-    <summary>A review of replay in the hippocampus.</summary>
+    <summary>A review of hippocampal replay during quiescence, and what it
+    consolidates.</summary>
   </entry>
 </feed>
 """
@@ -89,6 +98,14 @@ def question(journal: Journal, body: str) -> Entry:
     return entry
 
 
+def tagged(journal: Journal, body: str, tags: list[str]) -> Entry:
+    """An ordinary entry, so the journal has a tag vocabulary to snap against."""
+    now = utcnow()
+    entry = Entry(id=files.new_id(), created=now, updated=now, body=body, tags=tags)
+    journal.index.upsert(entry, files.write(entry, journal.entries_root))
+    return entry
+
+
 def read_already(journal: Journal, url: str) -> Entry:
     now = utcnow()
     entry = Entry(
@@ -127,6 +144,50 @@ def test_atom_and_rss_both_parse_with_the_standard_library() -> None:
     [rss] = parse(RSS, source="blog")
     assert rss.url == "https://example.com/writing"
     assert rss.summary.startswith("Why a note")
+
+
+def test_a_candidate_with_no_description_never_reaches_triage() -> None:
+    """A title with decoration is not something to judge.
+
+    Triage exists so that reading is decided on evidence rather than on a
+    headline; a candidate with nothing but a title makes it guess, which is the
+    thing the two-pass design is there to avoid.
+    """
+    thin = """<?xml version="1.0"?>
+<rss version="2.0"><channel>
+  <item>
+    <title>A complete item</title>
+    <link>https://example.com/full</link>
+    <description>A description long enough to actually judge the thing by.</description>
+  </item>
+  <item>
+    <title>Headline only</title>
+    <link>https://example.com/thin</link>
+  </item>
+  <item>
+    <title>Barely anything</title>
+    <link>https://example.com/short</link>
+    <description>Read more</description>
+  </item>
+</channel></rss>
+"""
+    assert [f.url for f in parse(thin, source="blog")] == ["https://example.com/full"]
+
+
+def test_a_feed_of_pure_headlines_yields_nothing(caplog) -> None:
+    """And says so. Silently useless looks exactly like down, and the two want
+    different fixes."""
+    headlines = (
+        '<?xml version="1.0"?><rss version="2.0"><channel>'
+        "<item><title>One</title><link>https://a.example/1</link></item>"
+        "<item><title>Two</title><link>https://a.example/2</link></item>"
+        "</channel></rss>"
+    )
+
+    with caplog.at_level("WARNING"):
+        assert parse(headlines, source="headline.example") == []
+
+    assert "none carry a description" in caplog.text
 
 
 def test_a_malformed_feed_costs_only_itself() -> None:
@@ -209,8 +270,8 @@ async def test_triage_is_the_filter(journal: Journal, index: Index) -> None:
     chosen = await triage(journal, provider, findings(6))
 
     assert len(inner.prompts) == 1, "one call for the lot, not one per candidate"
-    assert [c.url for c, _ in chosen] == ["https://example.com/4"]
-    assert chosen[0][1] == "argues the opposite"
+    assert [p.finding.url for p in chosen] == ["https://example.com/4"]
+    assert chosen[0].why == "argues the opposite"
     assert "Paper 5 on attention" in inner.prompts[0], "all six were judged"
 
 
@@ -224,6 +285,57 @@ async def test_triage_will_not_exceed_its_ceiling(journal: Journal, index: Index
     chosen = await triage(journal, provider, findings(6))
 
     assert len(chosen) == MAX_PICKS
+
+
+async def test_a_proposed_tag_lands_on_the_one_you_already_use(
+    journal: Journal, index: Index
+) -> None:
+    """One vocabulary for the journal, not a second one growing beside it.
+
+    Left alone a model coins "Attention" beside the "attention" already in the
+    sidebar, and a week of that is a tag list nobody can use to find anything.
+    """
+    tagged(journal, "Attention discards most of what arrives.", ["attention"])
+    question(journal, "Does attention behave like a filter?")
+    provider, inner = metered(
+        index,
+        '{"picks": [{"n": 0, "why": "w", "tags": ["Attentions", "  #Memory  ", "memory"]}]}',
+    )
+
+    chosen = await triage(journal, provider, findings(2))
+
+    assert chosen[0].tags == ["attention", "memory"], "snapped, lowercased, deduped"
+    assert "attention" in inner.prompts[0], "the model was shown the vocabulary"
+
+
+async def test_a_genuinely_new_tag_is_kept(journal: Journal, index: Index) -> None:
+    """snap() returning nothing is it declining to guess, not a rejection. A
+    subject you have not written about yet is exactly what a scout is for."""
+    tagged(journal, "Attention discards most of what arrives.", ["attention"])
+    question(journal, "Does attention behave like a filter?")
+    provider, _ = metered(index, '{"picks": [{"n": 0, "why": "w", "tags": ["hippocampus"]}]}')
+
+    assert (await triage(journal, provider, findings(2)))[0].tags == ["hippocampus"]
+
+
+async def test_a_pick_with_no_tags_is_still_a_pick(
+    journal: Journal, index: Index
+) -> None:
+    """Tags are how a candidate is recognised, not what makes it valid."""
+    question(journal, "Does attention behave like a filter?")
+    provider, _ = metered(index, '{"picks": [{"n": 0, "why": "w"}]}')
+
+    chosen = await triage(journal, provider, findings(2))
+
+    assert len(chosen) == 1
+    assert chosen[0].tags == []
+
+
+def test_no_more_than_three_tags_reach_a_row(journal: Journal) -> None:
+    """A row in the brief is one line of chips wide."""
+    assert snap_tags(["a", "bb", "ccc", "dddd", "eeeee"], []) == ["a", "bb", "ccc"]
+    assert snap_tags("not a list", []) == []
+    assert snap_tags(["", "  ", "#"], []) == []
 
 
 async def test_triage_ignores_a_pick_that_points_at_nothing(
@@ -266,7 +378,7 @@ async def test_offline_triage_needs_a_real_overlap(
         [Finding("Attention as a filter, not a spotlight", "u", "", "t")],
     )
     assert len(fat) == 1
-    assert "matched offline by keyword" in fat[0][1]
+    assert "matched offline by keyword" in fat[0].why
 
 
 def test_the_prompt_asks_for_dissent() -> None:

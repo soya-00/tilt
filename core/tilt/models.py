@@ -346,6 +346,13 @@ class BriefItem(BaseModel):
     own note to yourself. Without it a list of links is unreadable a week
     later, because the reason you saved something is the first thing to go."""
     origin: BriefOrigin = BriefOrigin.YOU
+    tags: list[str] = Field(default_factory=list)
+    """The same vocabulary entries use, not a second one growing beside it.
+
+    Snapped against the tags already in the journal before being stored, so a
+    proposed "Attention" lands on the "attention" you have been using. What it
+    buys is that a candidate can be recognised at a glance as belonging to
+    something you already think about."""
     created: datetime
     dismissed: bool = False
     """Kept rather than deleted, so the scout never proposes it again. The same

@@ -221,6 +221,9 @@ export interface BriefItem {
   why: string;
   /** `scout` if the agent went looking, `you` if you put it there. */
   origin: "scout" | "you";
+  /** The same vocabulary entries use — snapped against it before storing, so a
+   *  brief tag and an entry tag are the same word. */
+  tags: string[];
   created: string;
   dismissed: boolean;
   path: string;

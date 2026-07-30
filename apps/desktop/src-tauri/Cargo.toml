@@ -18,6 +18,10 @@ tauri-build = { version = "2", features = [] }
 # Mac App Store distribution — a fair trade for an app shipped as a .dmg.
 tauri = { version = "2", features = ["tray-icon", "image-png", "macos-private-api"] }
 tauri-plugin-global-shortcut = "2"
+# Handing a link to the system browser. The webview must never navigate to one
+# itself: a page that opened inside Tilt would be a browser nobody asked for,
+# sitting on top of the journal with no way back.
+tauri-plugin-opener = "2"
 serde_json = "1"
 getrandom = "0.3"
 

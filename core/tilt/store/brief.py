@@ -33,6 +33,12 @@ def _created(value: object) -> datetime:
         return utcnow()
 
 
+def _listed(value: object) -> list[object]:
+    if isinstance(value, list):
+        return value
+    return [value] if value else []
+
+
 def normalise(url: str | None) -> str:
     """The comparison key for "have I seen this already".
 
@@ -67,6 +73,7 @@ class BriefStore:
             origin=item.origin.value,
             created=item.created.isoformat(),
             **({"url": item.url} if item.url else {}),
+            **({"tags": item.tags} if item.tags else {}),
             **({"dismissed": True} if item.dismissed else {}),
         )
 
@@ -148,6 +155,9 @@ class BriefStore:
                 if origin in {o.value for o in BriefOrigin}
                 else BriefOrigin.YOU
             ),
+            # A hand-edited file may carry one tag as a bare string rather than
+            # a list, which is what YAML does with `tags: attention`.
+            tags=[str(t) for t in _listed(meta.get("tags"))],
             created=_created(meta.get("created")),
             dismissed=bool(meta.get("dismissed")),
             path=str(path),

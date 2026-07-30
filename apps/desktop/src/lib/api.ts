@@ -228,7 +228,12 @@ export const api = {
   /** Put something here yourself. A link, a note, or both — a note with no URL
    *  is a legitimate item, because "the second half of that book" has no
    *  address. */
-  addToBrief: (payload: { url?: string; title?: string; why?: string }) =>
+  addToBrief: (payload: {
+    url?: string;
+    title?: string;
+    why?: string;
+    tags?: string[];
+  }) =>
     request<BriefItem>("/brief", { method: "POST", body: JSON.stringify(payload) }),
 
   /** The only expensive call in the whole feature, and the only one behind a

@@ -1810,30 +1810,59 @@
 }
 
 /* ---- Brief ---------------------------------------------------------------
-   A shelf, not an inbox. No counts, no progress, no tick boxes — the visual
-   grammar has to carry "these are candidates" on its own, because a list of
-   rows with buttons on the right reads as a queue unless it is told not to. */
-.brief__add {
-  padding-bottom: var(--s-3);
-  border-bottom: 1px solid var(--line);
-}
+   A shelf, not an inbox. No counts, no progress, no tick boxes — the grammar
+   has to carry "these are candidates" on its own, because a list of rows with
+   buttons on the right reads as a queue unless it is told not to.
 
+   Built from the Stream's parts rather than its own: `.row__gutter` and
+   `.row__dot` are reused verbatim, so the two surfaces cannot drift apart. */
 .brief__list {
   display: flex;
   flex-direction: column;
   list-style: none;
+  /* A `ul` carries 40px of inline padding by default, which would push the dot
+     rail off the composer's left edge — the one alignment this layout is for. */
+  padding-inline-start: 0;
 }
 
 .brief__item {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
+  display: grid;
+  grid-template-columns: var(--gutter) 1fr;
+  align-items: start;
+  /* Negative margin against equal padding: the hover fill bleeds outward
+     without moving anything, so the dot rail stays exactly where it was. The
+     trick `.chip--tag` already uses. */
+  margin: 0 calc(var(--s-2) * -1);
   padding: var(--s-2);
   border-radius: var(--r-md);
 }
 
 .brief__item:hover {
   background: var(--wash-1);
+}
+
+/* The same distance the Stream puts between two thoughts. */
+.brief__item + .brief__item {
+  margin-top: var(--s-6);
+}
+
+.brief__main {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+/* Their own line, as they have under an entry in the Stream. Sharing a line
+   with the provenance and the actions makes three unrelated things compete for
+   one row, and the row wraps at the first long title. */
+.brief__tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-1);
+  /* Pulled left by the chip's own padding, so the first tag's text sits on the
+     same edge as the title above and the provenance below. */
+  margin: var(--s-2) 0 0 calc(var(--s-2) * -1);
 }
 
 .brief__title {
@@ -1845,6 +1874,7 @@
 .brief__title a {
   color: inherit;
   text-decoration: none;
+  cursor: pointer;
 }
 
 .brief__title a:hover {
@@ -1861,12 +1891,15 @@
   text-wrap: pretty;
 }
 
+/* Tags, provenance and actions on one line. A column of buttons would take its
+   width from every row whether or not it is showing, and the titles — the
+   thing you are here to read — would wrap around it. */
 .brief__foot {
   display: flex;
   align-items: baseline;
-  gap: var(--s-2);
-  margin-top: 3px;
-  min-height: 18px;
+  gap: var(--s-3);
+  margin-top: 4px;
+  min-height: 20px;
 }
 
 .brief__meta {
@@ -1911,7 +1944,7 @@
 }
 
 .link-btn--quiet {
-  font-weight: 400;
+  font-weight: var(--w-normal);
   color: var(--ink-tertiary);
 }
 
@@ -1921,4 +1954,59 @@
 
 .brief__error {
   color: var(--ink);
+}
+
+/* The composer. One hairline above it and nothing else — the same separation
+   the writing surface downstairs has, and for the same reason: a bordered box
+   is a form, and nobody fills in a form to save a link. */
+.brief__compose {
+  padding-top: var(--s-4);
+  border-top: 1px solid var(--line);
+}
+
+.brief__compose-title,
+.brief__compose-note {
+  display: block;
+  width: 100%;
+  background: transparent;
+  color: var(--ink);
+  caret-color: var(--accent);
+}
+
+.brief__compose-title {
+  font-size: var(--t-entry);
+  font-weight: var(--w-medium);
+  line-height: var(--lh-tight);
+}
+
+.brief__compose-note {
+  resize: none;
+  overflow-y: auto;
+  margin-top: 2px;
+  font-size: var(--t-body);
+  line-height: var(--lh-body);
+}
+
+.brief__compose-title::placeholder,
+.brief__compose-note::placeholder {
+  color: var(--ink-tertiary);
+  font-weight: var(--w-normal);
+}
+
+.brief__compose-title:focus-visible,
+.brief__compose-note:focus-visible {
+  outline: none;
+}
+
+.brief__compose-bar {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--s-2);
+  margin-top: var(--s-2);
+}
+
+/* The title needs the auto margin that used to sit on the version line, or the
+   close button walks in beside it. */
+.sheet__title--wide {
+  margin-right: auto;
 }

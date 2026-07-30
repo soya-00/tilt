@@ -50,9 +50,12 @@ Five loops are in: **inputting, categorising, connecting, distilling, seeing.**
 - **The brief** (`⌘B`) — reading that has not happened yet, filled from both
   sides. You put things there; once a day the agent looks through the feeds you
   named and whatever arXiv has on your subjects, and adds at most two, each with
-  one line on which of your open questions it might answer. Read one and it goes
-  through the same distillation as anything you paste; dismiss it and it is
-  never offered again. Nothing in it is in your journal until you choose it.
+  one line on which of your open questions it might answer. Everything carries
+  tags in the same vocabulary your entries use, so a candidate can be recognised
+  at a glance and followed back to what you have already written under it. Read
+  one and it goes through the same distillation as anything you paste; dismiss it
+  and it is never offered again. Nothing in it is in your journal until you
+  choose it.
 - **Sidebar** — navigate folders and tags the agent produced, kept deliberately
   few (see below). Rename a folder to pin its name against future agent edits;
   delete one, in two clicks, when the agent's guess about how your thinking
@@ -220,6 +223,17 @@ by becoming journal content or by being turned down, and one that simply sits
 there is not a failure. Dismissals are kept as tombstones so the same paper is
 never offered twice, which is the fastest way to teach someone to stop opening
 a list.
+
+**Feeds and arXiv, and nothing else.** An open web search was built for this and
+removed. A search result arrives as a headline and a snippet, so triage would be
+ranking headlines — the thing the two-pass design exists to avoid. A feed item
+arrives with a real title and a real abstract, and anything that turns up
+without a description is dropped before a model ever sees it.
+
+It looks like the Stream on purpose: the same dot rail, the same tag chips, the
+same composer you type into rather than a form you complete. A candidate is a
+thought you have not had yet, and it should not look like a different kind of
+object.
 
 ### Reading someone you disagree with
 

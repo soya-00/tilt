@@ -92,6 +92,35 @@ def test_reading_an_item_leaves_no_tombstone(tmp_path: Path) -> None:
     assert store.all(include_dismissed=True) == []
 
 
+def test_tags_survive_a_restart(tmp_path: Path) -> None:
+    """Tags are how a candidate is recognised at a glance. Losing them on quit
+    would leave a list of links again."""
+    saved = BriefStore(tmp_path).save(
+        BriefItem(
+            id=new_id(),
+            title="A paper",
+            url="https://example.com/p",
+            tags=["attention", "memory"],
+            created=utcnow(),
+        )
+    )
+
+    reopened = BriefStore(tmp_path).load(saved.id)
+    assert reopened is not None
+    assert reopened.tags == ["attention", "memory"]
+
+
+def test_a_single_tag_written_by_hand_still_reads(tmp_path: Path) -> None:
+    """`tags: attention` is what a person types, and YAML gives back a string
+    rather than a list. The directory is meant to be editable."""
+    (tmp_path / "b1.md").write_text(
+        "---\nid: b1\ntitle: A paper\ntags: attention\n---\nbecause\n"
+    )
+
+    [item] = BriefStore(tmp_path).all()
+    assert item.tags == ["attention"]
+
+
 def test_the_newest_thing_is_at_the_top(tmp_path: Path) -> None:
     store = BriefStore(tmp_path)
     item(store, title="Old", url="https://example.com/old", age=timedelta(days=3))
@@ -164,6 +193,30 @@ def test_adding_something_back_overrides_a_dismissal(client: TestClient) -> None
     client.post("/brief", json={"url": "https://example.com/y"})
 
     assert [i["id"] for i in client.get("/brief").json()] == [added["id"]]
+
+
+def test_a_tag_you_type_lands_on_the_one_you_already_use(client: TestClient) -> None:
+    """The composer parses `#tags` out of what you wrote; the snapping happens
+    here so the rule holds whoever is calling."""
+    client.post("/entries", json={"body": "About attention.", "tags": ["attention"]})
+
+    added = client.post(
+        "/brief", json={"url": "https://example.com/p", "tags": ["Attentions", "#memory"]}
+    ).json()
+
+    assert added["tags"] == ["attention", "memory"]
+
+
+def test_a_title_you_type_is_the_title_stored(client: TestClient) -> None:
+    """No title is invented from the URL — a magazine slug reads as a title
+    someone typed badly. Left blank, the view falls back to the host."""
+    titled = client.post(
+        "/brief", json={"url": "https://example.com/a", "title": "Seeing Like a State"}
+    ).json()
+    bare = client.post("/brief", json={"url": "https://example.com/b"}).json()
+
+    assert titled["title"] == "Seeing Like a State"
+    assert bare["title"] == ""
 
 
 def test_an_empty_addition_is_refused(client: TestClient) -> None:
