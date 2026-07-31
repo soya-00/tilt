@@ -78,8 +78,12 @@ Five loops are in: **inputting, categorising, connecting, distilling, seeing.**
   visible in the status bar. Unattended work stops at 80% of your ceiling;
   anything you asked for yourself always proceeds.
 
-Your journal is a folder of Markdown files. The database is a cache that can be
-deleted and rebuilt at any time — folders, connections, dismissals, the
+Your journal is a folder of Markdown files, and it holds only what you wrote:
+entries, the brief, diagrams, and your agent's name and manner. What the machine
+derived or was handed — the search index, the vectors, your API key — lives in
+`~/Library/Application Support/Tilt` instead, so the folder you grep, sync and
+put in git contains no credential and no database. The database is a cache that
+can be deleted and rebuilt at any time — folders, connections, dismissals, the
 promotion bar, and the record of what the agent has already examined all live
 in each entry's own frontmatter, so nothing is re-derived and nothing is
 re-billed.
@@ -191,10 +195,10 @@ which was the one job it was there for.
 Settings lists what is asleep without a key rather than leaving you to notice.
 Everything else still runs offline.
 
-Vectors live in `.tilt/vectors.db`, beside the index and deliberately not in it.
-The index is free to rebuild from Markdown and the app says so; vectors were
-bought from a hosted model, so throwing them away has a price. Two files means
-either can be discarded without paying for the other.
+Vectors live in `vectors.db`, beside the index and deliberately not in it. The
+index is free to rebuild from Markdown and the app says so; vectors were bought
+from a hosted model, so throwing them away has a price. Two files means either
+can be discarded without paying for the other.
 
 ### A shelf, not a queue
 
@@ -365,6 +369,31 @@ Markdown, not just the database — themes are restored from frontmatter on boot
 so a merge that touched only SQLite would bring the folder it deleted straight
 back on the next restart.
 
+## Running it somewhere other than your machine
+
+Tilt is a single-user local app whose backend happens to speak HTTP, and that
+is the whole security model. There is no user id anywhere in the schema, so two
+people on one instance share a journal — reading, editing and deleting each
+other's entries.
+
+If you want to show it to people, give each of them their own container:
+
+```
+docker build -t tilt-demo .
+docker run --rm -p 8765:8765 tilt-demo
+```
+
+That image serves the interface and the API from one process, keeps the
+visitor's API key in memory instead of writing it down, and starts a journal
+that dies with the container. It refuses to start on a non-loopback address
+without a token, so the mistake with no recovery is not one you can make by
+forgetting.
+
+**[SECURITY.md](SECURITY.md)** has the audit behind that: what was checked and
+holds, what did not and what was done about it, what the token protects and
+what it demonstrably does not once the page is served from the same process,
+and why the spending ceiling still exempts anything you asked for yourself.
+
 ## Running it
 
 Requires Python 3.11+ and Node 20+. Nothing else — no `uv`, no global installs.
@@ -528,8 +557,8 @@ With both processes running, open http://localhost:5173 and walk this path:
    have happened within fifteen minutes anyway.
 9. **Check the files.** `ls ~/Tilt/entries/**/*.md` — your thoughts are plain
    Markdown with YAML frontmatter, and folders and connections are written there
-   too. Delete `~/Tilt/.tilt/index.db`, restart, and everything comes back; the
-   database is only a cache.
+   too. Delete the index — `~/Library/Application Support/Tilt/index.db` —
+   restart, and everything comes back; the database is only a cache.
 
 Offline mode is lexical, not intelligent: it matches on repeated keywords, so
 tags are decent and connections are conservative. Add a Gemini key for real
@@ -601,10 +630,12 @@ Reading a link — a page, or a YouTube video the model watches directly — is
 wired but needs a key: there is no page to fetch offline, and storing an empty
 source would imply something had been read.
 
-The API key lives in `~/Tilt/.tilt/settings.json` at mode 600 rather than in the
-macOS Keychain — moving it there means the key stops travelling through the
-settings API, which is a change to how the app is configured and not just to
-where a string is kept.
+The API key lives in `~/Library/Application Support/Tilt/settings.json` at mode
+600 rather than in the macOS Keychain — moving it there means the key stops
+travelling through the settings API, which is a change to how the app is
+configured and not just to where a string is kept. It is at least no longer in
+the journal folder, so it cannot be committed to git or handed to a cloud
+provider by accident.
 
 There are no system notifications, and that is now a decision rather than a gap.
 The plan had the shell raise one when a scheduled job found something; against a

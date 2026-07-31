@@ -38,6 +38,7 @@ const base = {
     spend_this_month_usd: 0,
     cost_ceiling_usd: 20,
     data_dir: "/tmp/journal",
+    ephemeral: false,
     dormant: [],
   },
   persona: { name: "Tilt", personality: "Direct and unsentimental." },

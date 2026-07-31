@@ -10,8 +10,12 @@ on your own writing can know it. A model that read far more than you have can.
 from __future__ import annotations
 
 import asyncio
+import logging
 
+from tilt.agents.redact import redact
 from tilt.embed.base import EmbeddingError
+
+log = logging.getLogger(__name__)
 
 MODEL = "gemini-embedding-001"
 
@@ -76,7 +80,8 @@ class GeminiEmbedder:
                 ),
             )
         except Exception as exc:  # noqa: BLE001 - surface as one failure mode
-            raise EmbeddingError(f"Embedding failed: {exc}") from exc
+            log.exception("embedding failed")
+            raise EmbeddingError(f"Embedding failed: {redact(str(exc))}") from exc
 
         vectors = [list(e.values or []) for e in (response.embeddings or [])]
         if len(vectors) != len(texts):

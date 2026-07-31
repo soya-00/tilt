@@ -9,8 +9,12 @@ because a constant went stale is a failure mode worth designing out.
 from __future__ import annotations
 
 import asyncio
+import logging
 
 from tilt.agents.base import AgentError, Completion, Pricing, Reference, estimate_tokens
+from tilt.agents.redact import redact
+
+log = logging.getLogger(__name__)
 
 # USD per million tokens, keyed by model family prefix.
 PRICING: dict[str, Pricing] = {
@@ -59,7 +63,12 @@ class GeminiProvider:
                 return await self._generate(candidate, prompt, system, reference)
             except Exception as exc:  # noqa: BLE001 - fall back, then surface
                 if candidate == (self.fallback_model or self.model):
-                    raise AgentError(f"Gemini request failed: {exc}") from exc
+                    # Relayed to the browser as a 502 body, so it goes through
+                    # redact first: an SDK exception can carry the request that
+                    # produced it, and under bring-your-own-key that credential
+                    # belongs to somebody else. The unredacted text is logged.
+                    log.exception("gemini request failed")
+                    raise AgentError(f"Gemini request failed: {redact(str(exc))}") from exc
         raise AgentError("No Gemini model configured.")
 
     def _contents(self, prompt: str, reference: Reference | None):

@@ -1,0 +1,27 @@
+# The build context, kept to what the image actually needs.
+#
+# Without this it is over four gigabytes: `node_modules` and the Rust `target`
+# directory alone are 4.3GB, and copying a host-built `node_modules` into a
+# Linux image is a good way to get native modules compiled for the wrong
+# platform. Everything below is either rebuilt inside the image or has no
+# business in it.
+
+**/node_modules
+**/dist
+**/__pycache__
+**/*.pyc
+.venv
+core/.venv
+
+# Rust build output for the desktop shell, which the container never runs.
+apps/desktop/src-tauri/target
+apps/desktop/src-tauri/gen
+
+.git
+.github
+# No Markdown is needed to build: pyproject declares no readme.
+*.md
+
+# Never build a journal, a key, or a database into an image.
+.env
+**/.tilt

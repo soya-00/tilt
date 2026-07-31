@@ -44,6 +44,27 @@ def new_id() -> str:
     return str(ULID())
 
 
+def contained(root: Path, name: str) -> Path:
+    """``root/name.md``, or a refusal if that lands outside ``root``.
+
+    The stores turn an id into a filename, so the id has to be checked rather
+    than trusted. Traversal is not currently reachable — uvicorn percent-decodes
+    the path before Starlette matches it, so a separator cannot be smuggled
+    through a path parameter — but that is a property of the server, not of this
+    code, and a store should be safe on its own terms.
+
+    Containment rather than a check on the *shape* of the id, which was the
+    first attempt and was wrong: these directories are Markdown the user is
+    invited to edit, so a file they renamed by hand must still be readable and
+    deletable. What actually matters is that the result stays in the directory,
+    which is what this asserts.
+    """
+    target = (root / f"{name}.md").resolve()
+    if not target.is_relative_to(root.resolve()):
+        raise ValueError(f"{name!r} does not name a file in {root}.")
+    return target
+
+
 def _slug_time(dt: datetime) -> str:
     return dt.strftime("%Y-%m-%dT%H%M%SZ")
 

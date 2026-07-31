@@ -1,13 +1,14 @@
 """Runtime settings the user can change from inside the app.
 
 Distinct from :mod:`tilt.config`, which is boot configuration from the
-environment. These live in ``.tilt/settings.json`` beside the journal and can be
-edited while the service runs — changing the API key rebuilds the provider
-without a restart.
+environment. These live in ``settings.json`` in the support directory — outside
+the journal — and can be edited while the service runs, so changing the API key
+rebuilds the provider without a restart.
 
-The key is stored in plain text on disk. That is acceptable for a local-only
-app you run yourself, and it is what lets the key travel with your journal
-folder. The Tauri build should move it to the macOS Keychain.
+Outside the journal deliberately. The journal folder is one you are invited to
+grep, sync and put in git, and a live credential has no business in it. The key
+is still plain text on disk, at mode 600, which is acceptable for a local app
+you run yourself; the Tauri build should move it to the macOS Keychain.
 """
 
 from __future__ import annotations
@@ -75,16 +76,31 @@ class PublicSettings(BaseModel):
 
 
 class SettingsStore:
-    def __init__(self, path: Path) -> None:
+    """Runtime settings, on disk or only in memory.
+
+    ``ephemeral`` exists for a shared demo, where the person typing the key is
+    not the person who owns the machine. Nothing is written, so the key lives
+    for the life of the process and the app can say so truthfully rather than
+    asking a stranger to trust a file mode.
+    """
+
+    def __init__(self, path: Path, *, ephemeral: bool = False) -> None:
         self.path = path
+        self.ephemeral = ephemeral
+        self._held: RuntimeSettings | None = None
 
     def load(self) -> RuntimeSettings:
+        if self.ephemeral:
+            return (self._held or RuntimeSettings()).model_copy(deep=True)
         try:
             return RuntimeSettings(**json.loads(self.path.read_text(encoding="utf-8")))
         except (OSError, json.JSONDecodeError, ValueError):
             return RuntimeSettings()
 
     def save(self, settings: RuntimeSettings) -> RuntimeSettings:
+        if self.ephemeral:
+            self._held = settings
+            return settings
         self.path.parent.mkdir(parents=True, exist_ok=True)
         self.path.write_text(settings.model_dump_json(indent=2), encoding="utf-8")
         # Owner-only: the file holds an API key. Best effort — some

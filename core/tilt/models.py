@@ -94,18 +94,29 @@ class Entry(BaseModel):
         return self.kind is EntryKind.REPLY
 
 
+MAX_BODY = 100_000
+"""An entry is something a person typed, and this is far past the longest
+anyone types in one. Long source material goes through ``/ingest``, which has
+its own limit and its own explanation for exceeding it. Bounded at all because
+the alternative is an unbounded read into memory from anyone who can reach the
+service."""
+
+MAX_TAGS = 32
+"""More than the categoriser ever proposes. A bound rather than a rule."""
+
+
 class EntryCreate(BaseModel):
-    body: str
+    body: str = Field(max_length=MAX_BODY)
     kind: EntryKind = EntryKind.NOTE
     provenance: Provenance = Provenance.SELF
-    parent: str | None = None
-    source_url: str | None = None
-    tags: list[str] = Field(default_factory=list)
+    parent: str | None = Field(default=None, max_length=64)
+    source_url: str | None = Field(default=None, max_length=2000)
+    tags: list[str] = Field(default_factory=list, max_length=MAX_TAGS)
 
 
 class EntryUpdate(BaseModel):
-    body: str | None = None
-    tags: list[str] | None = None
+    body: str | None = Field(default=None, max_length=MAX_BODY)
+    tags: list[str] | None = Field(default=None, max_length=MAX_TAGS)
 
 
 class LinkKind(StrEnum):

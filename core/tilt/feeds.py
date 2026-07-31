@@ -11,10 +11,12 @@ than asked to build one.
 
 from __future__ import annotations
 
+import ipaddress
 import logging
+import socket
 import xml.etree.ElementTree as ET
 from dataclasses import dataclass
-from urllib.parse import quote
+from urllib.parse import quote, urlparse
 
 import httpx
 
@@ -27,6 +29,15 @@ ARXIV_API = "http://export.arxiv.org/api/query"
 subject rather than scraped."""
 
 TIMEOUT = 15.0
+
+MAX_REDIRECTS = 3
+"""Enough for the http-to-https and the trailing-slash hops every real feed
+makes, few enough that a redirect loop ends quickly."""
+
+MAX_FEED_BYTES = 2_000_000
+"""A feed is an index of things to read, not a thing to read. Past this,
+somebody else's server is choosing how much memory this process uses."""
+
 MAX_PER_FEED = 20
 """Enough to be worth triaging, few enough that a chatty feed cannot dominate
 the candidate list and crowd out everything else."""
@@ -54,16 +65,118 @@ class Finding:
     """Which feed it came from, so the brief can say where it was found."""
 
 
-async def fetch(url: str, *, client: httpx.AsyncClient | None = None) -> str:
-    owned = client is None
-    client = client or httpx.AsyncClient(timeout=TIMEOUT, follow_redirects=True)
+class UnsafeFeed(Exception):
+    """A feed URL that resolves somewhere this service will not go."""
+
+
+def forbidden(address: str) -> bool:
+    """Whether an address is somewhere this service refuses to go.
+
+    The policy, kept separate from the lookup so it can be tested against a
+    list of addresses rather than against the network. ``169.254.169.254`` is
+    the reason this exists — every cloud provider serves credentials there —
+    but the whole private range goes with it, because a feed pointed at a
+    printer on the LAN is no more legitimate.
+    """
     try:
-        response = await client.get(url, headers={"User-Agent": "Tilt/0.3 (journal)"})
-        response.raise_for_status()
-        return response.text
+        ip = ipaddress.ip_address(address)
+    except ValueError:
+        return True
+    return (
+        ip.is_loopback
+        or ip.is_private
+        or ip.is_link_local
+        or ip.is_reserved
+        or ip.is_multicast
+        or ip.is_unspecified
+    )
+
+
+def resolve(host: str) -> list[str]:
+    """Every address a host answers to. Separated from :func:`forbidden` so the
+    policy is testable without a network and this is stubbable without one."""
+    return [str(sockaddr[0]) for *_head, sockaddr in socket.getaddrinfo(host, None)]
+
+
+def check_reachable(url: str) -> None:
+    """Refuse a URL that points back inside the machine or its network.
+
+    Feed URLs come from the settings route, which is to say from whoever can
+    reach the service. Fetching happens *here*, in-process, with whatever
+    network position this process has — so an unchecked feed is a request
+    forgery whose output gets summarised into the brief.
+
+    The honest limit: this resolves the name and then hands the *name* to httpx,
+    which resolves it again. A DNS record that changes between the two answers
+    slips through. Closing that means pinning the resolved address through a
+    custom transport, which is more machinery than this warrants — recorded
+    rather than papered over.
+    """
+    parsed = urlparse(url)
+    if parsed.scheme not in ("http", "https"):
+        raise UnsafeFeed(f"{parsed.scheme or 'that'} is not a scheme Tilt will fetch.")
+    if not parsed.hostname:
+        raise UnsafeFeed("That feed URL has no host.")
+
+    try:
+        addresses = resolve(parsed.hostname)
+    except OSError as exc:
+        raise UnsafeFeed(f"Could not resolve {parsed.hostname}.") from exc
+
+    for address in addresses:
+        if forbidden(address):
+            raise UnsafeFeed(
+                f"{parsed.hostname} resolves to {address}, which is inside this "
+                "machine or its network. Tilt fetches feeds from the public "
+                "internet only."
+            )
+
+
+async def fetch(url: str, *, client: httpx.AsyncClient | None = None) -> str:
+    """One feed, with redirects followed by hand so each hop is checked.
+
+    ``follow_redirects=True`` would check only the URL the user typed, and a
+    public host that answers ``302 Location: http://169.254.169.254/`` would
+    walk straight past the guard. Following them here means the guard applies
+    to where the request actually ends up.
+    """
+    owned = client is None
+    client = client or httpx.AsyncClient(timeout=TIMEOUT, follow_redirects=False)
+    try:
+        for _hop in range(MAX_REDIRECTS + 1):
+            check_reachable(url)
+            response = await client.get(
+                url,
+                headers={"User-Agent": "Tilt/0.3 (journal)"},
+                follow_redirects=False,
+            )
+            if response.is_redirect and response.headers.get("location"):
+                url = str(response.next_request.url) if response.next_request else ""
+                if not url:
+                    raise UnsafeFeed("That feed redirected to nowhere.")
+                continue
+            response.raise_for_status()
+            return _bounded(response, url)
+        raise UnsafeFeed(f"That feed redirected more than {MAX_REDIRECTS} times.")
     finally:
         if owned:
             await client.aclose()
+
+
+def _bounded(response: httpx.Response, url: str) -> str:
+    """The body, refused rather than buffered if it is absurd.
+
+    A feed is an index of things to read, not a thing to read. Nothing
+    legitimate is larger than this, and the alternative to a cap is letting
+    somebody else's server decide how much memory this process uses.
+    """
+    body = response.content
+    if len(body) > MAX_FEED_BYTES:
+        raise UnsafeFeed(
+            f"{url} returned more than {MAX_FEED_BYTES // 1_000_000}MB, which is "
+            "not a feed."
+        )
+    return body.decode(response.encoding or "utf-8", errors="replace")
 
 
 def arxiv_query(terms: list[str], *, limit: int = MAX_PER_FEED) -> str:

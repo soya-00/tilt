@@ -35,6 +35,12 @@ class Status(BaseModel):
     spend_this_month_usd: float
     cost_ceiling_usd: float
     data_dir: str
+    ephemeral: bool = False
+    """Whether the key is held in memory rather than written to disk.
+
+    Surfaced so Settings can say where the key goes and be right about it. The
+    copy differs completely between the two, and a sentence promising a file
+    mode to someone whose key is never filed would be worse than none."""
     dormant: list[Dormant] = []
     """What is asleep for want of a key, and why.
 
@@ -66,6 +72,7 @@ def status(
         spend_this_month_usd=round(provider.spend_this_month(), 4),
         cost_ceiling_usd=settings.monthly_cost_ceiling_usd,
         data_dir=str(settings.data_dir),
+        ephemeral=settings.ephemeral_settings,
         dormant=(
             [Dormant(capability=name, why=why) for name, why in DORMANT_WITHOUT_KEY]
             if offline

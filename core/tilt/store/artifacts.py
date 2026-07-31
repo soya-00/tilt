@@ -20,6 +20,7 @@ from pathlib import Path
 import frontmatter
 
 from tilt.models import Artifact, utcnow
+from tilt.store.files import contained
 
 
 def _created(value: object) -> datetime:
@@ -38,7 +39,12 @@ class ArtifactStore:
         self.root = root
 
     def _path(self, artifact_id: str) -> Path:
-        return self.root / f"{artifact_id}.md"
+        """The file for this id, checked rather than trusted.
+
+        See :func:`tilt.store.files.contained` for why this is a check and not
+        an assumption about how the web server parses a path.
+        """
+        return contained(self.root, artifact_id)
 
     def save(self, artifact: Artifact) -> Artifact:
         """Write atomically, overwriting any earlier version of the same id.
@@ -73,7 +79,16 @@ class ArtifactStore:
         return artifact.model_copy(update={"path": str(path)})
 
     def load(self, artifact_id: str) -> Artifact | None:
-        path = self._path(artifact_id)
+        """The diagram, or nothing.
+
+        An id that could never have been minted is reported as absent rather
+        than as an error: from the caller's side "no such diagram" and "not an
+        id" want the same 404, and only a crafted request produces the second.
+        """
+        try:
+            path = self._path(artifact_id)
+        except ValueError:
+            return None
         if not path.exists():
             return None
         return self._parse(path)
@@ -93,7 +108,10 @@ class ArtifactStore:
         return sorted(found, key=lambda a: a.created, reverse=True)
 
     def delete(self, artifact_id: str) -> bool:
-        path = self._path(artifact_id)
+        try:
+            path = self._path(artifact_id)
+        except ValueError:
+            return False
         if not path.exists():
             return False
         path.unlink()
