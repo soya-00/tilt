@@ -75,16 +75,31 @@ class PublicSettings(BaseModel):
 
 
 class SettingsStore:
-    def __init__(self, path: Path) -> None:
+    """Runtime settings, on disk or only in memory.
+
+    ``ephemeral`` exists for a shared demo, where the person typing the key is
+    not the person who owns the machine. Nothing is written, so the key lives
+    for the life of the process and the app can say so truthfully rather than
+    asking a stranger to trust a file mode.
+    """
+
+    def __init__(self, path: Path, *, ephemeral: bool = False) -> None:
         self.path = path
+        self.ephemeral = ephemeral
+        self._held: RuntimeSettings | None = None
 
     def load(self) -> RuntimeSettings:
+        if self.ephemeral:
+            return (self._held or RuntimeSettings()).model_copy(deep=True)
         try:
             return RuntimeSettings(**json.loads(self.path.read_text(encoding="utf-8")))
         except (OSError, json.JSONDecodeError, ValueError):
             return RuntimeSettings()
 
     def save(self, settings: RuntimeSettings) -> RuntimeSettings:
+        if self.ephemeral:
+            self._held = settings
+            return settings
         self.path.parent.mkdir(parents=True, exist_ok=True)
         self.path.write_text(settings.model_dump_json(indent=2), encoding="utf-8")
         # Owner-only: the file holds an API key. Best effort — some

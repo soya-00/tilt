@@ -18,6 +18,7 @@ from tilt.api.app import create_app
 from tilt.api.limits import MAX_REQUEST_BYTES, is_loopback
 from tilt.config import Settings
 from tilt.models import MAX_BODY
+from tilt.settings_store import RuntimeSettingsUpdate, SettingsStore
 from tilt.store.artifacts import ArtifactStore
 from tilt.store.brief import BriefStore
 from tilt.store.files import contained
@@ -113,6 +114,92 @@ def test_a_file_renamed_by_hand_is_still_reachable(tmp_path: Path) -> None:
     *shape* of the id was the first attempt and broke that promise; containment
     is what actually matters."""
     assert contained(tmp_path, "my-diagram").name == "my-diagram.md"
+
+
+# ----------------------------------------------------- serving the page too
+
+
+def interface(tmp_path: Path) -> Settings:
+    static = tmp_path / "static"
+    (static / "assets").mkdir(parents=True)
+    (static / "index.html").write_text("<html><body>Tilt</body></html>")
+    (static / "assets" / "app.js").write_text("// built")
+    return Settings(
+        data_dir=tmp_path / "journal",
+        static_dir=static,
+        auth_token="secret",
+        schedule_enabled=False,
+    )
+
+
+def test_the_page_is_reachable_without_the_token(tmp_path: Path) -> None:
+    """Open by necessity, not by choice: a browser cannot attach an
+    Authorization header to a document request, and the page is what carries
+    the token to the API. Recorded so nobody later reads this as the token
+    being the perimeter — it is not, in this topology."""
+    with TestClient(create_app(interface(tmp_path))) as client:
+        assert client.get("/").status_code == 200
+        assert client.get("/assets/app.js").status_code == 200
+
+
+def test_the_journal_behind_it_is_not(tmp_path: Path) -> None:
+    """The point of the token surviving at all: reaching the port directly,
+    without ever loading the page, gets you nothing."""
+    with TestClient(create_app(interface(tmp_path))) as client:
+        assert client.get("/entries").status_code == 401
+        assert client.get("/settings").status_code == 401
+        assert client.post("/entries", json={"body": "x"}).status_code == 401
+
+        ok = client.get("/entries", headers={"Authorization": "Bearer secret"})
+        assert ok.status_code == 200
+
+
+def test_serving_the_page_does_not_loosen_the_desktop_app(tmp_path: Path) -> None:
+    """Without static_dir this process is an API and nothing else, so the gate
+    stays total — a stray file named index.html cannot open a door."""
+    settings = Settings(data_dir=tmp_path, auth_token="secret", schedule_enabled=False)
+    with TestClient(create_app(settings)) as client:
+        assert client.get("/index.html").status_code == 401
+
+
+# ---------------------------------------------------------- somebody's key
+
+
+def test_ephemeral_settings_never_touch_the_disk(tmp_path: Path) -> None:
+    """For a demo where the person typing the key does not own the machine.
+
+    The point is being able to say "it is never written down" and have that be
+    true, rather than asking a stranger to trust a file mode.
+    """
+    path = tmp_path / "settings.json"
+    store = SettingsStore(path, ephemeral=True)
+
+    store.update(RuntimeSettingsUpdate(gemini_api_key="AIzaSECRET"))
+
+    assert not path.exists()
+    assert store.load().gemini_api_key == "AIzaSECRET", "still usable this session"
+    assert store.public().key_hint == "…CRET"
+
+
+def test_a_new_process_starts_without_the_key(tmp_path: Path) -> None:
+    """Held in the store, not in a module global. A second instance over the
+    same path — which is what a restart is — begins empty."""
+    path = tmp_path / "settings.json"
+    SettingsStore(path, ephemeral=True).update(
+        RuntimeSettingsUpdate(gemini_api_key="AIzaSECRET")
+    )
+
+    assert SettingsStore(path, ephemeral=True).load().gemini_api_key == ""
+
+
+def test_the_ordinary_store_still_persists(tmp_path: Path) -> None:
+    """The default, and the right one on your own machine: a key that survives
+    a restart is the point."""
+    path = tmp_path / "settings.json"
+    SettingsStore(path).update(RuntimeSettingsUpdate(gemini_api_key="AIzaKEEP"))
+
+    assert path.exists()
+    assert SettingsStore(path).load().gemini_api_key == "AIzaKEEP"
 
 
 # ---------------------------------------------------------------- redaction

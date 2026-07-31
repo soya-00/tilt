@@ -81,6 +81,26 @@ class Settings(BaseSettings):
     """0 asks the operating system for a free port — what the desktop shell does,
     so two copies of Tilt never fight over a fixed number."""
 
+    static_dir: Path | None = None
+    """Serve the built interface from this process too.
+
+    Unset for the desktop app, where the Tauri shell owns the window and this
+    process is only ever an API. Set for a browser demo, where the page and the
+    API being one origin is what makes the whole thing a single container.
+
+    Note what this does to the token: a browser cannot send an Authorization
+    header when it asks for a document, so the page has to be reachable without
+    one — and the page carries the token so the app can call its own API. The
+    token therefore is not the perimeter in this topology. See SECURITY.md."""
+
+    ephemeral_settings: bool = False
+    """Keep runtime settings — including the API key — in memory only.
+
+    For a shared demo where each visitor brings their own key: nothing is
+    written, so the key lives exactly as long as the process and the app can
+    say so rather than asking a stranger to trust a file mode. Off by default,
+    because on your own machine a key that survives a restart is the point."""
+
     auth_token: str | None = None
     """When set, every request but ``/health`` must present it as a bearer token.
     The shell mints a fresh one per launch; running by hand leaves it unset."""

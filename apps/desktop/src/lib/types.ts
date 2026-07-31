@@ -100,6 +100,8 @@ export interface Status {
   spend_this_month_usd: number;
   cost_ceiling_usd: number;
   data_dir: string;
+  /** The key is held in memory only and dies with the process. */
+  ephemeral: boolean;
   /** What is asleep for want of a key. Empty when one is configured. */
   dormant: Dormant[];
 }

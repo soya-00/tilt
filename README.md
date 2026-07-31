@@ -365,6 +365,31 @@ Markdown, not just the database — themes are restored from frontmatter on boot
 so a merge that touched only SQLite would bring the folder it deleted straight
 back on the next restart.
 
+## Running it somewhere other than your machine
+
+Tilt is a single-user local app whose backend happens to speak HTTP, and that
+is the whole security model. There is no user id anywhere in the schema, so two
+people on one instance share a journal — reading, editing and deleting each
+other's entries.
+
+If you want to show it to people, give each of them their own container:
+
+```
+docker build -t tilt-demo .
+docker run --rm -p 8765:8765 tilt-demo
+```
+
+That image serves the interface and the API from one process, keeps the
+visitor's API key in memory instead of writing it down, and starts a journal
+that dies with the container. It refuses to start on a non-loopback address
+without a token, so the mistake with no recovery is not one you can make by
+forgetting.
+
+**[SECURITY.md](SECURITY.md)** has the audit behind that: what was checked and
+holds, what did not and what was done about it, what the token protects and
+what it demonstrably does not once the page is served from the same process,
+and why the spending ceiling still exempts anything you asked for yourself.
+
 ## Running it
 
 Requires Python 3.11+ and Node 20+. Nothing else — no `uv`, no global installs.

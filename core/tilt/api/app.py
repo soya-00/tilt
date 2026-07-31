@@ -6,6 +6,7 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 
 from tilt import __version__
 from tilt.agents import build_provider
@@ -50,7 +51,10 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         # more recent intent than one exported in a shell, and both the provider
         # and the embedder are chosen by whether one exists — so the settings
         # file has to be consulted before either is built.
-        store = SettingsStore(settings.internal_dir / "settings.json")
+        store = SettingsStore(
+            settings.internal_dir / "settings.json",
+            ephemeral=settings.ephemeral_settings,
+        )
         runtime = store.load()
         if runtime.has_key:
             settings.gemini_api_key = runtime.gemini_api_key
@@ -109,7 +113,11 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     # passes back through CORS reaches the webview as an unreadable network
     # error instead of a message.
     if settings.auth_token:
-        app.add_middleware(TokenAuthMiddleware, token=settings.auth_token)
+        app.add_middleware(
+            TokenAuthMiddleware,
+            token=settings.auth_token,
+            serving_interface=bool(settings.static_dir),
+        )
 
     # Inside the auth gate: an unauthenticated caller should be turned away by
     # the token check rather than told how large a body this accepts.
@@ -132,6 +140,15 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(brief.router)
     app.include_router(settings_routes.router)
     app.include_router(agent.router)
+
+    # Last, so it never shadows an API route: mounted at "/" it would otherwise
+    # answer for everything.
+    if settings.static_dir and settings.static_dir.is_dir():
+        app.mount(
+            "/",
+            StaticFiles(directory=settings.static_dir, html=True),
+            name="interface",
+        )
     return app
 
 
