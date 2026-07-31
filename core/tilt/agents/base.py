@@ -49,10 +49,14 @@ class Reference:
 
     url: str
     kind: str
-    """``video`` or ``article``, decided by :mod:`tilt.ingest.route` — or
-    ``search``, which the scout uses to let the model go looking rather than
-    handing it something already found. In that case ``url`` is empty: there is
-    nothing to open yet, which is the point."""
+    """``video`` or ``article``, decided by :mod:`tilt.ingest.route`.
+
+    Deliberately only those two. An open-ended web search was built here and
+    removed: the scout reads feeds you named and arXiv on subjects you write
+    about, which means every candidate arrives with a real title and a real
+    description attached. A search result arrives as a headline and a snippet,
+    and triage would be ranking headlines — the thing the two-pass design exists
+    to avoid."""
 
 
 @runtime_checkable

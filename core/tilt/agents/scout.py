@@ -20,16 +20,25 @@ returning nothing is the expected outcome rather than a failure.
 from __future__ import annotations
 
 import logging
+from typing import NamedTuple
 
 import httpx
 
 from tilt.agents.ledger import MeteredProvider
-from tilt.agents.parsing import extract_json
+from tilt.agents.parsing import extract_json, snap
 from tilt.feeds import Finding, arxiv_query, fetch, parse
 from tilt.journal import Journal
 from tilt.store.brief import normalise
 
 log = logging.getLogger(__name__)
+
+
+class Pick(NamedTuple):
+    """One thing triage chose, and everything the brief needs to show it."""
+
+    finding: Finding
+    why: str
+    tags: list[str]
 
 JOB = "scout"
 
@@ -43,6 +52,17 @@ MAX_CANDIDATES = 40
 """How many findings triage will read at once. Bounds the prompt, and past this
 the model is skimming rather than judging."""
 
+MAX_TAGS = 3
+"""Per pick. A row in the brief is one line of chips wide."""
+
+TAG_CONTEXT = 60
+"""How much of the existing vocabulary triage is shown, matching the
+categoriser. Enough to reuse a tag, short enough to stay a prompt."""
+
+TAG_THRESHOLD = 0.86
+"""Looser than the folder threshold, tighter than nothing, and the same number
+:mod:`tilt.agents.categorize` uses — one bar for the whole tag vocabulary."""
+
 SYSTEM = """You choose what is worth someone's reading time.
 
 {persona}
@@ -51,7 +71,8 @@ You are given what a writer has left unresolved, the subjects they keep
 returning to, and a list of things that turned up today. Respond with JSON only,
 no prose, no code fence:
 
-{{"picks": [{{"n": 3, "why": "one clause on what this answers"}}]}}
+{{"picks": [{{"n": 3, "why": "one clause on what this answers",
+             "tags": ["attention", "memory"]}}]}}
 
 Rules:
 - At most {max_picks}. Usually zero. Most of what turns up on any given day
@@ -65,20 +86,32 @@ Rules:
   thought of them.
 - Prefer something that argues against what they think over something that
   agrees. Agreement adds nothing they do not already have.
+- "tags": one to three, and reuse a tag from TAGS ALREADY IN USE whenever one
+  fits rather than coining a near-synonym. These are how the writer will
+  recognise what a candidate belongs to, which only works if they are the same
+  words the rest of their journal uses.
 - An empty list is a good answer and needs no apology."""
 
 
 def build_prompt(
-    questions: list[str], subjects: list[str], candidates: list[Finding]
+    questions: list[str],
+    subjects: list[str],
+    candidates: list[Finding],
+    tags: list[str] | None = None,
 ) -> str:
     asked = "\n".join(f"- {q}" for q in questions) or "(none yet)"
     areas = ", ".join(subjects) or "(none yet)"
+    # Shown for the same reason the categoriser shows them: a model that cannot
+    # see the vocabulary invents one, and two vocabularies for one journal is
+    # worse than a slightly wrong tag.
+    vocabulary = ", ".join((tags or [])[:TAG_CONTEXT]) or "(none yet)"
     listed = "\n\n".join(
         f"[{n}] {c.title}\n{c.summary[:400]}" for n, c in enumerate(candidates)
     )
     return (
         f"TASK: scout\n\nOPEN QUESTIONS:\n{asked}\n\n"
-        f"SUBJECTS:\n{areas}\n\nTURNED UP TODAY:\n{listed}"
+        f"SUBJECTS:\n{areas}\n\nTAGS ALREADY IN USE:\n{vocabulary}\n\n"
+        f"TURNED UP TODAY:\n{listed}"
     )
 
 
@@ -145,7 +178,7 @@ async def triage(
     *,
     persona_instruction: str = "",
     interactive: bool = False,
-) -> list[tuple[Finding, str]]:
+) -> list[Pick]:
     """One model call over everything gathered. Returns what to propose, and why.
 
     Non-interactive by default: this runs unattended, so it stops at 80% of the
@@ -161,8 +194,9 @@ async def triage(
         # here would be proposing it at random.
         return []
 
+    vocabulary = [t.tag for t in journal.index.tags()]
     completion = await provider.complete(
-        build_prompt(questions, subjects, window),
+        build_prompt(questions, subjects, window, vocabulary),
         job=JOB,
         system=SYSTEM.format(persona=persona_instruction, max_picks=MAX_PICKS),
         interactive=interactive,
@@ -176,7 +210,7 @@ async def triage(
     if not isinstance(picks, list):
         return []
 
-    chosen: list[tuple[Finding, str]] = []
+    chosen: list[Pick] = []
     for pick in picks[:MAX_PICKS]:
         if not isinstance(pick, dict):
             continue
@@ -184,5 +218,26 @@ async def triage(
         if not isinstance(index, int) or not 0 <= index < len(window):
             continue
         why = " ".join(str(pick.get("why") or "").split())[:300]
-        chosen.append((window[index], why))
+        chosen.append(Pick(window[index], why, snap_tags(pick.get("tags"), vocabulary)))
     return chosen
+
+
+def snap_tags(proposed: object, vocabulary: list[str]) -> list[str]:
+    """Whatever the model offered, in the vocabulary the journal already has.
+
+    The same pass the categoriser makes on its own tags, and for the same
+    reason: left alone a model will coin "attentional" beside your "attention"
+    and the sidebar grows a synonym every week. Anything genuinely new is kept
+    — ``snap`` returning ``None`` is it declining to guess, not a rejection.
+    """
+    if not isinstance(proposed, list):
+        return []
+    out: list[str] = []
+    for raw in proposed:
+        tag = " ".join(str(raw).split()).strip("#").lower()[:40]
+        if not tag:
+            continue
+        settled = snap(tag, vocabulary, threshold=TAG_THRESHOLD) or tag
+        if settled not in out:
+            out.append(settled)
+    return out[:MAX_TAGS]

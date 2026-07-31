@@ -1,7 +1,7 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
-  "description": "What the webview is allowed to ask the shell for. Deliberately short: the UI talks to the Python core over HTTP, not through the shell, so the only shell capability it needs is dismissing the quick-capture window.",
+  "description": "What the webview is allowed to ask the shell for. Deliberately short: the UI talks to the Python core over HTTP, not through the shell, so the only things it needs are dismissing the quick-capture window and handing a link to the browser. The opener is scoped to http and https — a journal has no business opening a file:// URL, and the brief's links come from feeds rather than from anyone trustworthy.",
   "windows": ["main", "capture"],
   "permissions": [
     "core:default",
@@ -9,6 +9,10 @@
     "core:window:allow-show",
     "core:window:allow-set-focus",
     "core:window:allow-start-dragging",
-    "global-shortcut:default"
+    "global-shortcut:default",
+    {
+      "identifier": "opener:allow-open-url",
+      "allow": [{ "url": "http://*" }, { "url": "https://*" }]
+    }
   ]
 }

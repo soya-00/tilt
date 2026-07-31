@@ -35,6 +35,13 @@ SUMMARY_CHARS = 800
 """Abstract-length. Triage reads titles and summaries, never full text — the
 whole saving is in not fetching what you have not decided to read."""
 
+MIN_SUMMARY = 40
+"""Below this a candidate is a title with decoration, and triage would be
+guessing from the headline — which is the thing the two-pass design exists to
+avoid. A feed that carries no descriptions therefore contributes nothing, and
+that is the right outcome rather than a bug: the alternative is paying a model
+to rank headlines."""
+
 
 @dataclass(frozen=True)
 class Finding:
@@ -91,11 +98,27 @@ def parse(xml: str, *, source: str = "") -> list[Finding]:
         return []
 
     if root.tag == f"{ATOM}feed":
-        return _atom(root, source)
+        return _reported(_atom(root, source), root, f"{ATOM}entry", source)
     if root.tag == "rss" or root.find("channel") is not None:
-        return _rss(root, source)
+        return _reported(_rss(root, source), root, ".//item", source)
     log.warning("feed %s is neither Atom nor RSS", source or "?")
     return []
+
+
+def _reported(
+    found: list[Finding], root: ET.Element, tag: str, source: str
+) -> list[Finding]:
+    """Say when a feed parsed fine and still gave nothing.
+
+    A feed serving only headlines is silently useless otherwise, and it looks
+    exactly like a feed that is down — which wants a different fix.
+    """
+    if not found and root.findall(tag):
+        log.warning(
+            "feed %s has items but none carry a description; nothing to triage",
+            source or "?",
+        )
+    return found
 
 
 def _atom(root: ET.Element, source: str) -> list[Finding]:
@@ -109,7 +132,7 @@ def _atom(root: ET.Element, source: str) -> list[Finding]:
             link = entry.find(f"{ATOM}link")
             url = (link.get("href") or "") if link is not None else ""
         summary = _text(entry, f"{ATOM}summary") or _text(entry, f"{ATOM}content")
-        if title and url:
+        if _complete(title, url, summary, source):
             out.append(
                 Finding(title, url, summary[:SUMMARY_CHARS], source or "arxiv")
             )
@@ -124,9 +147,23 @@ def _rss(root: ET.Element, source: str) -> list[Finding]:
         title = _text(item, "title")
         url = _text(item, "link")
         summary = _text(item, "description")
-        if title and url:
+        if _complete(title, url, summary, source):
             out.append(Finding(title, url, summary[:SUMMARY_CHARS], source or "rss"))
     return out
+
+
+def _complete(title: str, url: str, summary: str, source: str) -> bool:
+    """Whether there is enough here to be worth a model's judgement.
+
+    Said out loud rather than dropped quietly. A feed whose items all fail this
+    looks identical to a feed that is down, and the two want different fixes.
+    """
+    if not (title and url):
+        return False
+    if len(summary) < MIN_SUMMARY:
+        log.debug("skipping %r from %s: no description", title[:60], source or "?")
+        return False
+    return True
 
 
 def _text(element: ET.Element, tag: str) -> str:

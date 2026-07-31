@@ -73,7 +73,7 @@ async def look(
         return summary
 
     now = utcnow()
-    for finding, why in picks:
+    for finding, why, tags in picks:
         brief.save(
             BriefItem(
                 id=new_id(),
@@ -81,6 +81,7 @@ async def look(
                 url=finding.url,
                 why=why or f"Turned up in {finding.source}.",
                 origin=BriefOrigin.SCOUT,
+                tags=tags,
                 created=now,
             )
         )

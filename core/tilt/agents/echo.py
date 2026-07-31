@@ -358,13 +358,19 @@ def _scout(prompt: str) -> str:
     # a glance.
     if best_n is None or len(best_shared) < 3:
         return json.dumps({"picks": []})
+
+    # The shared words *are* the tags. Offline there is nothing else honest to
+    # put there: these are the only thing this pass actually knows about the
+    # candidate, and they are the same words the reason cites.
+    shared = sorted(best_shared)
     return json.dumps(
         {
             "picks": [
                 {
                     "n": best_n,
-                    "why": f"shares {_join(sorted(best_shared)[:3])} with what you have asked"
+                    "why": f"shares {_join(shared[:3])} with what you have asked"
                     " — matched offline by keyword, not by reading either",
+                    "tags": shared[:3],
                 }
             ]
         }
