@@ -71,6 +71,23 @@ encrypting the Markdown would defend against a cloud provider at the cost of
 opening the files in Obsidian, grepping them, and reading them in five years —
 which is most of the reason they are Markdown.
 
+**There are no accounts and no hosted sync, and there will not be.** The
+journal is a folder of Markdown on your machine; that is the product, not a
+stage before a server. Accounts would mean a user model the schema does not
+have, and end-to-end encrypted sync would mean a key-recovery problem harder
+than its cryptography — lose the passphrase and the journal is gone, offer a
+reset and you have put back the trust you were removing. Neither buys anything
+a local, file-based journal does not already have.
+
+If you want it on two machines, the folder is the sync layer: iCloud, Dropbox,
+Syncthing or a git remote all work, and `index.rebuild` reconciles whatever it
+finds on boot. One caveat if you do, and it applies whether or not you meant to
+sync: `index.db` and `vectors.db` are WAL-mode SQLite inside the journal
+folder, and WAL side files are the classic way a cloud client corrupts a
+database. macOS syncs `~/Documents` by default, so keep the journal out of a
+synced tree, or accept that the index may need rebuilding — free — and that
+`vectors.db` may not, because those were bought.
+
 ## What the token is, and what it is not
 
 Worth being exact, because it is easy to over-read.
