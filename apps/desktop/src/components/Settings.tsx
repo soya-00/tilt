@@ -118,7 +118,7 @@ export function Settings({
             <p className="sheet__note sheet__note--quiet">
               {status?.ephemeral
                 ? "Held in memory for this session only and never written to disk. Closing this instance forgets it."
-                : "Stored in your journal folder at .tilt/settings.json, readable only by you."}{" "}
+                : "Stored outside your journal, in Application Support and readable only by you — never in the folder you sync or put in git."}{" "}
               It never leaves this machine except in calls to Google.
             </p>
 

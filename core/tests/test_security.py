@@ -26,6 +26,17 @@ from tilt.store.files import contained
 # ------------------------------------------------------------------ exposure
 
 
+def exposed(tmp_path: Path, *, host: str, auth_token: str | None) -> Settings:
+    """Settings that keep the index out of the real user's support directory."""
+    return Settings(
+        data_dir=tmp_path,
+        support_dir=tmp_path / "support",
+        host=host,
+        auth_token=auth_token,
+        schedule_enabled=False,
+    )
+
+
 def test_serving_off_loopback_without_a_token_is_refused(tmp_path: Path) -> None:
     """The one mistake with no recovery once someone has read your journal.
 
@@ -33,17 +44,17 @@ def test_serving_off_loopback_without_a_token_is_refused(tmp_path: Path) -> None
     is indistinguishable from no warning at all.
     """
     with pytest.raises(RuntimeError, match="TILT_AUTH_TOKEN"):
-        create_app(Settings(data_dir=tmp_path, host="0.0.0.0", auth_token=None))
+        create_app(exposed(tmp_path, host="0.0.0.0", auth_token=None))
 
 
 def test_loopback_without_a_token_still_works(tmp_path: Path) -> None:
     """What `npm run dev` does. Breaking it to be safe would be safety theatre
     paid for by everyone developing the app."""
-    assert create_app(Settings(data_dir=tmp_path, host="127.0.0.1", auth_token=None))
+    assert create_app(exposed(tmp_path, host="127.0.0.1", auth_token=None))
 
 
 def test_serving_off_loopback_with_a_token_is_allowed(tmp_path: Path) -> None:
-    assert create_app(Settings(data_dir=tmp_path, host="0.0.0.0", auth_token="secret"))
+    assert create_app(exposed(tmp_path, host="0.0.0.0", auth_token="secret"))
 
 
 def test_what_counts_as_this_machine_only() -> None:
@@ -126,6 +137,7 @@ def interface(tmp_path: Path) -> Settings:
     (static / "assets" / "app.js").write_text("// built")
     return Settings(
         data_dir=tmp_path / "journal",
+        support_dir=tmp_path / "support",
         static_dir=static,
         auth_token="secret",
         schedule_enabled=False,
@@ -157,9 +169,77 @@ def test_the_journal_behind_it_is_not(tmp_path: Path) -> None:
 def test_serving_the_page_does_not_loosen_the_desktop_app(tmp_path: Path) -> None:
     """Without static_dir this process is an API and nothing else, so the gate
     stays total — a stray file named index.html cannot open a door."""
-    settings = Settings(data_dir=tmp_path, auth_token="secret", schedule_enabled=False)
+    settings = Settings(
+        data_dir=tmp_path,
+        support_dir=tmp_path / "support",
+        auth_token="secret",
+        schedule_enabled=False,
+    )
     with TestClient(create_app(settings)) as client:
         assert client.get("/index.html").status_code == 401
+
+
+# ------------------------------------------------- what goes in which folder
+
+
+def test_nothing_the_machine_derived_lands_in_the_journal(tmp_path: Path) -> None:
+    """The line the split exists to draw.
+
+    The journal folder is one you are invited to grep, put in git, and hand to
+    a cloud provider. An API key and a WAL-mode database are both hazardous
+    under that invitation, and macOS syncs ~/Documents by default — so this is
+    not hypothetical for anyone who keeps their journal in the obvious place.
+    """
+    settings = Settings(data_dir=tmp_path / "journal", support_dir=tmp_path / "support")
+
+    for derived in (settings.index_path, settings.vectors_path, settings.internal_dir):
+        assert not derived.is_relative_to(settings.data_dir), derived
+
+
+def test_what_you_wrote_stays_in_the_journal(tmp_path: Path) -> None:
+    """The persona is the one thing the app keeps that you authored, so it
+    belongs with the entries — otherwise the journal folder stops being the
+    whole record of what you made."""
+    settings = Settings(data_dir=tmp_path / "journal", support_dir=tmp_path / "support")
+
+    for authored in (settings.entries_dir, settings.brief_dir, settings.persona_path):
+        assert authored.is_relative_to(settings.data_dir), authored
+
+
+def test_the_support_directory_follows_the_platform() -> None:
+    from tilt.config import default_support_dir
+
+    where = default_support_dir()
+    assert where.is_absolute()
+    assert not where.is_relative_to(Path.home() / "Tilt"), "never inside a journal"
+
+
+def test_the_persona_round_trips_as_readable_markdown(tmp_path: Path) -> None:
+    """Markdown rather than JSON because every other file in that folder is
+    readable, and a lone agent.json would be the exception."""
+    from tilt.persona import PersonaStore, PersonaUpdate
+
+    path = tmp_path / "agent.md"
+    PersonaStore(path).update(PersonaUpdate(name="Vera", personality="Terse. Never flatters."))
+
+    written = path.read_text()
+    assert "name: Vera" in written
+    assert "Terse. Never flatters." in written
+
+    reloaded = PersonaStore(path).load()
+    assert reloaded.name == "Vera"
+    assert reloaded.personality == "Terse. Never flatters."
+
+
+def test_a_persona_file_edited_into_nonsense_still_yields_an_agent(tmp_path: Path) -> None:
+    """Losing the ability to reflect because someone mistyped YAML would be
+    absurd — the agent must always have an identity to speak with."""
+    from tilt.persona import DEFAULT_NAME, PersonaStore
+
+    path = tmp_path / "agent.md"
+    path.write_text("---\nname: [unclosed\n---\nwhatever\n")
+
+    assert PersonaStore(path).load().name == DEFAULT_NAME
 
 
 # ---------------------------------------------------------- somebody's key

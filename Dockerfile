@@ -31,11 +31,14 @@ RUN chmod +x /usr/local/bin/docker-entrypoint.sh
 # read it. `static` is owned by the runtime user because the entrypoint stamps
 # the session token into index.html before uvicorn starts.
 RUN useradd --create-home --uid 10001 tilt \
-    && mkdir -p /journal \
-    && chown -R tilt /journal /app/static
+    && mkdir -p /journal /support \
+    && chown -R tilt /journal /support /app/static
 USER tilt
 
 ENV TILT_DATA_DIR=/journal
+# Derived state, deliberately not under /journal: the journal folder is the
+# one a visitor might export, and it should carry no database and no key.
+ENV TILT_SUPPORT_DIR=/support
 ENV TILT_STATIC_DIR=/app/static
 ENV TILT_HOST=0.0.0.0
 ENV TILT_PORT=8765

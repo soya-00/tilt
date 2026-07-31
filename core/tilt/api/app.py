@@ -77,7 +77,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         app.state.vectors = vectors
         app.state.journal = journal
         app.state.settings_store = store
-        app.state.persona = PersonaStore(settings.internal_dir / "agent.json")
+        app.state.persona = PersonaStore(settings.persona_path)
         app.state.artifacts = ArtifactStore(settings.diagrams_dir)
         # Not hung off the journal, and not indexed. Nothing in the brief is
         # part of the journal until it is read, and giving it a place inside

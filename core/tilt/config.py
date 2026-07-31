@@ -7,6 +7,8 @@ secrets to disk.
 
 from __future__ import annotations
 
+import os
+import sys
 from functools import lru_cache
 from pathlib import Path
 
@@ -14,11 +16,33 @@ from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
+def default_support_dir() -> Path:
+    """Where this machine keeps what it derived, per platform convention.
+
+    Six lines rather than a dependency on ``platformdirs``: the app targets
+    macOS, and the fallback only has to be somewhere sensible rather than
+    exhaustively correct.
+    """
+    if sys.platform == "darwin":
+        return Path.home() / "Library" / "Application Support" / "Tilt"
+    if sys.platform.startswith("win"):
+        base = os.environ.get("LOCALAPPDATA") or str(Path.home() / "AppData" / "Local")
+        return Path(base) / "Tilt"
+    xdg = os.environ.get("XDG_DATA_HOME")
+    return Path(xdg or Path.home() / ".local" / "share") / "tilt"
+
+
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_prefix="TILT_", env_file=".env", extra="ignore")
 
     data_dir: Path = Field(default=Path.home() / "Tilt")
     """Root of the journal. Markdown here is the source of truth."""
+
+    support_dir: Path | None = None
+    """Where the index, the vectors and the API key live. Defaults per platform.
+
+    Set explicitly by the demo container, which has no home directory worth
+    the name, and by the tests, which want everything under one tmp_path."""
 
     provider: str = Field(default="auto")
     """Agent provider: ``auto`` | ``gemini`` | ``echo``. ``auto`` picks gemini
@@ -117,7 +141,19 @@ class Settings(BaseSettings):
 
     @property
     def internal_dir(self) -> Path:
-        return self.data_dir / ".tilt"
+        """Where the machine's own files live, outside the journal.
+
+        The journal folder is one you are invited to touch — open it in
+        Obsidian, grep it, put it in git, hand it to Dropbox. Two things that
+        used to live inside it are hazardous under that invitation: an API key
+        you might commit or share, and WAL-mode SQLite that a cloud client
+        corrupts. macOS syncs ``~/Documents`` by default, so this is not a
+        hypothetical for anyone who keeps their journal in the obvious place.
+
+        So the line is: **the journal folder holds only what you authored; this
+        one holds only what the machine derived or was handed.**
+        """
+        return self.support_dir or default_support_dir()
 
     @property
     def vectors_path(self) -> Path:
@@ -140,6 +176,16 @@ class Settings(BaseSettings):
         """Diagrams the agent drew. Beside the journal rather than inside it —
         they are readings of your entries, not entries."""
         return self.data_dir / "artifacts" / "diagrams"
+
+    @property
+    def persona_path(self) -> Path:
+        """In the journal, unlike everything else the app keeps for itself.
+
+        The agent's name and manner are the one thing here you wrote. Keeping
+        them with your entries is what makes the journal folder the whole
+        record of what you made — and Markdown rather than JSON because every
+        other file in that folder is readable."""
+        return self.data_dir / "agent.md"
 
     @property
     def index_path(self) -> Path:

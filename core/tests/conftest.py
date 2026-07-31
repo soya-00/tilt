@@ -17,6 +17,10 @@ from tilt.store.index import Index
 def settings(tmp_path: Path) -> Settings:
     return Settings(
         data_dir=tmp_path / "journal",
+        # The index and the vectors live outside the journal now, so without
+        # this every test would share one database in the real user's
+        # Application Support directory.
+        support_dir=tmp_path / "support",
         provider="echo",
         monthly_cost_ceiling_usd=1.0,
         # Tests drive the jobs directly. A live scheduler would fire the sweep

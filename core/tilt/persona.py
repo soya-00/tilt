@@ -1,15 +1,21 @@
 """The agent's identity.
 
-Tilt has exactly one agent, not a roster. It has a name you choose and a
-personality you write, and both are stored beside the journal as plain JSON so
-they travel with your data rather than living in app preferences.
+Tilt has exactly one agent, not a roster. It has a name you choose and a manner
+you write, and both live *in* the journal folder rather than in app
+preferences — because unlike the index, the vectors and the API key, this is
+something you authored. It is the one file the machine keeps that belongs on
+your side of that line.
+
+Markdown with frontmatter, like everything else in that folder. The name is a
+field because the app substitutes it into prompts; the manner is the body,
+because it is prose you wrote and it should read like prose in the file.
 """
 
 from __future__ import annotations
 
-import json
 from pathlib import Path
 
+import frontmatter
 from pydantic import BaseModel, Field
 
 DEFAULT_NAME = "Tilt"
@@ -36,10 +42,11 @@ class PersonaUpdate(BaseModel):
 
 
 class PersonaStore:
-    """Reads and writes ``.tilt/agent.json``.
+    """Reads and writes ``agent.md`` in the journal folder.
 
     A malformed or missing file yields the default persona rather than an
-    error — the agent must always have an identity to speak with.
+    error — the agent must always have an identity to speak with, and losing
+    the ability to reflect because someone mistyped YAML would be absurd.
     """
 
     def __init__(self, path: Path) -> None:
@@ -47,13 +54,21 @@ class PersonaStore:
 
     def load(self) -> Persona:
         try:
-            return Persona(**json.loads(self.path.read_text(encoding="utf-8")))
-        except (OSError, json.JSONDecodeError, ValueError):
+            post = frontmatter.load(self.path)
+        except (OSError, Exception):  # noqa: B014 - frontmatter raises broadly
             return Persona()
+        name = str(post.metadata.get("name") or DEFAULT_NAME)
+        try:
+            return Persona(name=name, personality=post.content.strip())
+        except ValueError:
+            # A name edited to something the model rejects — empty, or longer
+            # than the field allows. The manner is still worth keeping.
+            return Persona(personality=post.content.strip()[:600])
 
     def save(self, persona: Persona) -> Persona:
         self.path.parent.mkdir(parents=True, exist_ok=True)
-        self.path.write_text(persona.model_dump_json(indent=2), encoding="utf-8")
+        post = frontmatter.Post(persona.personality, name=persona.name)
+        self.path.write_text(frontmatter.dumps(post), encoding="utf-8")
         return persona
 
     def update(self, payload: PersonaUpdate) -> Persona:

@@ -81,12 +81,24 @@ a local, file-based journal does not already have.
 
 If you want it on two machines, the folder is the sync layer: iCloud, Dropbox,
 Syncthing or a git remote all work, and `index.rebuild` reconciles whatever it
-finds on boot. One caveat if you do, and it applies whether or not you meant to
-sync: `index.db` and `vectors.db` are WAL-mode SQLite inside the journal
-folder, and WAL side files are the classic way a cloud client corrupts a
-database. macOS syncs `~/Documents` by default, so keep the journal out of a
-synced tree, or accept that the index may need rebuilding — free — and that
-`vectors.db` may not, because those were bought.
+finds on boot.
+
+That is safe now because of where things live, which is worth stating as a rule
+because it is the one that decides these questions:
+
+> **The journal folder holds only what you authored. `~/Library/Application
+> Support/Tilt` holds only what the machine derived or was handed.**
+
+So `~/Tilt` contains entries, the brief, diagrams, and `agent.md` — your
+agent's name and manner, which you wrote. The support folder contains
+`index.db`, `vectors.db` and `settings.json`. Syncing your journal therefore
+cannot corrupt a WAL-mode database and cannot carry your API key to another
+machine or into a git remote, because neither is in there.
+
+The remaining sync hazard is one the app cannot fix: two machines editing the
+same entry produce a provider's "(conflicted copy)" file carrying a duplicate
+`id`, and `index.rebuild` upserts by id, so one silently wins. Use git if that
+matters to you — it is Markdown, which is what git is for.
 
 ## What the token is, and what it is not
 
