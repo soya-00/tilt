@@ -8,12 +8,26 @@
 
 FROM node:20-slim AS ui
 WORKDIR /ui
-COPY apps/desktop/package*.json ./
-RUN npm ci
+# pnpm, because `pnpm-lock.yaml` is what this repo commits — `npm ci` would
+# want a package-lock.json that does not exist, and `npm install` would ignore
+# the lockfile and build against whatever resolved today.
+RUN corepack enable
+COPY apps/desktop/package.json apps/desktop/pnpm-lock.yaml ./
+# --ignore-scripts, and not only for speed: pnpm 10 refuses to run a
+# dependency's install script without explicit approval and *exits non-zero*
+# when it skips one, so a plain `pnpm install --frozen-lockfile` fails this
+# build outright. Asking for the skip is the honest version of what pnpm was
+# going to do anyway, and running no third-party install scripts in an image is
+# the posture this repo wants regardless.
+#
+# Verified rather than assumed: the interface builds from this tree, because
+# esbuild's platform binary arrives as an optional dependency rather than from
+# the postinstall that is being skipped.
+RUN pnpm install --frozen-lockfile --ignore-scripts
 COPY apps/desktop/ ./
 # The Tauri shell is not involved: this is the same React app served as a plain
 # page, talking to the sidecar over HTTP exactly as it always does.
-RUN npm run build
+RUN pnpm run build
 
 
 FROM python:3.11-slim

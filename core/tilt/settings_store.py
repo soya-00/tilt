@@ -1,13 +1,14 @@
 """Runtime settings the user can change from inside the app.
 
 Distinct from :mod:`tilt.config`, which is boot configuration from the
-environment. These live in ``.tilt/settings.json`` beside the journal and can be
-edited while the service runs — changing the API key rebuilds the provider
-without a restart.
+environment. These live in ``settings.json`` in the support directory — outside
+the journal — and can be edited while the service runs, so changing the API key
+rebuilds the provider without a restart.
 
-The key is stored in plain text on disk. That is acceptable for a local-only
-app you run yourself, and it is what lets the key travel with your journal
-folder. The Tauri build should move it to the macOS Keychain.
+Outside the journal deliberately. The journal folder is one you are invited to
+grep, sync and put in git, and a live credential has no business in it. The key
+is still plain text on disk, at mode 600, which is acceptable for a local app
+you run yourself; the Tauri build should move it to the macOS Keychain.
 """
 
 from __future__ import annotations
