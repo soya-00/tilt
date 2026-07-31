@@ -10,7 +10,9 @@ for you.
 from __future__ import annotations
 
 import httpx
+import pytest
 
+from tilt import feeds
 from tilt.agents.base import Completion, Pricing
 from tilt.agents.ledger import MeteredProvider
 from tilt.agents.scout import (
@@ -118,6 +120,19 @@ def read_already(journal: Journal, url: str) -> Entry:
     )
     journal.index.upsert(entry, files.write(entry, journal.entries_root))
     return entry
+
+
+@pytest.fixture(autouse=True)
+def public_dns(monkeypatch):
+    """Every test host resolves to a public address.
+
+    The address guard does a real lookup before fetching, which is the point of
+    it — but these tests answer over a mock transport and their hostnames are
+    RFC 2606 names that resolve nowhere. Stubbing the *lookup* keeps the
+    *policy* live: `forbidden` still runs, and the tests below that care about
+    it stub this differently.
+    """
+    monkeypatch.setattr(feeds, "resolve", lambda host: ["93.184.216.34"])
 
 
 def findings(n: int) -> list[Finding]:
@@ -245,6 +260,107 @@ async def test_the_same_paper_from_two_feeds_is_one_candidate(journal: Journal) 
         found = await gather(journal, ["https://a.example/f", "https://b.example/f"], client=client)
 
     assert len(found) == 1
+
+
+# ---------------------------------------------------------- where it may go
+
+
+def test_the_address_policy_refuses_everything_inside() -> None:
+    """The policy on its own, without a network to ask.
+
+    169.254.169.254 is the reason this exists — every cloud provider serves
+    credentials there — but the private ranges go with it, because a feed
+    pointed at a printer on the LAN is no more legitimate.
+    """
+    for address in (
+        "127.0.0.1",
+        "::1",
+        "169.254.169.254",
+        "10.0.0.5",
+        "192.168.1.1",
+        "172.16.0.1",
+        "0.0.0.0",
+        "224.0.0.1",
+        "not-an-address",
+    ):
+        assert feeds.forbidden(address), address
+
+    for address in ("93.184.216.34", "8.8.8.8", "2606:2800:220:1::1"):
+        assert not feeds.forbidden(address), address
+
+
+async def test_a_feed_pointed_at_the_metadata_service_is_refused(
+    journal: Journal, monkeypatch
+) -> None:
+    """The whole reason the guard exists. Fetching happens in this process, so
+    an unchecked feed URL is a request forgery with its output summarised into
+    the brief."""
+    monkeypatch.setattr(feeds, "resolve", lambda host: ["169.254.169.254"])
+    reached = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        reached.append(str(request.url))
+        return httpx.Response(200, text=RSS)
+
+    async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+        found = await gather(journal, ["http://metadata.example/latest"], client=client)
+
+    assert found == []
+    assert reached == [], "the request must not be made at all"
+
+
+async def test_a_public_url_cannot_redirect_somewhere_private(
+    journal: Journal, monkeypatch
+) -> None:
+    """follow_redirects=True would check only the URL you typed. A host that
+    answers 302 Location: http://169.254.169.254/ would walk straight past."""
+    monkeypatch.setattr(
+        feeds,
+        "resolve",
+        lambda host: ["169.254.169.254"] if host == "inside.example" else ["93.184.216.34"],
+    )
+    reached: list[str] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        reached.append(str(request.url))
+        if "outside" in str(request.url):
+            return httpx.Response(302, headers={"location": "http://inside.example/creds"})
+        return httpx.Response(200, text=RSS)
+
+    async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+        with pytest.raises(feeds.UnsafeFeed, match="inside this machine"):
+            await feeds.fetch("https://outside.example/feed", client=client)
+
+    assert reached == ["https://outside.example/feed"], "it stopped at the first hop"
+
+
+async def test_a_redirect_loop_ends(journal: Journal) -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(302, headers={"location": "https://round.example/again"})
+
+    async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+        with pytest.raises(feeds.UnsafeFeed, match="redirected more than"):
+            await feeds.fetch("https://round.example/feed", client=client)
+
+
+async def test_a_feed_larger_than_a_feed_is_refused() -> None:
+    """A feed is an index of things to read, not a thing to read. Without a cap
+    somebody else's server decides how much memory this process uses."""
+    huge = "<rss>" + "x" * (feeds.MAX_FEED_BYTES + 1)
+
+    async with httpx.AsyncClient(
+        transport=httpx.MockTransport(lambda r: httpx.Response(200, text=huge))
+    ) as client:
+        with pytest.raises(feeds.UnsafeFeed, match="which is not a feed"):
+            await feeds.fetch("https://big.example/feed", client=client)
+
+
+async def test_a_non_http_scheme_never_reaches_the_client() -> None:
+    async with httpx.AsyncClient(
+        transport=httpx.MockTransport(lambda r: httpx.Response(200, text=RSS))
+    ) as client:
+        with pytest.raises(feeds.UnsafeFeed, match="not a scheme"):
+            await feeds.fetch("file:///etc/passwd", client=client)
 
 
 def test_questions_come_before_folders(journal: Journal) -> None:

@@ -11,6 +11,7 @@ from tilt import __version__
 from tilt.agents import build_provider
 from tilt.agents.ledger import MeteredProvider
 from tilt.api.auth import TokenAuthMiddleware
+from tilt.api.limits import BodyLimitMiddleware, check_exposure
 from tilt.api.routes import (
     agent,
     brief,
@@ -36,6 +37,10 @@ from tilt.store.vectors import VectorStore
 
 def create_app(settings: Settings | None = None) -> FastAPI:
     settings = settings or get_settings()
+
+    # Before anything is built. Constructing the app and *then* discovering it
+    # is open would leave a window where it is serving.
+    check_exposure(settings.host, settings.auth_token)
 
     @asynccontextmanager
     async def lifespan(app: FastAPI):
@@ -105,6 +110,10 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     # error instead of a message.
     if settings.auth_token:
         app.add_middleware(TokenAuthMiddleware, token=settings.auth_token)
+
+    # Inside the auth gate: an unauthenticated caller should be turned away by
+    # the token check rather than told how large a body this accepts.
+    app.add_middleware(BodyLimitMiddleware)
 
     app.add_middleware(
         CORSMiddleware,

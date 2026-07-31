@@ -20,6 +20,7 @@ from pathlib import Path
 import frontmatter
 
 from tilt.models import BriefItem, BriefOrigin, utcnow
+from tilt.store.files import contained
 
 
 def _created(value: object) -> datetime:
@@ -61,7 +62,12 @@ class BriefStore:
         self.root = root
 
     def _path(self, item_id: str) -> Path:
-        return self.root / f"{item_id}.md"
+        """The file for this id, checked rather than trusted.
+
+        See :func:`tilt.store.files.contained` for why this is a check and not
+        an assumption about how the web server parses a path.
+        """
+        return contained(self.root, item_id)
 
     def save(self, item: BriefItem) -> BriefItem:
         path = self._path(item.id)
@@ -91,7 +97,16 @@ class BriefStore:
         return item.model_copy(update={"path": str(path)})
 
     def load(self, item_id: str) -> BriefItem | None:
-        path = self._path(item_id)
+        """The item, or nothing.
+
+        An id that could never have been minted is reported as absent rather
+        than as an error: from the caller's side "no such item" and "not an id"
+        want the same 404, and only a crafted request produces the second.
+        """
+        try:
+            path = self._path(item_id)
+        except ValueError:
+            return None
         return self._parse(path) if path.exists() else None
 
     def all(self, *, include_dismissed: bool = False) -> list[BriefItem]:
@@ -134,7 +149,10 @@ class BriefStore:
         the one path that leaves no trace here, because it left a better one
         somewhere else.
         """
-        path = self._path(item_id)
+        try:
+            path = self._path(item_id)
+        except ValueError:
+            return False
         if not path.exists():
             return False
         path.unlink()
