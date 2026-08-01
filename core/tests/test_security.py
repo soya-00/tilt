@@ -315,15 +315,20 @@ def test_no_keychain_falls_back_and_says_so(tmp_path: Path) -> None:
     """A container, CI, a headless box. The fallback is fine; being quiet about
     it is not — going from "encrypted by the OS" to "plain text on disk"
     without telling anyone is the objectionable part."""
-    path = tmp_path / "settings.json"
-    store = SettingsStore(path, vault=FakeVault(works=False))
+    path = tmp_path / "journal" / "settings.json"
+    key_path = tmp_path / "support" / "key.json"
+    store = SettingsStore(path, key_path=key_path, vault=FakeVault(works=False))
 
     store.update(RuntimeSettingsUpdate(gemini_api_key="AIzaFALLBACK"))
 
     assert store.load().gemini_api_key == "AIzaFALLBACK", "the app still works"
-    assert "AIzaFALLBACK" in path.read_text(), "written to the file instead"
+    # Its own file, outside the journal. `settings.json` now lives beside the
+    # entries so that feeds and the model travel with them, which makes it the
+    # last place a live credential should be.
+    assert "AIzaFALLBACK" in key_path.read_text()
+    assert "AIzaFALLBACK" not in path.read_text()
     assert store.key_is_in_the_keychain is False
-    assert path.stat().st_mode & 0o777 == 0o600
+    assert key_path.stat().st_mode & 0o777 == 0o600
 
 
 def test_the_status_route_names_where_the_key_is(client: TestClient) -> None:
