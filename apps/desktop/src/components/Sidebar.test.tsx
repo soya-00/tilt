@@ -41,13 +41,17 @@ const base = {
     key_storage: "file" as const,
     ephemeral: false,
     dormant: [],
+    conflicts: [],
   },
   persona: { name: "Tilt", personality: "Direct and unsentimental." },
   onScope: vi.fn(),
   onOpenGraph: vi.fn(),
   onOpenBrief: vi.fn(),
+  splits: [],
   onRenameTheme: vi.fn(),
   onDeleteTheme: vi.fn(),
+  onAcceptSplit: vi.fn(),
+  onDismissSplit: vi.fn(),
   onSavePersona: vi.fn(),
 };
 
@@ -167,5 +171,72 @@ describe("Sidebar", () => {
     expect(row).toBeInTheDocument();
     expect(row.closest(".stagger")).toHaveClass("nav-dormant");
     expect(row.closest("button")).toHaveAttribute("title", expect.stringContaining("quiet"));
+  });
+});
+
+describe("a folder that looks like two", () => {
+  const split = {
+    id: "sp1",
+    // The fixture ids folders by their label, so this is the "Attention" one.
+    theme_id: "Attention",
+    theme_label: "Attention",
+    keep_label: "Attention",
+    move_label: "Sleep",
+    keep_ids: ["a", "b", "c"],
+    move_ids: ["d", "e"],
+    separation: 0.42,
+    created: "2026-08-01T09:00:00Z",
+  };
+
+  it("names both halves and how many are in each", () => {
+    render(<Sidebar {...base} splits={[split]} />);
+
+    const proposal = screen.getByRole("group", { name: /split attention/i });
+    expect(proposal).toHaveTextContent("Attention (3)");
+    expect(proposal).toHaveTextContent("Sleep (2)");
+  });
+
+  it("only splits when asked", async () => {
+    // The whole design in one assertion: the nightly pass found this and
+    // stopped, because a wrong split names its halves differently and nothing
+    // ever puts the subject back together.
+    const user = userEvent.setup();
+    const onAcceptSplit = vi.fn();
+    render(<Sidebar {...base} splits={[split]} onAcceptSplit={onAcceptSplit} />);
+
+    expect(onAcceptSplit).not.toHaveBeenCalled();
+    await user.click(screen.getByRole("button", { name: /split it/i }));
+    expect(onAcceptSplit).toHaveBeenCalledWith("sp1");
+  });
+
+  it("can be turned down", async () => {
+    const user = userEvent.setup();
+    const onDismissSplit = vi.fn();
+    render(<Sidebar {...base} splits={[split]} onDismissSplit={onDismissSplit} />);
+
+    await user.click(screen.getByRole("button", { name: /not this/i }));
+    expect(onDismissSplit).toHaveBeenCalledWith("sp1");
+  });
+
+  it("shows nothing at all when there is nothing to propose", () => {
+    // Which is almost always. A permanent slot for this would make the sidebar
+    // look like it were waiting on you every day of the year.
+    render(<Sidebar {...base} />);
+
+    expect(screen.queryByRole("group", { name: /split/i })).not.toBeInTheDocument();
+  });
+
+  it("appears under the folder it is about, not somewhere general", () => {
+    render(<Sidebar {...base} splits={[split]} />);
+
+    // Queried through the nav row rather than by text: "Attention" now appears
+    // twice on screen, once as the folder and once inside the proposal.
+    const row = screen
+      .getByRole("button", { name: /^Attention/ })
+      .closest(".stagger")!;
+    expect(row.querySelector(".split")).not.toBeNull();
+    expect(
+      screen.getByText("Memory").closest(".stagger")!.querySelector(".split"),
+    ).toBeNull();
   });
 });

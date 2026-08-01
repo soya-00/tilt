@@ -12,7 +12,14 @@ import { useEffect, useState } from "react";
 import { tagStyle } from "../lib/tagColor";
 import { precise, stamp } from "../lib/time";
 import { useIsDark } from "../lib/useTheme";
-import type { Entry, LinkKind, LinkedEntry, Scope, Thread } from "../lib/types";
+import type {
+  Entry,
+  LinkKind,
+  LinkedEntry,
+  Notice as NoticeModel,
+  Scope,
+  Thread,
+} from "../lib/types";
 import { Icon } from "./Icon";
 import { Avatar } from "./primitives";
 
@@ -302,6 +309,64 @@ export function ConnectionRow({ linked, connected, onOpen, onDismiss }: Connecti
       <div className="row__aside">
         <time className="row__time" dateTime={entry.created}>
           {stamp(entry.created)}
+        </time>
+      </div>
+    </article>
+  );
+}
+
+/* ------------------------------------------------------------------ NoticeRow */
+
+interface NoticeRowProps {
+  notice: NoticeModel;
+  busy: boolean;
+  onSynthesise: (id: string) => void;
+  onDismiss: (id: string) => void;
+}
+
+/**
+ * What the weekly pass noticed, in the machine's voice, at the foot of the
+ * stream where the composer is.
+ *
+ * Deliberately one row and not a panel, a badge, or a digest. The pass that
+ * writes these costs nothing and finds nothing most weeks; giving its output a
+ * permanent home in the interface would make the app look like it is waiting
+ * for something on the weeks it has nothing to say.
+ *
+ * Two actions, and the asymmetry between them is the point. Dismissing is free.
+ * "Look at this" is the only thing here that spends money, so it is a button
+ * somebody presses rather than work already done and presented.
+ */
+export function NoticeRow({ notice, busy, onSynthesise, onDismiss }: NoticeRowProps) {
+  return (
+    <article className="row row--reply row--notice">
+      <span className="row__gutter">
+        <span className="row__dot" />
+      </span>
+
+      <div className="row__main">
+        <div className="bubble bubble--connection">
+          <p className="notice-body">{notice.body}</p>
+        </div>
+        <div className="attribution">
+          <Avatar icon="spark" size={20} />
+          <span>{notice.kind === "contradiction" ? "this week" : "an older question"}</span>
+          <button
+            className="attribution__action"
+            disabled={busy}
+            onClick={() => onSynthesise(notice.id)}
+          >
+            {busy ? "reading it back…" : "look at this"}
+          </button>
+          <button className="attribution__action" onClick={() => onDismiss(notice.id)}>
+            dismiss
+          </button>
+        </div>
+      </div>
+
+      <div className="row__aside">
+        <time className="row__time" dateTime={notice.created}>
+          {stamp(notice.created)}
         </time>
       </div>
     </article>

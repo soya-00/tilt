@@ -1,13 +1,17 @@
 import { useMemo } from "react";
 
 import { dayHeading, dayKey } from "../lib/time";
-import type { Scope, Thread } from "../lib/types";
-import { ConnectionRow, DatePill, EntryRow, ReplyRow } from "./Thread";
+import type { Notice, Scope, Thread } from "../lib/types";
+import { ConnectionRow, DatePill, EntryRow, NoticeRow, ReplyRow } from "./Thread";
 
 interface Props {
   threads: Thread[];
   loading: boolean;
   scope: Scope;
+  /** What the weekly pass noticed. Empty most weeks. */
+  notices: Notice[];
+  /** Notice ids with a synthesis in flight. */
+  synthesising: Set<string>;
   freshReplies: Set<string>;
   onReflect: (id: string) => void;
   onUpdate: (id: string, body: string) => void;
@@ -15,6 +19,8 @@ interface Props {
   onDismissLink: (linkId: string) => void;
   onOpenEntry: (entryId: string) => void;
   onScope: (scope: Scope) => void;
+  onSynthesise: (noticeId: string) => void;
+  onDismissNotice: (noticeId: string) => void;
 }
 
 interface DayGroup {
@@ -41,7 +47,15 @@ function emptyMessage(scope: Scope): string {
   return "Write a line about your day.";
 }
 
-export function Stream({ threads, loading, scope, freshReplies, ...on }: Props) {
+export function Stream({
+  threads,
+  loading,
+  scope,
+  notices,
+  synthesising,
+  freshReplies,
+  ...on
+}: Props) {
   const groups = useMemo(() => groupByDay(threads), [threads]);
 
   if (loading) return <div className="stream" aria-busy="true" />;
@@ -107,6 +121,21 @@ export function Stream({ threads, loading, scope, freshReplies, ...on }: Props) 
           })}
         </section>
       ))}
+
+      {/* At the foot rather than the head: the stream reads downward and ends
+          at the composer, so the bottom is where attention already is. And only
+          in the unfiltered view — the notice is about the journal rather than
+          about the folder you happen to be looking at. */}
+      {scope.type === "all" &&
+        notices.map((notice) => (
+          <NoticeRow
+            key={notice.id}
+            notice={notice}
+            busy={synthesising.has(notice.id)}
+            onSynthesise={on.onSynthesise}
+            onDismiss={on.onDismissNotice}
+          />
+        ))}
     </div>
   );
 }

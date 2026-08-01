@@ -17,10 +17,12 @@ import type {
   Entry,
   Persona,
   PublicSettings,
+  Notice,
   Scope,
   Status,
   TagCount,
   Theme,
+  ThemeSplit,
   Thread,
 } from "./types";
 
@@ -29,6 +31,12 @@ const PAGE = 50;
 export interface JournalState {
   threads: Thread[];
   themes: Theme[];
+  /** Folders the keeper thinks have become two. Almost always empty — the
+   *  nightly pass proposes at most one and only when it is sure enough to
+   *  spend a model call being told no. */
+  splits: ThemeSplit[];
+  /** What the weekly pass noticed. Empty most weeks, deliberately. */
+  notices: Notice[];
   tags: TagCount[];
   status: Status | null;
   persona: Persona | null;
@@ -40,6 +48,8 @@ export interface JournalState {
   reflecting: Set<string>;
   /** Entry ids being categorised or connected. */
   processing: Set<string>;
+  /** Notice ids with a synthesis in flight — the one weekly cost. */
+  synthesising: Set<string>;
   /** Reply ids that arrived this session, so they reveal word by word. */
   freshReplies: Set<string>;
   setScope: (scope: Scope) => void;
@@ -51,6 +61,10 @@ export interface JournalState {
   dismissLink: (linkId: string) => Promise<void>;
   renameTheme: (themeId: string, label: string) => Promise<void>;
   deleteTheme: (themeId: string) => Promise<void>;
+  acceptSplit: (splitId: string) => Promise<void>;
+  dismissSplit: (splitId: string) => Promise<void>;
+  dismissNotice: (noticeId: string) => Promise<void>;
+  reflectOnNotice: (noticeId: string) => Promise<void>;
   savePersona: (payload: Partial<Persona>) => Promise<void>;
   saveSettings: (payload: {
     gemini_api_key?: string;
@@ -84,6 +98,8 @@ function optimisticEntry(body: string): Entry {
 export function useJournal(): JournalState {
   const [threads, setThreads] = useState<Thread[]>([]);
   const [themes, setThemes] = useState<Theme[]>([]);
+  const [splits, setSplits] = useState<ThemeSplit[]>([]);
+  const [notices, setNotices] = useState<Notice[]>([]);
   const [tags, setTags] = useState<TagCount[]>([]);
   const [status, setStatus] = useState<Status | null>(null);
   const [persona, setPersona] = useState<Persona | null>(null);
@@ -94,6 +110,7 @@ export function useJournal(): JournalState {
   const [reflecting, setReflecting] = useState<Set<string>>(new Set());
   const [processing, setProcessing] = useState<Set<string>>(new Set());
   const [freshReplies, setFresh] = useState<Set<string>>(new Set());
+  const [synthesising, setSynthesising] = useState<Set<string>>(new Set());
 
   const mounted = useRef(true);
   // Read inside callbacks so they never need `threads` as a dependency, which
@@ -125,15 +142,27 @@ export function useJournal(): JournalState {
 
   const refreshLibrary = useCallback(async () => {
     try {
-      const [nextThemes, nextTags, nextStatus, nextPersona, nextSettings] = await Promise.all([
+      const [
+        nextThemes,
+        nextTags,
+        nextStatus,
+        nextPersona,
+        nextSettings,
+        nextSplits,
+        nextNotices,
+      ] = await Promise.all([
         api.themes(),
         api.tags(),
         api.status(),
         api.persona(),
         api.settings(),
+        api.splits(),
+        api.notices(),
       ]);
       if (!mounted.current) return;
       setThemes(nextThemes);
+      setSplits(nextSplits);
+      setNotices(nextNotices);
       setTags(nextTags);
       setStatus(nextStatus);
       setPersona(nextPersona);
@@ -327,6 +356,76 @@ export function useJournal(): JournalState {
     [refreshLibrary, themes],
   );
 
+  const acceptSplit = useCallback(
+    async (splitId: string) => {
+      // Cleared from the sidebar first. Accepting rewrites the frontmatter of
+      // every entry that moves, which takes long enough that a proposal still
+      // sitting there reads as a click that did not land.
+      setSplits((prev) => prev.filter((s) => s.id !== splitId));
+      try {
+        setThemes(await api.acceptSplit(splitId));
+        await refreshLibrary();
+      } catch (err) {
+        setError(describe(err));
+        await refreshLibrary();
+      }
+    },
+    [refreshLibrary],
+  );
+
+  const dismissSplit = useCallback(
+    async (splitId: string) => {
+      setSplits((prev) => prev.filter((s) => s.id !== splitId));
+      try {
+        await api.dismissSplit(splitId);
+      } catch (err) {
+        setError(describe(err));
+        await refreshLibrary();
+      }
+    },
+    [refreshLibrary],
+  );
+
+  const dismissNotice = useCallback(
+    async (noticeId: string) => {
+      setNotices((prev) => prev.filter((n) => n.id !== noticeId));
+      try {
+        await api.dismissNotice(noticeId);
+      } catch (err) {
+        setError(describe(err));
+        await refreshLibrary();
+      }
+    },
+    [refreshLibrary],
+  );
+
+  const reflectOnNotice = useCallback(
+    async (noticeId: string) => {
+      // The only part of the weekly pass that spends anything, and it happens
+      // because somebody pressed this. The row stays put while it runs, saying
+      // so — a notice that vanished the moment you clicked would leave nothing
+      // on screen for however long the model takes.
+      setSynthesising((prev) => new Set(prev).add(noticeId));
+      try {
+        await api.reflectOnNotice(noticeId);
+        setNotices((prev) => prev.filter((n) => n.id !== noticeId));
+        // The answer is threaded under an entry, so it is the stream that has
+        // to come back rather than the sidebar.
+        await refresh();
+      } catch (err) {
+        setError(describe(err));
+        await refreshLibrary();
+      } finally {
+        setSynthesising((prev) => {
+          const next = new Set(prev);
+          next.delete(noticeId);
+          return next;
+        });
+      }
+    },
+    [refresh, refreshLibrary],
+  );
+
   const savePersona = useCallback(
     async (payload: Partial<Persona>) => {
       try {
@@ -383,6 +482,8 @@ export function useJournal(): JournalState {
   return {
     threads,
     themes,
+    splits,
+    notices,
     tags,
     status,
     persona,
@@ -392,6 +493,7 @@ export function useJournal(): JournalState {
     error,
     reflecting,
     processing,
+    synthesising,
     freshReplies,
     setScope,
     create,
@@ -402,6 +504,10 @@ export function useJournal(): JournalState {
     dismissLink,
     renameTheme,
     deleteTheme,
+    acceptSplit,
+    dismissSplit,
+    dismissNotice,
+    reflectOnNotice,
     savePersona,
     saveSettings,
     ingest,

@@ -106,11 +106,55 @@ export interface Status {
   ephemeral: boolean;
   /** What is asleep for want of a key. Empty when one is configured. */
   dormant: Dormant[];
+  /** Two files on disk claiming one entry, seen at the last rebuild. Empty on
+   *  a healthy journal; not empty means one of them is not being read, which
+   *  is invisible otherwise because both files look fine sitting there. */
+  conflicts: Conflict[];
 }
 
 export interface Dormant {
   capability: string;
   why: string;
+}
+
+export interface Conflict {
+  entry_id: string;
+  /** The file that was indexed — the one with the newer `updated`. */
+  kept: string;
+  /** The file that was not. Still on disk, untouched. */
+  ignored: string;
+}
+
+/** A folder the keeper thinks has become two subjects.
+ *
+ *  Never applied on its own. A wrong merge is visible in the sidebar and the
+ *  next pass can still undo it; a wrong split names its halves differently and
+ *  nothing ever looks at them together again. */
+export interface ThemeSplit {
+  id: string;
+  theme_id: string;
+  theme_label: string;
+  keep_label: string;
+  move_label: string;
+  keep_ids: string[];
+  move_ids: string[];
+  /** How far apart the halves measured, so a proposal can be argued with. */
+  separation: number;
+  created: string;
+}
+
+/** Something the weekly pass noticed, found without spending anything.
+ *
+ *  Not the synthesis — the observation that there might be one worth paying
+ *  for. Usually there is no notice at all, which is the design. */
+export interface Notice {
+  id: string;
+  kind: "contradiction" | "question";
+  body: string;
+  entry_ids: string[];
+  subject: string;
+  created: string;
+  dismissed: boolean;
 }
 
 export interface AgentRun {
@@ -136,6 +180,8 @@ export interface JobSummary {
   connected: number;
   merged: number;
   dormant: number;
+  /** Suggestions left for you rather than changes made. */
+  proposed: number;
   detail: string;
   /** Stopped at the spending ceiling — unfinished, but nothing is broken. */
   paused: boolean;
