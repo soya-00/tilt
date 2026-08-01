@@ -1172,6 +1172,108 @@
   color: var(--accent);
 }
 
+.ghost-btn--danger {
+  color: var(--danger);
+  box-shadow: inset 0 0 0 1px currentcolor;
+}
+
+.ghost-btn--danger:hover:not(:disabled) {
+  background: var(--danger);
+  color: var(--accent-ink);
+}
+
+/* Disabled until DELETE is typed, and it should look inert rather than
+   merely dimmed — this is the one button whose armed state must be obvious. */
+.ghost-btn--danger:disabled {
+  color: var(--ink-tertiary);
+  box-shadow: inset 0 0 0 1px var(--line);
+  cursor: default;
+}
+
+/* ---- Settings: a rail and one panel ------------------------------------- */
+
+.settings {
+  display: grid;
+  grid-template-columns: 170px 1fr;
+  gap: var(--s-5);
+  min-height: 0;
+  flex: 1;
+}
+
+.settings__rail {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-1);
+  border-right: 1px solid var(--line);
+  padding-right: var(--s-3);
+}
+
+/* Danger sits below this, never above it. A destructive action reached by
+   momentum is a destructive action reached by accident. */
+.settings__rule {
+  margin: var(--s-2) var(--s-3);
+  border: 0;
+  border-top: 1px solid var(--line);
+}
+
+/* Each panel scrolls on its own, so one long list — the run log — cannot push
+   another group off the bottom of the sheet. */
+.settings__panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-5);
+  min-height: 0;
+  overflow-y: auto;
+  padding-right: var(--s-2);
+}
+
+.panel__save,
+.panel__actions {
+  display: flex;
+  align-items: center;
+  gap: var(--s-3);
+}
+
+.panel__save {
+  margin-top: auto;
+  padding-top: var(--s-3);
+  justify-content: flex-end;
+}
+
+.panel__rule {
+  border: 0;
+  border-top: 1px solid var(--line);
+  margin: var(--s-2) 0;
+}
+
+
+.sheet__path {
+  font-family: var(--font-mono);
+  font-size: var(--t-meta);
+  color: var(--ink-secondary);
+  word-break: break-all;
+}
+
+/* A narrow window collapses the sheet to full width; the rail would leave the
+   panel unusable, so it becomes a row of chips above it instead. */
+@media (max-width: 620px) {
+  .settings {
+    grid-template-columns: 1fr;
+  }
+
+  .settings__rail {
+    flex-direction: row;
+    flex-wrap: wrap;
+    border-right: 0;
+    border-bottom: 1px solid var(--line);
+    padding: 0 0 var(--s-2);
+  }
+
+  .settings__rule {
+    display: none;
+  }
+}
+
 /* ---- Motion ------------------------------------------------------------- */
 @keyframes pop-in {
   from {
@@ -1394,6 +1496,14 @@
   color: var(--ink-tertiary);
 }
 
+/* Declared after `.sheet__label` and `.sheet__note` rather than beside the
+   other danger rules: same specificity, so whichever is last wins, and these
+   have to. */
+.sheet__label--danger,
+.sheet__note--danger {
+  color: var(--danger);
+}
+
 .sheet__note code {
   font-family: var(--font-mono);
   font-size: 0.9em;
@@ -1406,10 +1516,18 @@
 }
 
 /* ---- Activity log -------------------------------------------------------- */
+/* Five buttons where there were two. They wrap onto a second line rather than
+   compressing, and each label stays on one line — "Look back" broken across
+   two reads as two different buttons. */
 .job-row {
   display: flex;
-  gap: var(--s-2);
-  margin-bottom: var(--s-2);
+  flex-wrap: wrap;
+  gap: var(--s-1) var(--s-2);
+  margin-bottom: var(--s-3);
+}
+
+.job-row .ghost-btn {
+  white-space: nowrap;
 }
 
 .runs {

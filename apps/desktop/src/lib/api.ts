@@ -245,6 +245,15 @@ export const api = {
 
   rebuildIndex: () => request<{ indexed: number }>("/index/rebuild", { method: "POST" }),
 
+  /** Delete the journal and everything derived from it, then stop the service.
+   *  The word is sent rather than a flag: a mis-fired or replayed request must
+   *  not be able to reach this. */
+  erase: (confirm: string) =>
+    request<{ removed: string[] }>("/erase", {
+      method: "POST",
+      body: JSON.stringify({ confirm }),
+    }),
+
   /* ------------------------------------------------------------------ brief */
 
   brief: () => request<BriefItem[]>("/brief"),

@@ -133,6 +133,13 @@ class SettingsStore:
 
         stored = settings
         key = settings.gemini_api_key.strip()
+        if self.vault and not key:
+            # An empty key here is an explicit "forget it", because every other
+            # path carries the existing one through: `load` fills it from the
+            # keychain and `update` only overwrites what the payload names.
+            # Without this the file is cleared and the keychain is not, so the
+            # key comes back on the next read and forgetting it does nothing.
+            self.vault.clear()
         if self.vault and key and self.vault.set(key):
             # Written to the file with the key removed, so an existing
             # plaintext copy is overwritten rather than left behind.
