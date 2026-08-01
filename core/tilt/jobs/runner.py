@@ -16,6 +16,7 @@ from tilt.jobs.scout import scout
 from tilt.jobs.sweep import sweep
 from tilt.jobs.themes import keep_themes
 from tilt.jobs.vectors import embed_pending
+from tilt.jobs.week import look_back
 from tilt.journal import Journal
 from tilt.models import AgentRun, JobSummary, utcnow
 from tilt.store.files import new_id
@@ -29,6 +30,7 @@ JOBS: dict[str, Job] = {
     "themes": keep_themes,
     "vectors": embed_pending,
     "scout": scout,
+    "week": look_back,
 }
 """The jobs a schedule can run, and the ones the UI can trigger by name."""
 

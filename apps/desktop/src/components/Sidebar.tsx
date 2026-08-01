@@ -2,13 +2,14 @@ import { useState } from "react";
 
 import { tagStyle } from "../lib/tagColor";
 import { useIsDark } from "../lib/useTheme";
-import type { Persona, Scope, Status, TagCount, Theme } from "../lib/types";
+import type { Persona, Scope, Status, TagCount, Theme, ThemeSplit } from "../lib/types";
 import { AgentCard } from "./AgentCard";
 import { Icon } from "./Icon";
 import { NavRow, SectionLabel } from "./primitives";
 
 interface Props {
   themes: Theme[];
+  splits: ThemeSplit[];
   tags: TagCount[];
   scope: Scope;
   entryCount: number;
@@ -19,6 +20,8 @@ interface Props {
   onOpenBrief: () => void;
   onRenameTheme: (themeId: string, label: string) => void;
   onDeleteTheme: (themeId: string) => void;
+  onAcceptSplit: (splitId: string) => void;
+  onDismissSplit: (splitId: string) => void;
   onSavePersona: (payload: Partial<Persona>) => void;
 }
 
@@ -26,6 +29,44 @@ interface Props {
 function dormantTitle(theme: Theme): string {
   const base = theme.description || `Show everything in ${theme.label}`;
   return theme.status === "dormant" ? `${base} — quiet for a while` : base;
+}
+
+interface SplitProposalProps {
+  split: ThemeSplit;
+  onAccept: (splitId: string) => void;
+  onDismiss: (splitId: string) => void;
+}
+
+/**
+ * A folder the keeper thinks has become two, offered rather than done.
+ *
+ * The one place in the app where the agent has found something structural and
+ * deliberately stopped. A wrong merge is visible in the sidebar and the next
+ * pass can undo it; a wrong split names its halves differently, so the merge
+ * pass never looks at them together again and nothing puts the subject back.
+ * That asymmetry is why this is two buttons rather than a change and a log
+ * line.
+ *
+ * "Not this" rather than "no": the answer is about this proposal, and the
+ * folder is asked about again once it has really grown.
+ */
+function SplitProposal({ split, onAccept, onDismiss }: SplitProposalProps) {
+  return (
+    <div className="split" role="group" aria-label={`Split ${split.theme_label}`}>
+      <p className="split__body">
+        This looks like two: <strong>{split.keep_label}</strong> ({split.keep_ids.length})
+        and <strong>{split.move_label}</strong> ({split.move_ids.length}).
+      </p>
+      <div className="split__actions">
+        <button className="split__action" onClick={() => onAccept(split.id)}>
+          Split it
+        </button>
+        <button className="split__action split__action--quiet" onClick={() => onDismiss(split.id)}>
+          Not this
+        </button>
+      </div>
+    </div>
+  );
 }
 
 function isActive(scope: Scope, candidate: Scope): boolean {
@@ -51,6 +92,7 @@ function isActive(scope: Scope, candidate: Scope): boolean {
  */
 export function Sidebar({
   themes,
+  splits,
   tags,
   scope,
   entryCount,
@@ -61,6 +103,8 @@ export function Sidebar({
   onOpenBrief,
   onRenameTheme,
   onDeleteTheme,
+  onAcceptSplit,
+  onDismissSplit,
   onSavePersona,
 }: Props) {
   const [editing, setEditing] = useState<string | null>(null);
@@ -70,6 +114,7 @@ export function Sidebar({
   // click — the same bargain the entry rows strike.
   const [armed, setArmed] = useState<string | null>(null);
   const dark = useIsDark();
+  const proposed = new Map(splits.map((s) => [s.theme_id, s]));
 
   const commit = (id: string) => {
     if (draft.trim()) onRenameTheme(id, draft);
@@ -189,6 +234,18 @@ export function Sidebar({
                       </button>
                     }
                   />
+                  {/* Under the folder it is about, because that is the only
+                      place it means anything. Nothing here is a badge or a
+                      count: the nightly pass proposes at most one of these and
+                      usually none, and a permanent slot for it would make the
+                      sidebar look like it were waiting for you. */}
+                  {proposed.has(theme.id) && (
+                    <SplitProposal
+                      split={proposed.get(theme.id)!}
+                      onAccept={onAcceptSplit}
+                      onDismiss={onDismissSplit}
+                    />
+                  )}
                 </div>
               ),
             )}

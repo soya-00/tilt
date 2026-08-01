@@ -15,7 +15,7 @@ from tilt.agents.reflect import reflect_on
 from tilt.api.deps import get_journal, get_persona_store, get_provider
 from tilt.jobs import JOBS, run_job
 from tilt.journal import Journal
-from tilt.models import Activity, AgentRun, Entry, JobSummary, Thread
+from tilt.models import Activity, AgentRun, Entry, JobSummary, Notice, Thread
 from tilt.persona import Persona, PersonaStore, PersonaUpdate
 
 router = APIRouter(prefix="/agent", tags=["agent"])
@@ -114,6 +114,58 @@ def write_persona(
     payload: PersonaUpdate, store: PersonaStore = Depends(get_persona_store)
 ) -> Persona:
     return store.update(payload)
+
+
+@router.get("/notices", response_model=list[Notice])
+def list_notices(journal: Journal = Depends(get_journal)) -> list[Notice]:
+    """What the weekly pass noticed and has not been answered on.
+
+    Usually empty, which is the design rather than a lull: a pass that finds
+    something every week is one whose findings stop being worth reading.
+    """
+    return journal.index.open_notices()
+
+
+@router.delete("/notices/{notice_id}", status_code=status.HTTP_204_NO_CONTENT)
+def dismiss_notice(notice_id: str, journal: Journal = Depends(get_journal)) -> None:
+    if not journal.index.dismiss_notice(notice_id):
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Notice not found.")
+
+
+@router.post("/notices/{notice_id}/reflect", response_model=Entry)
+async def reflect_on_notice(
+    notice_id: str,
+    journal: Journal = Depends(get_journal),
+    provider: MeteredProvider = Depends(get_provider),
+    store: PersonaStore = Depends(get_persona_store),
+) -> Entry:
+    """The synthesis, and the only part of the weekly pass that costs anything.
+
+    Noticing is free and happens on a schedule; this happens because somebody
+    asked. It reflects on the most recent entry the notice names, with the other
+    one already in that entry's context — so the answer arrives threaded where
+    machine replies already live, rather than in a weekly digest of its own that
+    would need its own place to be read and its own reason to be trusted.
+
+    The notice is dismissed by the same call. It has been answered; leaving it
+    up would invite the same question to be paid for twice.
+    """
+    notice = journal.index.get_notice(notice_id)
+    if notice is None or not notice.entry_ids:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Notice not found.")
+
+    entries = [e for e in (journal.get(i) for i in notice.entry_ids) if e is not None]
+    if not entries:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "The entries behind it are gone.")
+    subject = max(entries, key=lambda e: e.created)
+
+    try:
+        reply = await reflect_on(journal, provider, subject.id, persona=store.load())
+    except (BudgetExceeded, AgentError) as exc:
+        raise _surface(exc) from exc
+
+    journal.index.dismiss_notice(notice_id)
+    return reply
 
 
 @router.get("/runs", response_model=list[AgentRun])

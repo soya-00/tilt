@@ -331,8 +331,9 @@ process behind them.
 |---|---|---|
 | **Sweep** | every 15 min | Files and connects entries the interface never got to |
 | **Vectors** | hourly | Embeds what has been written since the last pass |
-| **Theme-keeper** | nightly, 03:17 | Merges duplicate folders, retires quiet ones, drops empty ones |
+| **Theme-keeper** | nightly, 03:17 | Merges duplicate folders, retires quiet ones, drops empty ones, and proposes a split when one has become two |
 | **Scout** | daily, 06:41 | Looks through your feeds and proposes at most two things to read |
+| **Week** | Sundays, 18:53 | Notices at most one thing worth a second look, and usually nothing |
 
 They are shaped differently on purpose. A backlog can appear at any hour — a
 thought caught with `⌥Space` while the window was closed, one written when a
@@ -342,7 +343,15 @@ theme-keeper rearranges the sidebar, and watching folders move under the cursor
 is disorienting, so it is a cron and it runs overnight. Not on the hour:
 everything else that runs at 3am runs at 3:00. The scout is a cron for a
 different reason — nothing accumulates that it drains, so running it more often
-would only fill the brief faster than anyone empties it.
+would only fill the brief faster than anyone empties it. The weekly pass is a
+cron for a third reason again: it is about a period rather than a backlog, and
+running it more often would report on a week that had barely changed since the
+last report.
+
+The weekly pass is also the only one that cannot spend anything. It runs two
+queries over what the index and the vector store already hold, which is what
+makes an unattended weekly job defensible at all — the expensive half happens
+when you press the button on what it found.
 
 Both are bounded, both are idempotent, and both stop at 80% of the monthly
 ceiling rather than spending it — an interactive request must never be refused
@@ -561,7 +570,9 @@ With both processes running, open http://localhost:5173 and walk this path:
 9. **Check the files.** `ls ~/Tilt/entries/**/*.md` — your thoughts are plain
    Markdown with YAML frontmatter, and folders and connections are written there
    too. Delete the index — `~/Library/Application Support/Tilt/index.db` —
-   restart, and everything comes back; the database is only a cache.
+   restart, and everything comes back; the database is only a cache. That now
+   includes the decisions you made about your folders, which are kept in
+   `~/Tilt/folders.md` because no entry could carry them.
 
 Offline mode is lexical, not intelligent: it matches on repeated keywords, so
 tags are decent and connections are conservative. Add a Gemini key for real
@@ -610,6 +621,15 @@ than by reading it. A folder renamed while taking screenshots was back under
 its old name after the next restart, with the renamed one standing empty
 beside it.
 
+The pin itself lives in `folders.md`, beside your entries. A folder has no file
+of its own — it is only implied by the labels its members carry — so there was
+nowhere for a fact *about a folder* to be written, and two decisions ended up
+in `index.db` and nowhere else: a name you typed, and a split you turned down.
+That made the one operation this README calls costless the only one that could
+lose something. Both are matched on the label rather than on a theme id, because
+a rebuild from an empty index mints new ids and the label is the only durable
+name a folder has.
+
 ## Roadmap
 
 | Phase | Scope | State |
@@ -619,8 +639,9 @@ beside it.
 | 2 | Scheduled agents: catch-up sweep, theme upkeep | done |
 | 3 | Source distillation — transcript, subtitles, PDF, link | done |
 | 4 | Constellation graph, on-demand diagrams | done |
-| 5 | Research scout, daily brief | built, unmerged |
-| 6 | Weekly synthesis, growth timeline | designed |
+| 5 | Research scout, daily brief | done |
+| 6 | Folder splitting, weekly notice | done |
+| 7 | Growth timeline | designed |
 
 Some of what is designed is deliberately still open.
 
@@ -655,11 +676,50 @@ away* — that dismisses on click and never returns. The connections themselves
 stay threaded under the entries they belong to, which is the only place they
 mean anything.
 
-The theme-keeper merges folders and retires quiet ones, but it does not *split*
-them. Splitting on lexical evidence alone is guesswork, and a bad split scatters
-one subject across two folders with no way for you to see why. The embedding
-layer it was waiting for now exists, so this and from-scratch clustering are
-buildable — they are simply not built.
+The theme-keeper now splits folders, and it never does so on its own.
+
+The asymmetry is the whole design. A wrong merge is visible in the sidebar and
+the next pass can still undo it, so merging is allowed to happen while you are
+asleep. A wrong split names its two halves differently, so the merge pass —
+which only ever looks at folders with similar names — will never consider them
+together again, and nothing in the app puts the subject back. So the pass ends
+at a proposal under the folder it is about, and the split happens when you
+click.
+
+Cheap work filters for expensive work, as in the scout. Counting members is
+free, reading vectors is nearly free, two-means over them is cheap, and only a
+folder that has survived all three costs a model call — which is a veto rather
+than a decision, and whose expected answer is no.
+
+The threshold was measured before it was chosen, because the number that
+matters is not what a real division scores. Two-means always returns two
+clusters, so a folder about *one* subject still produces a positive number, and
+the threshold has to clear every one of them. One subject tops out at 0.06
+across folder sizes from twelve entries to a decade of writing, or 0.11 when its
+entries drift steadily along an axis; two subjects bottom out at 0.23 even when
+they are barely distinct. 0.15 sits in the gap.
+
+The measurement also found where the statistic stops. Stretch a single subject
+far enough — someone circling one topic and moving a long way as they do — and
+it scores like two, and no threshold fixes that: at some point "one subject that
+moved" and "two subjects" are the same arrangement of points, and telling them
+apart is a question about meaning rather than geometry. That case is pinned in
+the test rather than left to be discovered, and it is why the model gets a veto
+and you get the click. What none of it proves is where a real embedder puts a
+real journal — the corpus is planted, and the honest version of that measurement
+needs a key and somebody's actual writing.
+
+There is a weekly pass, and it does not write a weekly summary. A summary
+produced on a schedule is produced on the weeks that held nothing too, and after
+a month of those you have learned to skip it — including the week it would have
+mattered. So the pass notices instead. Two things count: a contradiction you
+drew this week between two things *you* wrote, and an open question a month or
+more old that this week's writing came near. Everything else a weekly review
+might report — how much you wrote, which folder grew — is a statistic about
+activity rather than an observation about thinking. Most weeks it finds nothing
+and says nothing, and the interface is unchanged. When it does find something it
+is one sentence at the foot of the stream with one button, and the button is the
+only part that costs anything.
 
 And the connector's precision has not been measured. The gate for this phase is
 ≥0.8 on hand-labelled pairs, which requires a real corpus and a real key; the

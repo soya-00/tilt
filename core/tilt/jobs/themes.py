@@ -6,20 +6,17 @@ and "Attention Economy" and "Paying Attention" end up as three folders holding
 one subject, and the sidebar slowly stops meaning anything.
 
 Nothing here invents structure. It only repairs what accumulated filing did to
-it, in three passes that get progressively more expensive:
+it, in four passes that get progressively more expensive:
 
 1. **Prune** — a theme with no members is nothing but a row. Free.
 2. **Dormancy** — mark what has gone quiet, so the sidebar shows which subjects
    are live and which you have set down. Pure SQL, no model call.
 3. **Merge** — near-duplicate names, judged by the model and folded together.
-   The only step that costs anything, and the only one that changes your files.
-
-The full re-clustering in the plan — every entry embedded, clustered over the
-vectors, themes split as well as merged — now has the embedding layer it was
-waiting for, and is simply not built yet. Splitting on lexical evidence alone
-would be guesswork, and a bad split scatters a subject across two folders with
-no way for the user to see why. Merging is the half that was honest without
-vectors.
+   The only step that changes your files.
+4. **Split** — a folder that has become two subjects, measured over the vectors
+   and, if the model agrees, *proposed*. See :mod:`tilt.jobs.split` for why this
+   one stops at a proposal when merging does not: a wrong merge is visible in
+   the sidebar and reversible by the next pass, and a wrong split is neither.
 """
 
 from __future__ import annotations
@@ -30,6 +27,7 @@ from datetime import timedelta
 from tilt.agents.base import AgentError
 from tilt.agents.ledger import BudgetExceeded, MeteredProvider
 from tilt.agents.parsing import extract_json
+from tilt.jobs.split import propose_split
 from tilt.journal import Journal
 from tilt.models import JobSummary, Theme, ThemeStatus, utcnow
 
@@ -174,6 +172,20 @@ async def keep_themes(
             # already been applied and costs nothing to have done.
             pass
 
+    # After the merge, and from a fresh list: a folder that just absorbed
+    # another is a different folder, and the counts the split gates read would
+    # otherwise be the ones from before it grew.
+    if not summary.paused:
+        try:
+            split = await propose_split(
+                journal, provider, index.themes(), interactive=interactive
+            )
+            summary.proposed = 1 if split else 0
+        except BudgetExceeded:
+            summary.paused = True
+        except AgentError:
+            pass
+
     summary.detail = _describe(summary)
     return summary
 
@@ -218,6 +230,10 @@ def _describe(summary: JobSummary) -> str:
         parts.append(f"{summary.merged} merged")
     if summary.dormant:
         parts.append(f"{summary.dormant} dormant")
+    if summary.proposed:
+        # Said differently from the others on purpose: everything else in this
+        # sentence has already happened.
+        parts.append("one looks like two, waiting on you")
     if summary.paused:
         parts.append("paused at the spending ceiling")
     return ", ".join(parts)

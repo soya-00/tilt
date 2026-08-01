@@ -17,9 +17,11 @@ import type {
   Persona,
   PublicSettings,
   Scope,
+  Notice,
   Status,
   TagCount,
   Theme,
+  ThemeSplit,
   Thread,
 } from "./types";
 
@@ -114,6 +116,17 @@ export const api = {
   /** Removes the folder and its filing. The entries in it are untouched. */
   deleteTheme: (id: string) => request<void>(`/themes/${id}`, { method: "DELETE" }),
 
+  /** Folders the keeper thinks have become two subjects. Usually empty. */
+  splits: () => request<ThemeSplit[]>("/themes/splits"),
+
+  /** Carry out a split. The only call in the app that does — the nightly pass
+   *  only ever proposes one. Returns the rearranged folder list. */
+  acceptSplit: (id: string) => request<Theme[]>(`/themes/splits/${id}`, { method: "POST" }),
+
+  /** Turn one down. Kept as a tombstone, so the same folder is not offered
+   *  again until it has really grown. */
+  dismissSplit: (id: string) => request<void>(`/themes/splits/${id}`, { method: "DELETE" }),
+
   tags: () => request<TagCount[]>("/tags"),
 
   dismissLink: (id: string) => request<void>(`/links/${id}`, { method: "DELETE" }),
@@ -156,10 +169,21 @@ export const api = {
       body: JSON.stringify({ entry_id: entryId }),
     }),
 
+  /** What the weekly pass noticed. Empty most weeks, deliberately. */
+  notices: () => request<Notice[]>("/agent/notices"),
+
+  dismissNotice: (id: string) =>
+    request<void>(`/agent/notices/${id}`, { method: "DELETE" }),
+
+  /** The synthesis, and the only part of the weekly pass that costs anything.
+   *  Threads a reflection under the entries the notice names. */
+  reflectOnNotice: (id: string) =>
+    request<Entry>(`/agent/notices/${id}/reflect`, { method: "POST" }),
+
   runs: () => request<AgentRun[]>("/agent/runs"),
 
   /** Run a scheduled job now, rather than waiting to find out at 3am. */
-  runJob: (name: "sweep" | "themes" | "vectors" | "scout") =>
+  runJob: (name: "sweep" | "themes" | "vectors" | "scout" | "week") =>
     request<JobSummary>(`/agent/jobs/${name}`, { method: "POST" }),
 
   activity: (since: string) =>

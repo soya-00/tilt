@@ -8,6 +8,10 @@ when there is nothing waiting, which is almost always.
 
 The theme-keeper is a *cron*: it rearranges the sidebar, and doing that while
 someone is looking at it is disorienting. Overnight it is.
+
+The weekly look back is a cron for a third reason again: it is about a period
+rather than about a backlog, and running it more often would mean reporting on
+a week that has barely changed since the last report.
 """
 
 from __future__ import annotations
@@ -31,6 +35,10 @@ KEEPER_MINUTE = 17
 SCOUT_MINUTE = 41
 """Same reason, and not the keeper's minute either — two model-calling jobs
 waking together would race for the same ceiling check."""
+
+WEEK_MINUTE = 53
+"""Its own minute, for consistency rather than for contention: the weekly pass
+makes no model call and could not race anything for the ceiling."""
 
 
 class Schedule:
@@ -96,6 +104,17 @@ class Schedule:
             args=["scout"],
             id="scout",
             name="Look for something worth reading",
+        )
+        # Weekly, and the only job here that cannot spend anything: it runs two
+        # queries over what the index and the vector store already hold. That is
+        # what makes an unattended weekly pass defensible at all — the expensive
+        # half happens when somebody presses the button on what it found.
+        scheduler.add_job(
+            self._run,
+            CronTrigger(day_of_week="sun", hour=self._settings.week_hour, minute=WEEK_MINUTE),
+            args=["week"],
+            id="week",
+            name="Look back over the week",
         )
         scheduler.start()
         self._scheduler = scheduler

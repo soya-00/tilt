@@ -46,11 +46,21 @@ async def look(
     if brief is None:
         return JobSummary(job=JOB, detail="No brief configured; nothing to write to.")
 
-    candidates = await gather(journal, feeds or [], client=client)
+    sources = feeds or []
+    candidates = await gather(journal, sources, client=client)
     if not candidates:
+        # Two causes, said apart. They used to share one sentence — "no feeds
+        # configured, or none of them had anything" — and that sentence is what
+        # hid a bug for a fortnight: the job was reading settings from a
+        # directory that no longer existed, saw no feeds, and reported something
+        # that was true of a perfectly healthy morning.
         return JobSummary(
             job=JOB,
-            detail="Nothing turned up. No feeds configured, or none of them had anything.",
+            detail=(
+                f"Nothing turned up from your {len(sources)} feeds today."
+                if sources
+                else "No feeds configured, so there is nowhere to look."
+            ),
         )
 
     # Both halves of the memory: what the journal has already read, and what
@@ -106,7 +116,13 @@ async def scout(journal: Journal, provider: MeteredProvider) -> JobSummary:
     """
     from tilt.settings_store import SettingsStore
 
-    runtime = SettingsStore(journal.data_dir / ".tilt" / "settings.json").load()
+    # From the same directory the app writes it to. This used to rebuild a path
+    # inside the journal folder, which is where settings lived until the support
+    # directory was split out — and the failure was silent in the worst way,
+    # because loading a file that is not there yields defaults rather than an
+    # error. The scheduled scout reported "no feeds configured" every morning to
+    # somebody who had configured feeds.
+    runtime = SettingsStore(journal.support_dir / "settings.json").load()
     return await look(
         journal,
         provider,
