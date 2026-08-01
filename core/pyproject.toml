@@ -24,6 +24,11 @@ dependencies = [
     # route at import time without this — a missing extra would take the whole
     # service down, not just the upload.
     "python-multipart>=0.0.18",
+    # The API key belongs in the OS keychain rather than in a file anyone
+    # running as you can read. Falls back to the file where there is no
+    # keychain — a container, CI — and says so rather than downgrading
+    # silently.
+    "keyring>=25.5",
 ]
 
 [project.scripts]

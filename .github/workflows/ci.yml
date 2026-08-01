@@ -55,7 +55,10 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          # 22, not 20: the pinned pnpm does not run on Node 20 — which is
+          # what the first run of this workflow discovered — and the runners
+          # are deprecating 20 regardless.
+          node-version: "22"
 
       - run: corepack enable
 

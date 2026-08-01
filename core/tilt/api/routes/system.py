@@ -7,10 +7,16 @@ from pydantic import BaseModel
 
 from tilt import __version__
 from tilt.agents.ledger import MeteredProvider
-from tilt.api.deps import get_journal, get_provider, get_settings_dep
+from tilt.api.deps import (
+    get_journal,
+    get_provider,
+    get_settings_dep,
+    get_settings_store,
+)
 from tilt.config import Settings
 from tilt.embed import DORMANT_WITHOUT_KEY
 from tilt.journal import Journal
+from tilt.settings_store import SettingsStore
 
 router = APIRouter(tags=["system"])
 
@@ -35,6 +41,13 @@ class Status(BaseModel):
     spend_this_month_usd: float
     cost_ceiling_usd: float
     data_dir: str
+    key_storage: str = "file"
+    """Where the API key is kept: ``keychain``, ``file``, or ``memory``.
+
+    Reported so the interface can say something true about it. A fallback from
+    the OS keychain to a plain file is a real downgrade in how a credential is
+    protected, and the app should name it rather than let someone assume the
+    stronger one."""
     ephemeral: bool = False
     """Whether the key is held in memory rather than written to disk.
 
@@ -60,6 +73,7 @@ def status(
     journal: Journal = Depends(get_journal),
     provider: MeteredProvider = Depends(get_provider),
     settings: Settings = Depends(get_settings_dep),
+    store: SettingsStore = Depends(get_settings_store),
 ) -> Status:
     offline = provider.name == "echo"
     return Status(
@@ -72,6 +86,16 @@ def status(
         spend_this_month_usd=round(provider.spend_this_month(), 4),
         cost_ceiling_usd=settings.monthly_cost_ceiling_usd,
         data_dir=str(settings.data_dir),
+        # Named from the store rather than guessed from configuration: the
+        # keychain can be present and still refuse, and the honest answer is
+        # what actually happened.
+        key_storage=(
+            "memory"
+            if settings.ephemeral_settings
+            else "keychain"
+            if store.key_is_in_the_keychain
+            else "file"
+        ),
         ephemeral=settings.ephemeral_settings,
         dormant=(
             [Dormant(capability=name, why=why) for name, why in DORMANT_WITHOUT_KEY]
