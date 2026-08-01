@@ -16,6 +16,7 @@ from tilt.api.deps import (
 from tilt.config import Settings
 from tilt.embed import DORMANT_WITHOUT_KEY
 from tilt.journal import Journal
+from tilt.models import Conflict
 from tilt.settings_store import SettingsStore
 
 router = APIRouter(tags=["system"])
@@ -54,6 +55,12 @@ class Status(BaseModel):
     Surfaced so Settings can say where the key goes and be right about it. The
     copy differs completely between the two, and a sentence promising a file
     mode to someone whose key is never filed would be worse than none."""
+    conflicts: list[Conflict] = []
+    """Two files on disk claiming one entry, seen at the last rebuild.
+
+    Empty on a healthy journal. Not empty means a sync client made a
+    "(conflicted copy)" and one of the two is not being indexed — which is
+    invisible otherwise, because both files look fine sitting there."""
     dormant: list[Dormant] = []
     """What is asleep for want of a key, and why.
 
@@ -97,6 +104,7 @@ def status(
             else "file"
         ),
         ephemeral=settings.ephemeral_settings,
+        conflicts=journal.index.conflicts,
         dormant=(
             [Dormant(capability=name, why=why) for name, why in DORMANT_WITHOUT_KEY]
             if offline

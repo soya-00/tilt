@@ -389,6 +389,9 @@ that dies with the container. It refuses to start on a non-loopback address
 without a token, so the mistake with no recovery is not one you can make by
 forgetting.
 
+**[upcoming.md](upcoming.md)** is the ledger of what is known-unfinished —
+what needs a Mac, what needs a real key, and what was decided against.
+
 **[SECURITY.md](SECURITY.md)** has the audit behind that: what was checked and
 holds, what did not and what was done about it, what the token protects and
 what it demonstrably does not once the page is served from the same process,

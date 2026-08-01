@@ -236,6 +236,23 @@ class AgentRun(BaseModel):
     able to tell those apart the next morning."""
 
 
+class Conflict(BaseModel):
+    """Two files on disk claiming the same entry.
+
+    A sync client's "(conflicted copy)" carries the id of the file it copied,
+    so both are the same entry as far as the index is concerned and one of them
+    silently loses. Reported rather than resolved: the app has no business
+    renaming or merging somebody's files, and a conflict you can see is one you
+    can settle.
+    """
+
+    entry_id: str
+    kept: str
+    """The file that was indexed — the one with the newer ``updated``."""
+    ignored: str
+    """The file that was not. Still on disk, untouched."""
+
+
 class JobSummary(BaseModel):
     """The outcome of one scheduled pass, returned when it is triggered by hand."""
 
