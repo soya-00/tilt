@@ -253,6 +253,64 @@ class Conflict(BaseModel):
     """The file that was not. Still on disk, untouched."""
 
 
+class ThemeSplit(BaseModel):
+    """A folder that has turned into two subjects, offered rather than applied.
+
+    The keeper merges folders on its own because a wrong merge is visible and
+    the next pass can still undo it. A split has no such recovery: it names its
+    halves distinctly, so nothing will ever look at them as a pair again. So
+    this is where the machine's part ends — it says what it found, names both
+    halves, and waits.
+
+    Kept in the index rather than in Markdown, which means a deleted index
+    forgets a dismissal. The same is already true of a folder name you typed by
+    hand, and the fix for both is the same durable theme record nobody has built
+    yet.
+    """
+
+    id: str
+    theme_id: str
+    theme_label: str = ""
+    """The folder as it is named now, carried so the proposal reads on its own."""
+    keep_label: str
+    """What the larger half would be called — usually the existing name."""
+    move_label: str
+    """What the smaller half would be called, once it is its own folder."""
+    keep_ids: list[str] = Field(default_factory=list)
+    move_ids: list[str] = Field(default_factory=list)
+    separation: float = 0.0
+    """How far apart the two halves measured. Kept so a proposal can be argued
+    with rather than only accepted or refused."""
+    created: datetime
+
+
+class Notice(BaseModel):
+    """Something worth a second look, found without spending anything.
+
+    The weekly pass writes at most one of these and usually writes none. That
+    is the whole design: a weekly review that arrives every week regardless of
+    whether the week held anything teaches you to stop reading it, and then the
+    one week that mattered goes past unread too.
+
+    A notice is not the synthesis. It is the observation that there might be one
+    worth paying for, and the paying happens when the writer asks.
+    """
+
+    id: str
+    kind: str
+    """``contradiction`` — two things you wrote that pull against each other —
+    or ``question``, an old open question this week's writing came near."""
+    body: str
+    """One sentence, in the machine's own voice."""
+    entry_ids: list[str] = Field(default_factory=list)
+    """What the notice is about, and what a synthesis would read."""
+    subject: str = ""
+    """A stable identity for the finding — the link or the question behind it —
+    so the same observation is never raised twice."""
+    created: datetime
+    dismissed: bool = False
+
+
 class JobSummary(BaseModel):
     """The outcome of one scheduled pass, returned when it is triggered by hand."""
 
@@ -263,6 +321,12 @@ class JobSummary(BaseModel):
     connected: int = 0
     merged: int = 0
     dormant: int = 0
+    proposed: int = 0
+    """Suggestions left for the writer rather than changes made.
+
+    Separate from the counters above, and the distinction is the point: those
+    say what the run did, this says what it is waiting on. A split is never
+    applied by a job."""
     detail: str = ""
     paused: bool = False
     """Set when the budget ceiling stopped the run partway.

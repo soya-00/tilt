@@ -87,6 +87,14 @@ class Settings(BaseSettings):
     hourly because a list that fills faster than it is read is a backlog
     whatever it is called."""
 
+    week_hour: int = 18
+    """Local hour on Sunday for the look back over the week.
+
+    Evening rather than morning, and Sunday rather than Monday: what it may
+    find is something to sit with, not something to start the week by being
+    handed. It costs nothing to run — no model call — so the only thing the
+    time affects is when a sentence might appear."""
+
     cors_origins: list[str] = Field(
         default_factory=lambda: [
             "http://localhost:5173",
@@ -186,6 +194,17 @@ class Settings(BaseSettings):
         record of what you made — and Markdown rather than JSON because every
         other file in that folder is readable."""
         return self.data_dir / "agent.md"
+
+    @property
+    def folders_path(self) -> Path:
+        """Decisions you made about your folders, beside your entries.
+
+        In the journal folder for the same reason ``agent.md`` is: a name you
+        typed and a suggestion you declined are things you authored. They used
+        to live only in ``index.db``, which the app calls disposable and means
+        it — so the one operation advertised as costless was quietly discarding
+        the only state that could not be re-derived."""
+        return self.data_dir / "folders.md"
 
     @property
     def index_path(self) -> Path:

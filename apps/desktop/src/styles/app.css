@@ -66,6 +66,48 @@
   line-height: var(--lh-tight);
 }
 
+/* A folder the keeper thinks has become two, offered under the folder itself.
+   Quiet on purpose: it is the one place the agent found something structural
+   and stopped, and it should read as a question rather than as an alert. */
+.split {
+  margin: var(--s-1) 0 var(--s-2) var(--s-3);
+  padding: var(--s-2) var(--s-3);
+  border-left: 1px solid var(--rule);
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-2);
+}
+
+.split__body {
+  font-size: var(--t-meta);
+  color: var(--ink-secondary);
+  line-height: var(--lh-tight);
+}
+
+.split__body strong {
+  color: var(--ink);
+  font-weight: var(--w-medium);
+}
+
+.split__actions {
+  display: flex;
+  gap: var(--s-3);
+}
+
+.split__action {
+  font-size: var(--t-meta);
+  color: var(--ink);
+  transition: color var(--dur-fast) var(--ease);
+}
+
+.split__action--quiet {
+  color: var(--ink-tertiary);
+}
+
+.split__action:hover {
+  color: var(--accent);
+}
+
 .section-label {
   font-size: var(--t-meta);
   font-weight: var(--w-medium);
@@ -365,6 +407,21 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+/* Two files claiming one entry. Beside the overnight summary rather than styled
+   as an error, because nothing is broken and nothing was lost — one of the two
+   files is simply not being read. */
+.pane__conflict {
+  margin-left: auto;
+  font-size: var(--t-meta);
+  color: var(--ink-secondary);
+  white-space: nowrap;
+  transition: color var(--dur-fast) var(--ease);
+}
+
+.pane__conflict:hover {
+  color: var(--ink);
 }
 
 /* What the agent did overnight. Shares the error's slot: both are transient
@@ -697,6 +754,20 @@
 
 .attribution__action:hover {
   color: var(--ink);
+}
+
+/* The weekly notice keeps its actions visible. Everywhere else the actions
+   reveal on hover because the row is already saying what it has to say; here
+   the whole row exists to offer a choice, and an offer you have to find with
+   the cursor is not one. */
+.row--notice .attribution__action {
+  opacity: 1;
+}
+
+.notice-body {
+  color: var(--ink-secondary);
+  font-size: var(--t-body);
+  line-height: var(--lh-body);
 }
 
 .connection-quote {

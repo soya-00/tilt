@@ -9,6 +9,7 @@ import { QuickCapture } from "./components/QuickCapture";
 import { SearchBar } from "./components/SearchBar";
 import { Settings } from "./components/Settings";
 import { SourceSheet } from "./components/SourceSheet";
+import { Conflicts } from "./components/Conflicts";
 import { Sidebar } from "./components/Sidebar";
 import { Stream } from "./components/Stream";
 import { Icon } from "./components/Icon";
@@ -57,9 +58,14 @@ export default function App() {
   const [sourcePrefill, setSourcePrefill] = useState<{ title: string; text: string } | null>(null);
   const composer = useRef<ComposerHandle>(null);
   const scroller = useRef<HTMLDivElement>(null);
+  // Dismissed for this session only, not written anywhere. The files are still
+  // in conflict tomorrow and the app should say so again; what it should not do
+  // is keep saying it while you are in the middle of dealing with it.
+  const [seenConflicts, setSeenConflicts] = useState(false);
   const atBottom = useRef(true);
 
-  const { scope, setScope, themes, tags, status, persona, settings, threads } = journal;
+  const { scope, setScope, themes, splits, notices, tags, status, persona, settings, threads } =
+    journal;
 
   const focusComposer = useCallback(() => composer.current?.focus(), []);
 
@@ -102,7 +108,11 @@ export default function App() {
     atBottom.current = el.scrollHeight - el.scrollTop - el.clientHeight < STICK_THRESHOLD;
   }, []);
 
-  const count = threads.reduce((n, t) => n + 1 + t.replies.length + t.links.length, 0);
+  // Notices are counted too. They render at the foot of the stream and arrive
+  // on their own request, so a count that ignored them would leave the newest
+  // thing on screen sitting just below the fold.
+  const count =
+    threads.reduce((n, t) => n + 1 + t.replies.length + t.links.length, 0) + notices.length;
   useLayoutEffect(() => {
     const el = scroller.current;
     if (!el || !atBottom.current) return;
@@ -218,6 +228,7 @@ export default function App() {
     <div className="app">
       <Sidebar
         themes={themes}
+        splits={splits}
         tags={tags}
         scope={scope}
         entryCount={status?.entries ?? 0}
@@ -228,6 +239,8 @@ export default function App() {
         onOpenBrief={() => setBriefOpen(true)}
         onRenameTheme={journal.renameTheme}
         onDeleteTheme={journal.deleteTheme}
+        onAcceptSplit={journal.acceptSplit}
+        onDismissSplit={journal.dismissSplit}
         onSavePersona={journal.savePersona}
       />
 
@@ -251,11 +264,20 @@ export default function App() {
               {journal.error}
             </button>
           ) : (
-            away.activity && (
-              <button className="pane__away" onClick={away.dismiss} title="Dismiss">
-                {describe(away.activity)}
-              </button>
-            )
+            <>
+              {/* Ahead of the overnight summary and behind an error. All three
+                  are notices about the app rather than about your writing, and
+                  this is the only one that will still be true tomorrow. */}
+              <Conflicts
+                conflicts={seenConflicts ? [] : (status?.conflicts ?? [])}
+                onDismiss={() => setSeenConflicts(true)}
+              />
+              {away.activity && (
+                <button className="pane__away" onClick={away.dismiss} title="Dismiss">
+                  {describe(away.activity)}
+                </button>
+              )}
+            </>
           )}
 
           <button
@@ -275,6 +297,8 @@ export default function App() {
               threads={threads}
               loading={journal.loading}
               scope={scope}
+              notices={notices}
+              synthesising={journal.synthesising}
               freshReplies={journal.freshReplies}
               onReflect={journal.reflect}
               onUpdate={journal.update}
@@ -282,6 +306,8 @@ export default function App() {
               onDismissLink={journal.dismissLink}
               onOpenEntry={(id) => void openEntry(id)}
               onScope={setScope}
+              onSynthesise={journal.reflectOnNotice}
+              onDismissNotice={journal.dismissNotice}
             />
           </div>
         </div>

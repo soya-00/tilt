@@ -44,13 +44,21 @@ itself.
 - **The embedding path has never run against a real key.** `bridges to` depends
   on it, and bridge recall was measured on a planted corpus rather than on
   anything anyone wrote.
+- **The split threshold on a real journal.** `SEPARATION = 0.15` separates one
+  subject from two by roughly a factor of four on planted vectors, and the
+  planting is the part that needs replacing: what a real embedder does to a real
+  set of folders is unmeasured. The number to watch is not how often it proposes
+  a split, it is how often a proposal is dismissed.
 
 ## Wanted, not started
 
-- **Folder splitting, and clustering from scratch.** The nightly keeper merges
-  duplicates and retires quiet folders but never splits one, because splitting
-  on lexical evidence alone is guesswork and a bad split scatters a subject
-  with no way to see why. The embedding layer it was waiting for now exists.
+- **Clustering from scratch.** Splitting exists now; discovering the folders in
+  the first place from vectors rather than one entry at a time does not. The
+  same asymmetry applies and more sharply — a from-scratch clustering proposes
+  a whole structure at once, and there is no obvious way to accept part of one.
+- **A growth timeline.** Phase 7, and undesigned on purpose: it was worth
+  waiting to see whether the weekly notice finds anything real before building
+  a view on top of the same idea.
 - **Audio and video transcription.** Locally that means MLX: Apple-Silicon-only
   and about a gigabyte of native libraries in the bundle. Dropping an `.mp3`
   currently says so rather than failing.
@@ -74,6 +82,17 @@ itself.
   of machinery for a request you made yourself from the app's own webview
   behind a bearer token.
 
+## Known limits, recorded so they are not rediscovered
+
+- **The statistic cannot tell a subject that drifted from a folder that is two
+  subjects.** Measured, not assumed: stretch one subject far enough along an
+  axis and it scores like two. That is what the model veto and the accept click
+  are for, and no threshold would help.
+- **The weekly pass only ever looks for two things.** A contradiction between
+  two things you wrote, and an old question this week came near. That is a
+  deliberately short list, and whether it is too short is a question a few
+  months of real weeks will answer better than more design.
+
 ## Loose ends worth knowing
 
 - **`pnpm install --ignore-scripts`** in CI and the Dockerfile. pnpm 10+ exits
@@ -85,3 +104,7 @@ itself.
 - **`packageManager` is pinned** in `apps/desktop/package.json`. Its absence is
   what let three environments each resolve their own pnpm, one of which did not
   run on the Node version CI had.
+- **`StatusBar.tsx` was dead code** and is gone. Nothing imported it and its CSS
+  had already been deleted in an earlier redesign, so it was found by running the
+  app rather than by reading it. Worth knowing because the same thing can happen
+  again: a component with no import and no test looks alive in the file tree.

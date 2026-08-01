@@ -548,7 +548,10 @@ async def test_a_job_that_finds_nothing_is_not_a_failure(
     summary = await look(journal, provider, brief=BriefStore(tmp_path / "brief"), feeds=[])
 
     assert summary.filed == 0
-    assert "Nothing turned up" in summary.detail
+    # Named for its actual cause. "Nothing turned up" is also what a healthy
+    # quiet morning looks like, and one sentence covering both is how a job
+    # reading the wrong settings directory went unnoticed.
+    assert "No feeds configured" in summary.detail
 
 
 def test_unseen_drops_what_is_known() -> None:
@@ -600,3 +603,23 @@ def test_the_scout_is_a_job_like_any_other() -> None:
     from tilt.jobs.runner import JOBS
 
     assert "scout" in JOBS
+
+
+# ------------------------------------------------------- where settings live
+
+
+async def test_the_scheduled_scout_reads_the_feeds_you_configured(client) -> None:
+    """The check that was missing when the support directory was split out.
+
+    `scout` builds its own settings store rather than taking one — every job in
+    the registry has the same two-parameter shape — and the path it rebuilt was
+    the pre-split one, inside the journal folder. Loading a file that is not
+    there yields defaults rather than an error, so the job reported "no feeds
+    configured" every morning to somebody who had configured feeds, and nothing
+    anywhere said otherwise.
+    """
+    client.patch("/settings", json={"feeds": ["https://example.com/feed.xml"]})
+
+    summary = client.post("/agent/jobs/scout").json()
+
+    assert "No feeds configured" not in summary["detail"]
