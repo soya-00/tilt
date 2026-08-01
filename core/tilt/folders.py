@@ -41,6 +41,10 @@ Folders Tilt keeps a note about.
 
 `pinned` are folders you renamed. Tilt will not rename them back.
 
+`refused` are suggested refilings you turned down — the entry, and the folder
+Tilt wanted to move it to. Keyed on both, so saying no to one destination does
+not silence every future suggestion about that entry.
+
 `declined` are splits you turned down — the folder Tilt thought had become two
 subjects, and how many entries were in it when you said no. It asks again only
 once a folder has grown by half as much again.
@@ -57,12 +61,28 @@ class Declined(BaseModel):
     at: int = 0
 
 
+class Refused(BaseModel):
+    """A suggested refiling you turned down: the entry, and where it wanted to
+    put it. Keyed on the destination as well as the entry, because "not that
+    folder" is a narrower answer than "leave this entry alone forever"."""
+
+    entry: str
+    to: str
+
+
 class Decisions(BaseModel):
     pinned: list[str] = Field(default_factory=list)
     declined: list[Declined] = Field(default_factory=list)
+    refused: list[Refused] = Field(default_factory=list)
 
     def is_pinned(self, label: str) -> bool:
         return any(p.casefold() == label.casefold() for p in self.pinned)
+
+    def refused_move(self, entry_id: str, to_label: str) -> bool:
+        return any(
+            r.entry == entry_id and r.to.casefold() == to_label.casefold()
+            for r in self.refused
+        )
 
     def declined_at(self, label: str) -> int | None:
         for item in self.declined:
@@ -94,6 +114,11 @@ class FolderStore:
                     for d in (post.metadata.get("declined") or [])
                     if isinstance(d, dict) and d.get("folder")
                 ],
+                refused=[
+                    Refused(entry=str(r.get("entry", "")), to=str(r.get("to", "")))
+                    for r in (post.metadata.get("refused") or [])
+                    if isinstance(r, dict) and r.get("entry") and r.get("to")
+                ],
             )
         except Exception:
             log.warning("could not read %s; carrying on with no folder decisions", self.path)
@@ -105,6 +130,7 @@ class FolderStore:
             PREAMBLE,
             pinned=sorted(decisions.pinned, key=str.casefold),
             declined=[d.model_dump() for d in decisions.declined],
+            refused=[r.model_dump() for r in decisions.refused],
         )
         self.path.write_text(frontmatter.dumps(post), encoding="utf-8")
         return decisions
@@ -152,6 +178,20 @@ class FolderStore:
                 break
         else:
             decisions.declined.append(Declined(folder=label, at=members))
+        self.save(decisions)
+
+    def refuse_move(self, entry_id: str, to_label: str) -> None:
+        """Remember that this entry should stay where it is.
+
+        In `folders.md` rather than only in the index, for the reason the index
+        is not to be trusted with a decision: the app promises it is safe to
+        delete, and a refusal that lived only there came back as a fresh
+        suggestion the first time somebody took that promise at its word.
+        """
+        decisions = self.load()
+        if decisions.refused_move(entry_id, to_label):
+            return
+        decisions.refused.append(Refused(entry=entry_id, to=to_label))
         self.save(decisions)
 
     def accepted(self, label: str) -> None:

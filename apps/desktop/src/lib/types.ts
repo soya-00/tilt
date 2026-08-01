@@ -132,6 +132,26 @@ export interface Declined {
   at: number;
 }
 
+/** An entry the filing pass thinks is in the wrong folder.
+ *
+ *  Filing happens one entry at a time and is path dependent: an entry written
+ *  before a subject had a folder lands in whichever one was nearest that week.
+ *  Offered rather than applied, like everything else here that changes what you
+ *  wrote — but cheaper to be wrong about than a split, so it does not buy a
+ *  model call to check itself. */
+export interface Misfiled {
+  id: string;
+  entry_id: string;
+  opening: string;
+  from_id: string;
+  from_label: string;
+  to_id: string;
+  to_label: string;
+  /** How much closer the other folder measured, so it can be argued with. */
+  margin: number;
+  created: string;
+}
+
 export interface Exported {
   path: string;
   entries: number;

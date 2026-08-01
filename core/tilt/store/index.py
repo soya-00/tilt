@@ -22,11 +22,13 @@ from pathlib import Path
 
 from pydantic import ValidationError
 
+from tilt.folders import Decisions
 from tilt.models import (
     AgentRun,
     Conflict,
     Entry,
     Link,
+    Misfiled,
     Notice,
     TagCount,
     Theme,
@@ -38,7 +40,7 @@ from tilt.store import files
 
 log = logging.getLogger(__name__)
 
-SCHEMA_VERSION = 5
+SCHEMA_VERSION = 6
 
 
 def pair_key(a: str, b: str) -> str:
@@ -168,6 +170,20 @@ CREATE TABLE IF NOT EXISTS theme_splits (
     -- record of that decision, and a kept row would propose a split already made.
     state       TEXT NOT NULL DEFAULT 'pending',
     size_at_decision INTEGER NOT NULL DEFAULT 0
+);
+
+-- An entry the filing pass thinks is in the wrong folder. Offered, never
+-- applied: one row per entry, replaced when a later pass measures it again.
+CREATE TABLE IF NOT EXISTS entry_moves (
+    id        TEXT PRIMARY KEY,
+    entry_id  TEXT NOT NULL UNIQUE REFERENCES entries(id) ON DELETE CASCADE,
+    opening   TEXT NOT NULL DEFAULT '',
+    from_id   TEXT NOT NULL REFERENCES themes(id) ON DELETE CASCADE,
+    from_label TEXT NOT NULL,
+    to_id     TEXT NOT NULL REFERENCES themes(id) ON DELETE CASCADE,
+    to_label  TEXT NOT NULL,
+    margin    REAL NOT NULL DEFAULT 0.0,
+    created   TEXT NOT NULL
 );
 
 -- What the weekly pass noticed. Usually nothing, which is the point.
@@ -701,6 +717,56 @@ class Index:
         if row["state"] == "pending":
             return True
         return members < row["size_at_decision"] * growth
+
+    # ------------------------------------------------------------- refiling
+
+    def propose_move(self, move: Misfiled, *, declined: Decisions | None = None) -> bool:
+        """Offer to refile one entry, unless the writer already said no.
+
+        The refusal is checked here rather than in the pass so that every path
+        into this table goes through it — a proposal that reappears after being
+        turned down is the failure this whole shape of feature has to avoid.
+        """
+        if declined is not None and declined.refused_move(move.entry_id, move.to_label):
+            return False
+        with self.tx() as conn:
+            conn.execute(
+                "INSERT INTO entry_moves (id, entry_id, opening, from_id, from_label,"
+                " to_id, to_label, margin, created) VALUES (?,?,?,?,?,?,?,?,?)"
+                " ON CONFLICT(entry_id) DO UPDATE SET"
+                "  id=excluded.id, opening=excluded.opening, from_id=excluded.from_id,"
+                "  from_label=excluded.from_label, to_id=excluded.to_id,"
+                "  to_label=excluded.to_label, margin=excluded.margin,"
+                "  created=excluded.created",
+                (
+                    move.id,
+                    move.entry_id,
+                    move.opening,
+                    move.from_id,
+                    move.from_label,
+                    move.to_id,
+                    move.to_label,
+                    move.margin,
+                    move.created.isoformat(),
+                ),
+            )
+        return True
+
+    def pending_moves(self) -> list[Misfiled]:
+        rows = self._conn.execute("SELECT * FROM entry_moves ORDER BY margin DESC")
+        return [_row_to_move(r) for r in rows]
+
+    def get_move(self, move_id: str) -> Misfiled | None:
+        row = self._conn.execute(
+            "SELECT * FROM entry_moves WHERE id = ?", (move_id,)
+        ).fetchone()
+        return _row_to_move(row) if row else None
+
+    def clear_move(self, entry_id: str) -> None:
+        """Forget a proposal, whether it was taken or turned down. The durable
+        record of a refusal is in `folders.md`; this table is the projection."""
+        with self.tx() as conn:
+            conn.execute("DELETE FROM entry_moves WHERE entry_id = ?", (entry_id,))
 
     # ------------------------------------------------------------------ notices
 
@@ -1252,6 +1318,20 @@ def _row_to_split(row: sqlite3.Row) -> ThemeSplit:
         keep_ids=json.loads(row["keep_ids"]),
         move_ids=json.loads(row["move_ids"]),
         separation=row["separation"],
+        created=row["created"],
+    )
+
+
+def _row_to_move(row: sqlite3.Row) -> Misfiled:
+    return Misfiled(
+        id=row["id"],
+        entry_id=row["entry_id"],
+        opening=row["opening"],
+        from_id=row["from_id"],
+        from_label=row["from_label"],
+        to_id=row["to_id"],
+        to_label=row["to_label"],
+        margin=row["margin"],
         created=row["created"],
     )
 

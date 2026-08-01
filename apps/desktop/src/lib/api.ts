@@ -17,6 +17,7 @@ import type {
   GraphQuery,
   Imported,
   JobSummary,
+  Misfiled,
   Persona,
   PublicSettings,
   Scope,
@@ -129,6 +130,16 @@ export const api = {
   /** Turn one down. Kept as a tombstone, so the same folder is not offered
    *  again until it has really grown. */
   dismissSplit: (id: string) => request<void>(`/themes/splits/${id}`, { method: "DELETE" }),
+
+  /** Entries the filing pass thinks are in the wrong folder. Usually empty. */
+  moves: () => request<Misfiled[]>("/moves"),
+
+  /** Refile the entry, and get its thread back — that is what the row offering
+   *  this is sitting inside. */
+  acceptMove: (id: string) => request<Thread>(`/moves/${id}`, { method: "POST" }),
+
+  /** Leave it where it is. Remembered against that destination only. */
+  dismissMove: (id: string) => request<void>(`/moves/${id}`, { method: "DELETE" }),
 
   /** Pinned names and refused splits — what you told the keeper. */
   folderDecisions: () => request<Decisions>("/folders"),

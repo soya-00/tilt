@@ -6,7 +6,7 @@ and "Attention Economy" and "Paying Attention" end up as three folders holding
 one subject, and the sidebar slowly stops meaning anything.
 
 Nothing here invents structure. It only repairs what accumulated filing did to
-it, in four passes that get progressively more expensive:
+it, in five passes that get progressively more expensive:
 
 1. **Prune** — a theme with no members is nothing but a row. Free.
 2. **Dormancy** — mark what has gone quiet, so the sidebar shows which subjects
@@ -17,6 +17,10 @@ it, in four passes that get progressively more expensive:
    and, if the model agrees, *proposed*. See :mod:`tilt.jobs.split` for why this
    one stops at a proposal when merging does not: a wrong merge is visible in
    the sidebar and reversible by the next pass, and a wrong split is neither.
+5. **Refile** — an entry that sits closer to a folder it is not in, also
+   proposed. Free: the arithmetic separates the two cases so far apart that a
+   model call would be paying to be told what it already says. See
+   :mod:`tilt.jobs.misfiled`.
 """
 
 from __future__ import annotations
@@ -27,6 +31,7 @@ from datetime import timedelta
 from tilt.agents.base import AgentError
 from tilt.agents.ledger import BudgetExceeded, MeteredProvider
 from tilt.agents.parsing import extract_json
+from tilt.jobs.misfiled import keep_filing
 from tilt.jobs.split import propose_split
 from tilt.journal import Journal
 from tilt.models import JobSummary, Theme, ThemeStatus, utcnow
@@ -186,6 +191,10 @@ async def keep_themes(
         except AgentError:
             pass
 
+    # Free, and last: it reads the folders as they now are, after any merge and
+    # with any split still only proposed.
+    summary.proposed += await keep_filing(journal, index.themes())
+
     summary.detail = _describe(summary)
     return summary
 
@@ -233,7 +242,11 @@ def _describe(summary: JobSummary) -> str:
     if summary.proposed:
         # Said differently from the others on purpose: everything else in this
         # sentence has already happened.
-        parts.append("one looks like two, waiting on you")
+        parts.append(
+            f"{summary.proposed} waiting on you"
+            if summary.proposed > 1
+            else "one thing waiting on you"
+        )
     if summary.paused:
         parts.append("paused at the spending ceiling")
     return ", ".join(parts)

@@ -16,6 +16,7 @@ import type {
   Entry,
   LinkKind,
   LinkedEntry,
+  Misfiled as MisfiledModel,
   Notice as NoticeModel,
   Scope,
   Thread,
@@ -367,6 +368,65 @@ export function NoticeRow({ notice, busy, onSynthesise, onDismiss }: NoticeRowPr
       <div className="row__aside">
         <time className="row__time" dateTime={notice.created}>
           {stamp(notice.created)}
+        </time>
+      </div>
+    </article>
+  );
+}
+
+/* ---------------------------------------------------------------- MisfiledRow */
+
+interface MisfiledRowProps {
+  move: MisfiledModel;
+  busy: boolean;
+  onAccept: (id: string) => void;
+  onDismiss: (id: string) => void;
+}
+
+/**
+ * An entry the filing pass thinks is in the wrong folder.
+ *
+ * Under the entry, because that is the only place the claim is about anything —
+ * "this sits closer to Sleep" is not a statement you can judge from a list.
+ *
+ * The same bubble vocabulary as a proposed connection, and for the same reason:
+ * both are the machine noticing something about a thought you already wrote,
+ * and neither has happened yet. Where a connection offers to be dismissed, this
+ * offers a choice, so both actions stay visible rather than revealing on hover.
+ */
+export function MisfiledRow({ move, busy, onAccept, onDismiss }: MisfiledRowProps) {
+  return (
+    <article className="row row--reply row--notice">
+      <span className="row__gutter">
+        <span className="row__dot" />
+      </span>
+
+      <div className="row__main">
+        <div className="bubble bubble--connection">
+          <p className="notice-body">
+            Filed under <strong>{move.from_label}</strong>, but this sits closer to{" "}
+            <strong>{move.to_label}</strong>.
+          </p>
+        </div>
+        <div className="attribution">
+          <Avatar icon="folder" size={20} />
+          <span>filing</span>
+          <button
+            className="attribution__action"
+            disabled={busy}
+            onClick={() => onAccept(move.id)}
+          >
+            {busy ? "moving…" : `move to ${move.to_label}`}
+          </button>
+          <button className="attribution__action" onClick={() => onDismiss(move.id)}>
+            leave it
+          </button>
+        </div>
+      </div>
+
+      <div className="row__aside">
+        <time className="row__time" dateTime={move.created}>
+          {stamp(move.created)}
         </time>
       </div>
     </article>
