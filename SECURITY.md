@@ -36,7 +36,10 @@ below stop holding too.
   React escapes everything else.
 - **The API key never leaves.** `PublicSettings` exposes only whether a key is
   set and its last four characters, and a test asserts the secret is not
-  serialisable out.
+  serialisable out. It is held in the OS keychain rather than in a file, and
+  falls back to a mode-600 file only where there is no keychain — a container,
+  CI, a headless box. `/status` names which of the two is in force, so the
+  weaker mode is never silent.
 - **Prompt injection is bounded.** A hostile page you ingest can steer the
   model, but output is parsed as JSON, tags and folder names are snapped
   against the existing vocabulary and length-capped, and diagrams are

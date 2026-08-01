@@ -20,6 +20,12 @@ hidden = [
     # Pydantic-settings reaches for dotenv only when a .env exists — which it
     # will not on the build machine, and might on someone's Mac.
     "dotenv",
+    # keyring resolves its backend by walking entry points at runtime, so the
+    # macOS one is invisible to static analysis and the frozen build would fall
+    # back to storing the API key in a file — silently, and only on the machines
+    # that actually ship.
+    "keyring.backends.macOS",
+    "keyring.backends.SecretService",
 ]
 
 a = Analysis(  # noqa: F821
