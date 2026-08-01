@@ -1,0 +1,90 @@
+# The checks that used to be done by hand, and once were not.
+#
+# This exists because three faults reached a pushed commit in the Dockerfile —
+# a lockfile that does not exist, an installer that exits non-zero when it skips
+# a script, and a four-gigabyte build context — and every one of them was found
+# by a person remembering to look. The `image` job below is the one that would
+# have caught all three.
+
+name: CI
+
+on:
+  push:
+  pull_request:
+
+# A second push supersedes the first: nobody needs the result of a commit that
+# has already been replaced.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  core:
+    name: core — ruff and pytest
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: core
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: core/pyproject.toml
+
+      # Quoted: unquoted, bash reads `.[dev]` as a glob and the behaviour
+      # depends on whether anything happens to match.
+      - run: pip install -e '.[dev]'
+
+      - run: ruff check tilt tests
+
+      # No -x. A run that stops at the first failure hides how much else broke,
+      # which is the thing you most want to know from a red build.
+      - run: pytest -q
+
+  desktop:
+    name: desktop — types, tests, build
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/desktop
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - run: corepack enable
+
+      # --ignore-scripts matches the Dockerfile exactly. pnpm 10+ exits
+      # non-zero when it skips a dependency's install script, so this is not
+      # only a hardening choice — without it the install fails. If the two ever
+      # drift apart, the `image` job below is what notices.
+      - run: pnpm install --frozen-lockfile --ignore-scripts
+
+      - run: pnpm run typecheck
+
+      - run: pnpm run test
+
+      - run: pnpm run build
+
+  image:
+    name: image — docker build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # The job this whole file is for. Building the image is the only way to
+      # check the Dockerfile, the entrypoint, and the .dockerignore together,
+      # and it is precisely what a laptop without a Docker daemon cannot do.
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: false
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
