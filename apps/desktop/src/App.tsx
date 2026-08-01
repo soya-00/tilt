@@ -10,6 +10,7 @@ import { SearchBar } from "./components/SearchBar";
 import { Settings } from "./components/Settings";
 import { SourceSheet } from "./components/SourceSheet";
 import { Conflicts } from "./components/Conflicts";
+import { DiagramButton } from "./components/DiagramButton";
 import { Sidebar } from "./components/Sidebar";
 import { Stream } from "./components/Stream";
 import { Icon } from "./components/Icon";
@@ -279,6 +280,8 @@ export default function App() {
               )}
             </>
           )}
+
+          <DiagramButton scope={scope} onOpen={() => setDiagramOpen(true)} />
 
           <button
             className="strip-btn"

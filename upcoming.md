@@ -11,8 +11,10 @@ The roadmap in the README says what the app is for. This says what is owed.
 
 ## Needs a Mac
 
-Neither can be checked in CI or in a Linux container, and both are shipped and
-unverified.
+None of these can be checked in CI or in a Linux container, and all are shipped
+unverified. Each fails visibly rather than silently — a button that does
+nothing, a `/status` that still reports a key — which is the only reason they
+ship at all. The dead opener is what taught that distinction.
 
 - **The Tauri opener.** External links were dead in the packaged app — the
   webview never created the window and the CSP had no `navigate-to`, so a link
@@ -25,6 +27,14 @@ unverified.
   the app silently falls back to storing the API key in a file — and only on
   the machines that actually ship. Check `/status` reports
   `key_storage: keychain` in a built app.
+- **The keychain genuinely forgetting a key.** The file path is covered by
+  tests; whether `keyring.delete_password` reaches the login keychain from a
+  frozen sidecar is not. Settings → Danger → Forget it, then check `/status`.
+- **Quitting after an erase or an import.** Both routes stop the service and
+  expect the shell to follow. `core:app:allow-exit` is not in
+  `src-tauri/capabilities/default.json` yet; until it is, the window stays open
+  on a journal that is gone and the interface says to quit and reopen. One line,
+  and only a Mac can say whether it works.
 
 ## Needs a real key
 
@@ -95,19 +105,6 @@ itself.
   deliberately short list, and whether it is too short is a question a few
   months of real weeks will answer better than more design.
 
-## Owed to a Mac
-
-Both fail visibly rather than silently, which is the only reason they ship
-unverified — the class of bug the dead opener taught.
-
-- **Quitting after an erase or an import.** Both routes stop the service and
-  expect the shell to follow. `core:app:allow-exit` is not in the capabilities
-  file yet; until it is, the window stays open on a journal that is gone and the
-  interface says to quit and reopen.
-- **The keychain genuinely forgetting a key.** The file path is covered by
-  tests; whether `keyring.delete_password` reaches the login keychain in a
-  frozen sidecar is not.
-
 ## Surfaces the API has and the interface does not
 
 Both found by running the app rather than by reading it, and they are the same
@@ -117,10 +114,12 @@ component that ever renders the result.
 - **Saved diagrams.** `GET /diagrams` and `DELETE /diagrams/{id}` exist and
   `api.diagrams()` is in the client. Nothing reads either. A diagram is drawn,
   written to `artifacts/diagrams/`, and is unreachable the moment the sheet is
-  closed — you can only draw it again, which costs another model call.
-- **Diagram this** has no button anywhere. It is reachable only from the command
-  palette, and only when a folder or a search is open. Discoverable by accident
-  or not at all.
+  closed — you can only draw it again, which costs another model call. **Ruled
+  out rather than pending**: a gallery was proposed and turned down. Recorded
+  because the hole is real, not because it is scheduled.
+- ~~**Diagram this** has no button.~~ Fixed: it sits in the strip beside the
+  scope chip, present exactly when something is scoped. The gallery below is
+  the half that is still missing.
 
 ## Loose ends worth knowing
 
