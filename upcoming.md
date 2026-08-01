@@ -84,10 +84,6 @@ itself.
 
 ## Known limits, recorded so they are not rediscovered
 
-- **A dismissed split lives only in `index.db`.** Delete the index and a folder
-  you already said no to can be proposed again. The same is already true of a
-  folder name you typed by hand — `pinned_label` is index-only too — and the fix
-  for both is one durable theme record rather than two workarounds.
 - **The statistic cannot tell a subject that drifted from a folder that is two
   subjects.** Measured, not assumed: stretch one subject far enough along an
   axis and it scores like two. That is what the model veto and the accept click

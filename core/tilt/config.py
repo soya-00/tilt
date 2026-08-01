@@ -196,6 +196,17 @@ class Settings(BaseSettings):
         return self.data_dir / "agent.md"
 
     @property
+    def folders_path(self) -> Path:
+        """Decisions you made about your folders, beside your entries.
+
+        In the journal folder for the same reason ``agent.md`` is: a name you
+        typed and a suggestion you declined are things you authored. They used
+        to live only in ``index.db``, which the app calls disposable and means
+        it — so the one operation advertised as costless was quietly discarding
+        the only state that could not be re-derived."""
+        return self.data_dir / "folders.md"
+
+    @property
     def index_path(self) -> Path:
         return self.internal_dir / "index.db"
 

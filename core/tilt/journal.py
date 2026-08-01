@@ -10,6 +10,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from tilt.embed import Embedder
+from tilt.folders import FolderStore
 from tilt.models import (
     Entry,
     EntryCreate,
@@ -54,6 +55,10 @@ class Journal:
         # used to rebuild that path by hand and had been reading a directory
         # that stopped existing when the support folder was split out.
         self.support_dir = support_dir or index.path.parent
+        # Decisions you made about your folders, in the journal folder beside
+        # your entries. They used to live only in the index, which is the one
+        # store the app promises is safe to delete.
+        self.folders = FolderStore(data_dir / "folders.md")
         self.index = index
         # Both optional and both absent without a key. Every use is guarded, so
         # the journal is the same object with or without them — retrieval is
@@ -219,9 +224,13 @@ class Journal:
         entries follow it there, and the renamed folder is left standing empty
         beside it. Renaming twice would leave three.
         """
+        was = self.index.get_theme(theme_id)
         theme = self.index.rename_theme(theme_id, label)
         if theme is None:
             return None
+        # Written down before the frontmatter pass, which is the slow part: a
+        # crash halfway through should leave the name recorded rather than lost.
+        self.folders.rename(was.label if was else label, theme.label)
         for entry in self.index.entries_in_theme(theme_id):
             current = self.index.themes_for([entry.id]).get(entry.id, [])
             self.set_themes(entry.id, [t.label for t in current])
@@ -240,8 +249,11 @@ class Journal:
         SQLite would resurrect the folder the next time Tilt started.
         """
         members = self.index.entries_in_theme(theme_id)
+        gone = self.index.get_theme(theme_id)
         if not self.index.delete_theme(theme_id):
             return False
+        if gone is not None:
+            self.folders.forget(gone.label)
         for entry in members:
             remaining = self.index.themes_for([entry.id]).get(entry.id, [])
             self.set_themes(entry.id, [t.label for t in remaining])
@@ -471,4 +483,39 @@ class Journal:
     # --------------------------------------------------------------- lifecycle
 
     def rebuild(self) -> int:
-        return self.index.rebuild(self.entries_root)
+        """Re-derive the index from Markdown, decisions included.
+
+        The second half is what makes `index.db` genuinely disposable rather
+        than nearly so. Entries and their folders come back from frontmatter;
+        a folder name you typed and a split you declined come back from
+        `folders.md`, because there is no entry that could carry either.
+        """
+        indexed = self.index.rebuild(self.entries_root)
+        self.restore_decisions()
+        return indexed
+
+    def restore_decisions(self) -> None:
+        """Replay `folders.md` into the index.
+
+        Matched on the label, which is the only durable name a folder has:
+        theme ids are minted afresh by the rebuild whenever it meets a label it
+        does not recognise, so an id cannot identify anything across one.
+
+        A decision about a folder that no longer exists is left in the file
+        rather than pruned. Folders come back — an old subject picked up again
+        is exactly the case — and silently discarding the name you gave it the
+        first time would be the same bug in a slower form.
+        """
+        decisions = self.folders.load()
+        if not decisions.pinned and not decisions.declined:
+            return
+
+        by_label = {t.label.casefold(): t for t in self.index.themes()}
+        for label in decisions.pinned:
+            theme = by_label.get(label.casefold())
+            if theme is not None and not theme.pinned_label:
+                self.index.pin_theme(theme.id)
+        for item in decisions.declined:
+            theme = by_label.get(item.folder.casefold())
+            if theme is not None:
+                self.index.record_declined_split(theme.id, at=item.at)

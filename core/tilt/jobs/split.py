@@ -456,5 +456,9 @@ def apply_split(journal: Journal, split: ThemeSplit) -> int:
         journal.rename_theme(theme.id, split.keep_label)
 
     journal.index.clear_split(theme.id)
+    # A split that happened settles the question, so any earlier refusal of it
+    # is spent. Recorded under the name the folder had, before the rename above
+    # may have changed it.
+    journal.folders.accepted(theme.label)
     log.info("split %s into %s and %s", theme.label, split.keep_label, split.move_label)
     return len(moving)

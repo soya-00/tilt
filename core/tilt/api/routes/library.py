@@ -57,8 +57,15 @@ def dismiss_split(split_id: str, journal: Journal = Depends(get_journal)) -> Non
     night, and a suggestion that ignores your answer is worse than one you never
     saw. It comes back only once the folder has grown by half again.
     """
-    if not journal.index.dismiss_split(split_id):
+    split = journal.index.get_split(split_id)
+    if split is None or not journal.index.dismiss_split(split_id):
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Proposal not found.")
+    # Written to `folders.md` as well as the index. The index is the store the
+    # app promises is safe to delete, and a refusal that only lived there came
+    # back as a fresh proposal the first time anybody took it at its word.
+    theme = journal.index.get_theme(split.theme_id)
+    if theme is not None:
+        journal.folders.decline(theme.label, members=theme.count)
 
 
 @router.patch("/themes/{theme_id}", response_model=Theme)

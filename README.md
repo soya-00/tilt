@@ -570,7 +570,9 @@ With both processes running, open http://localhost:5173 and walk this path:
 9. **Check the files.** `ls ~/Tilt/entries/**/*.md` — your thoughts are plain
    Markdown with YAML frontmatter, and folders and connections are written there
    too. Delete the index — `~/Library/Application Support/Tilt/index.db` —
-   restart, and everything comes back; the database is only a cache.
+   restart, and everything comes back; the database is only a cache. That now
+   includes the decisions you made about your folders, which are kept in
+   `~/Tilt/folders.md` because no entry could carry them.
 
 Offline mode is lexical, not intelligent: it matches on repeated keywords, so
 tags are decent and connections are conservative. Add a Gemini key for real
@@ -618,6 +620,15 @@ The rename case was found the way these usually are — by using the app rather
 than by reading it. A folder renamed while taking screenshots was back under
 its old name after the next restart, with the renamed one standing empty
 beside it.
+
+The pin itself lives in `folders.md`, beside your entries. A folder has no file
+of its own — it is only implied by the labels its members carry — so there was
+nowhere for a fact *about a folder* to be written, and two decisions ended up
+in `index.db` and nowhere else: a name you typed, and a split you turned down.
+That made the one operation this README calls costless the only one that could
+lose something. Both are matched on the label rather than on a theme id, because
+a rebuild from an empty index mints new ids and the label is the only durable
+name a folder has.
 
 ## Roadmap
 

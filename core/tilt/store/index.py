@@ -482,6 +482,33 @@ class Index:
         ).fetchone()
         return _row_to_theme(row) if row else None
 
+    def pin_theme(self, theme_id: str) -> None:
+        """Mark a name as the user's without changing it.
+
+        Renaming already pins; this is the other half, for replaying a pin that
+        was recorded in `folders.md` onto a freshly rebuilt index. The name is
+        already right — what was lost was the fact that it is yours.
+        """
+        with self.tx() as conn:
+            conn.execute("UPDATE themes SET pinned_label=1 WHERE id=?", (theme_id,))
+
+    def record_declined_split(self, theme_id: str, *, at: int) -> None:
+        """Restore a refusal that has no proposal behind it any more.
+
+        The proposal was a row in a database somebody deleted; the refusal is a
+        decision they made. Written back as a dismissed row so every gate that
+        reads `theme_splits` keeps working unchanged.
+        """
+        with self.tx() as conn:
+            conn.execute(
+                "INSERT INTO theme_splits (id, theme_id, keep_label, move_label,"
+                " separation, created, state, size_at_decision)"
+                " VALUES (?,?,'','',0,?, 'dismissed', ?)"
+                " ON CONFLICT(theme_id) DO UPDATE SET"
+                "  state='dismissed', size_at_decision=excluded.size_at_decision",
+                (files.new_id(), theme_id, utcnow().isoformat(), at),
+            )
+
     def rename_theme(self, theme_id: str, label: str) -> Theme | None:
         """A user rename pins the label against future agent edits."""
         with self.tx() as conn:
