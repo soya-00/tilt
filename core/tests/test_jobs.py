@@ -435,7 +435,7 @@ async def test_the_schedule_can_be_started_and_stopped(
     try:
         assert schedule._scheduler is not None
         jobs = {job.id for job in schedule._scheduler.get_jobs()}
-        assert jobs == {"sweep", "themes", "vectors", "scout"}
+        assert jobs == {"sweep", "themes", "vectors", "scout", "week"}
     finally:
         schedule.shutdown()
 
@@ -451,7 +451,7 @@ async def test_starting_twice_does_not_double_the_jobs(
     schedule.start()
     schedule.start()
     try:
-        assert len(schedule._scheduler.get_jobs()) == 4
+        assert len(schedule._scheduler.get_jobs()) == 5
     finally:
         schedule.shutdown()
 

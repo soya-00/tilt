@@ -909,6 +909,29 @@ class Index:
                 > 0
             )
 
+    def links_of_kind(self, kind: str, *, since: str) -> list[Link]:
+        """Connections of one kind made recently, newest first.
+
+        For the weekly pass, which cares about one kind in particular: a
+        contradiction is the only link the connector will only ever draw between
+        two things the writer wrote themselves.
+        """
+        rows = self._conn.execute(
+            "SELECT * FROM links WHERE kind = ? AND dismissed = 0 AND created >= ?"
+            " ORDER BY created DESC",
+            (kind, since),
+        )
+        return [_row_to_link(r) for r in rows]
+
+    def written_since(self, iso_ts: str) -> list[Entry]:
+        """What the writer wrote in a window — not what the machine replied."""
+        rows = self._conn.execute(
+            "SELECT * FROM entries WHERE kind != 'reply' AND created >= ?"
+            " ORDER BY created DESC",
+            (iso_ts,),
+        )
+        return [_row_to_entry(r) for r in rows]
+
     def all_links(self) -> list[Link]:
         rows = self._conn.execute("SELECT * FROM links WHERE dismissed = 0")
         return [_row_to_link(r) for r in rows]

@@ -44,9 +44,16 @@ class Journal:
         index: Index,
         vectors: VectorStore | None = None,
         embedder: Embedder | None = None,
+        support_dir: Path | None = None,
     ) -> None:
         self.data_dir = data_dir
         self.entries_root = data_dir / "entries"
+        # Where the machine's own files are, as against the ones you wrote.
+        # Carried here because the unattended jobs get a journal and nothing
+        # else, and one of them needs to read the settings the app wrote. It
+        # used to rebuild that path by hand and had been reading a directory
+        # that stopped existing when the support folder was split out.
+        self.support_dir = support_dir or index.path.parent
         self.index = index
         # Both optional and both absent without a key. Every use is guarded, so
         # the journal is the same object with or without them — retrieval is

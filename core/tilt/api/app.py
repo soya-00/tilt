@@ -66,7 +66,13 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         # Its own file, so the disposable cache and the vectors that cost money
         # can be thrown away independently.
         vectors = VectorStore(settings.vectors_path)
-        journal = Journal(settings.data_dir, index, vectors, build_embedder(settings))
+        journal = Journal(
+            settings.data_dir,
+            index,
+            vectors,
+            build_embedder(settings),
+            support_dir=settings.internal_dir,
+        )
 
         # Files are authoritative; reconcile on boot so entries added by hand
         # (or by another machine syncing the folder) are picked up.
