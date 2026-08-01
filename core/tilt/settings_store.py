@@ -1,19 +1,29 @@
 """Runtime settings the user can change from inside the app.
 
 Distinct from :mod:`tilt.config`, which is boot configuration from the
-environment. These live in ``settings.json`` in the support directory — outside
-the journal — and can be edited while the service runs, so changing the API key
-rebuilds the provider without a restart.
+environment. These can be edited while the service runs, so changing the API
+key rebuilds the provider without a restart.
 
-Outside the journal deliberately. The journal folder is one you are invited to
-grep, sync and put in git, and a live credential has no business in it.
+``settings.json`` lives **in the journal folder**, and it did not always. It was
+moved out when the API key was sitting in it in plain text, which was the right
+call about the key and the wrong one about everything else: the feeds you typed
+and the model you chose are things you authored, and a folder advertised as your
+whole journal that silently omitted them was not one. Copying it to another
+machine lost both.
 
-The key is not in this file at all where the OS offers somewhere better: it
-goes to the keychain via :mod:`tilt.secrets`, and what stays here is the model,
-the ceiling and the feed list — none of which are secret. Where there is no
-keychain the key falls back to this file at mode 600, and ``/status`` reports
-which of the two is in force, because a silent downgrade from "encrypted by the
-OS" to "plain text on disk" is worth saying out loud.
+So the split is by secrecy rather than by convenience:
+
+* **The journal folder** — model, ceiling, feeds. Yours, portable, and safe to
+  grep, sync or commit.
+* **The keychain** — the key, wherever the OS offers one.
+* **A separate ``key.json`` in the support directory** — the key on a machine
+  with no keychain, at mode 600. A separate file rather than dragging the whole
+  settings file back out, so the rule keeps no exceptions: *nothing secret is
+  ever written into the journal folder.*
+
+``/status`` reports which of the last two is in force, because a silent
+downgrade from "encrypted by the OS" to "plain text on disk" is worth saying out
+loud.
 """
 
 from __future__ import annotations
@@ -25,6 +35,17 @@ from pathlib import Path
 from pydantic import BaseModel, Field
 
 from tilt.secrets import Vault
+
+
+def _read(path: Path) -> dict:
+    """Whatever JSON is there, or nothing. A settings file somebody has hand
+    edited into invalid JSON should cost them their settings, not their app."""
+    try:
+        loaded = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError, ValueError):
+        return {}
+    return loaded if isinstance(loaded, dict) else {}
+
 
 MAX_FEEDS = 20
 """More than anyone reads, and few enough that one pass cannot take all
@@ -92,9 +113,18 @@ class SettingsStore:
     """
 
     def __init__(
-        self, path: Path, *, ephemeral: bool = False, vault: Vault | None = None
+        self,
+        path: Path,
+        *,
+        key_path: Path | None = None,
+        ephemeral: bool = False,
+        vault: Vault | None = None,
     ) -> None:
         self.path = path
+        # Where the key goes when there is no keychain. Defaults beside the
+        # settings file only so a caller that does not care still works; every
+        # real caller passes a path outside the journal folder.
+        self.key_path = key_path or path.with_name("key.json")
         self.ephemeral = ephemeral
         # Not constructed when ephemeral: there is nothing to store, and
         # probing a keychain would prompt on macOS for no reason.
@@ -113,17 +143,16 @@ class SettingsStore:
     def load(self) -> RuntimeSettings:
         if self.ephemeral:
             return (self._held or RuntimeSettings()).model_copy(deep=True)
-        try:
-            settings = RuntimeSettings(
-                **json.loads(self.path.read_text(encoding="utf-8"))
-            )
-        except (OSError, json.JSONDecodeError, ValueError):
-            settings = RuntimeSettings()
+        settings = RuntimeSettings(**_read(self.path))
+        # Never trusted from this file even if something put it there — an old
+        # build, a hand edit, a restored backup. The key has exactly two homes
+        # and this is not one of them.
+        settings.gemini_api_key = ""
 
-        # The keychain wins over the file. A key in both means an upgrade
-        # happened and the file's copy is the stale one.
         if self.vault and self.vault.available:
             settings.gemini_api_key = self.vault.get() or ""
+        else:
+            settings.gemini_api_key = str(_read(self.key_path).get("gemini_api_key") or "")
         return settings
 
     def save(self, settings: RuntimeSettings) -> RuntimeSettings:
@@ -131,7 +160,6 @@ class SettingsStore:
             self._held = settings
             return settings
 
-        stored = settings
         key = settings.gemini_api_key.strip()
         if self.vault and not key:
             # An empty key here is an explicit "forget it", because every other
@@ -140,19 +168,33 @@ class SettingsStore:
             # Without this the file is cleared and the keychain is not, so the
             # key comes back on the next read and forgetting it does nothing.
             self.vault.clear()
-        if self.vault and key and self.vault.set(key):
-            # Written to the file with the key removed, so an existing
-            # plaintext copy is overwritten rather than left behind.
-            stored = settings.model_copy(update={"gemini_api_key": ""})
+        if not (self.vault and key and self.vault.set(key)):
+            self._write_key(key)
+        elif self.key_path.exists():
+            # Promoted to the keychain, so the plaintext copy is stale and must
+            # go rather than sit there readable.
+            with contextlib.suppress(OSError):
+                self.key_path.unlink()
 
+        # The key is stripped unconditionally: this file is in the journal
+        # folder, which someone is invited to sync and commit.
         self.path.parent.mkdir(parents=True, exist_ok=True)
-        self.path.write_text(stored.model_dump_json(indent=2), encoding="utf-8")
-        # Owner-only. Still worth doing when the key is in the keychain: the
-        # ceiling and the feed list are nobody else's business either, and this
-        # is the fallback path's only protection.
-        with contextlib.suppress(OSError):
-            self.path.chmod(0o600)
+        self.path.write_text(
+            settings.model_copy(update={"gemini_api_key": ""}).model_dump_json(indent=2),
+            encoding="utf-8",
+        )
         return settings
+
+    def _write_key(self, key: str) -> None:
+        """The fallback home, at mode 600, outside the journal."""
+        if not key:
+            with contextlib.suppress(OSError):
+                self.key_path.unlink()
+            return
+        self.key_path.parent.mkdir(parents=True, exist_ok=True)
+        self.key_path.write_text(json.dumps({"gemini_api_key": key}), encoding="utf-8")
+        with contextlib.suppress(OSError):
+            self.key_path.chmod(0o600)
 
     def update(self, payload: RuntimeSettingsUpdate) -> RuntimeSettings:
         current = self.load()
@@ -177,3 +219,35 @@ class SettingsStore:
             monthly_cost_ceiling_usd=s.monthly_cost_ceiling_usd,
             feeds=s.feeds,
         )
+
+
+def migrate(legacy: Path, path: Path, key_path: Path, *, vault: Vault | None = None) -> bool:
+    """Move a pre-existing settings file into the journal folder.
+
+    Somebody who has been using Tilt has feeds and a model chosen, and losing
+    them on upgrade would be the same class of bug as the one this move fixes —
+    only faster, and to the people who actually use it.
+
+    The key is not carried across into the new file even if it is sitting in
+    the old one. It goes to the keychain if there is one and to its own file if
+    not, and the legacy file is removed either way so no plaintext copy is left
+    behind in a directory nobody looks at again.
+    """
+    if path.exists() or not legacy.exists():
+        return False
+
+    data = _read(legacy)
+    key = str(data.pop("gemini_api_key", "") or "").strip()
+
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(data, indent=2), encoding="utf-8")
+
+    if key and not (vault and vault.available and vault.set(key)):
+        key_path.parent.mkdir(parents=True, exist_ok=True)
+        key_path.write_text(json.dumps({"gemini_api_key": key}), encoding="utf-8")
+        with contextlib.suppress(OSError):
+            key_path.chmod(0o600)
+
+    with contextlib.suppress(OSError):
+        legacy.unlink()
+    return True
