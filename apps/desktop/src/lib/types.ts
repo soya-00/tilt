@@ -117,6 +117,32 @@ export interface Dormant {
   why: string;
 }
 
+/** What you have told the keeper about your folders, kept in `folders.md`
+ *  beside your entries so it survives the index being thrown away. */
+export interface Decisions {
+  /** Folders you renamed. The agent will not rename them back. */
+  pinned: string[];
+  declined: Declined[];
+}
+
+export interface Declined {
+  folder: string;
+  /** How many entries were in it when you said no. It is not raised again
+   *  until the folder has grown by half as much. */
+  at: number;
+}
+
+export interface Exported {
+  path: string;
+  entries: number;
+}
+
+export interface Imported {
+  path: string;
+  entries: number;
+  written_by: string;
+}
+
 export interface Conflict {
   entry_id: string;
   /** The file that was indexed — the one with the newer `updated`. */

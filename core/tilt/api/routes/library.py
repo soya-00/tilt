@@ -6,6 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
 
 from tilt.api.deps import get_journal
+from tilt.folders import Decisions
 from tilt.jobs.split import apply_split
 from tilt.journal import Journal
 from tilt.models import TagCount, Theme, ThemeSplit
@@ -93,6 +94,41 @@ def delete_theme(theme_id: str, journal: Journal = Depends(get_journal)) -> None
     """
     if not journal.delete_theme(theme_id):
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Theme not found.")
+
+
+@router.get("/folders", response_model=Decisions)
+def folder_decisions(journal: Journal = Depends(get_journal)) -> Decisions:
+    """What you have told the keeper about your folders.
+
+    A name you pinned by renaming, and a split you turned down. Both are kept
+    in `folders.md` beside your entries, and both were previously invisible —
+    you could accumulate them for months with no way to see what you had said
+    or to take any of it back.
+    """
+    return journal.folders.load()
+
+
+@router.delete("/folders/pinned/{label}", status_code=status.HTTP_204_NO_CONTENT)
+def unpin(label: str, journal: Journal = Depends(get_journal)) -> None:
+    """Let the agent rename this folder again. The name it has now stays until
+    the agent has a better one; nothing is renamed by this."""
+    decisions = journal.folders.load()
+    decisions.pinned = [p for p in decisions.pinned if p.casefold() != label.casefold()]
+    journal.folders.save(decisions)
+
+
+@router.delete("/folders/declined/{label}", status_code=status.HTTP_204_NO_CONTENT)
+def ask_again(label: str, journal: Journal = Depends(get_journal)) -> None:
+    """Drop a refusal, so the keeper may propose splitting this folder again
+    without waiting for it to grow by half."""
+    journal.folders.accepted(label)
+    # The index carries its own copy of the refusal, and it is the one the
+    # nightly pass actually reads.
+    theme = next(
+        (t for t in journal.index.themes() if t.label.casefold() == label.casefold()), None
+    )
+    if theme is not None:
+        journal.index.clear_split(theme.id)
 
 
 @router.get("/tags", response_model=list[TagCount])

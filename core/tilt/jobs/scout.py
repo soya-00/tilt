@@ -116,13 +116,13 @@ async def scout(journal: Journal, provider: MeteredProvider) -> JobSummary:
     """
     from tilt.settings_store import SettingsStore
 
-    # From the same directory the app writes it to. This used to rebuild a path
-    # inside the journal folder, which is where settings lived until the support
-    # directory was split out — and the failure was silent in the worst way,
-    # because loading a file that is not there yields defaults rather than an
-    # error. The scheduled scout reported "no feeds configured" every morning to
-    # somebody who had configured feeds.
-    runtime = SettingsStore(journal.support_dir / "settings.json").load()
+    # From the same file the app writes. This has been wrong twice — first a
+    # path inside the journal that the support-dir split abandoned, and now the
+    # support path that the move back into the journal abandoned — and both
+    # times it failed silently, because loading a file that is not there yields
+    # defaults rather than an error. Hence the test that asserts the scheduled
+    # scout can actually see the feeds you configured.
+    runtime = SettingsStore(journal.data_dir / "settings.json").load()
     return await look(
         journal,
         provider,

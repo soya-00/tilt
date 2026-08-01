@@ -95,6 +95,19 @@ itself.
   deliberately short list, and whether it is too short is a question a few
   months of real weeks will answer better than more design.
 
+## Owed to a Mac
+
+Both fail visibly rather than silently, which is the only reason they ship
+unverified — the class of bug the dead opener taught.
+
+- **Quitting after an erase or an import.** Both routes stop the service and
+  expect the shell to follow. `core:app:allow-exit` is not in the capabilities
+  file yet; until it is, the window stays open on a journal that is gone and the
+  interface says to quit and reopen.
+- **The keychain genuinely forgetting a key.** The file path is covered by
+  tests; whether `keyring.delete_password` reaches the login keychain in a
+  frozen sidecar is not.
+
 ## Surfaces the API has and the interface does not
 
 Both found by running the app rather than by reading it, and they are the same

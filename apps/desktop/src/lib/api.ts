@@ -9,10 +9,13 @@ import type {
   AgentRun,
   Artifact,
   BriefItem,
+  Decisions,
   DiagramScope,
   Entry,
+  Exported,
   Graph,
   GraphQuery,
+  Imported,
   JobSummary,
   Persona,
   PublicSettings,
@@ -126,6 +129,28 @@ export const api = {
   /** Turn one down. Kept as a tombstone, so the same folder is not offered
    *  again until it has really grown. */
   dismissSplit: (id: string) => request<void>(`/themes/splits/${id}`, { method: "DELETE" }),
+
+  /** Pinned names and refused splits — what you told the keeper. */
+  folderDecisions: () => request<Decisions>("/folders"),
+
+  unpinFolder: (label: string) =>
+    request<void>(`/folders/pinned/${encodeURIComponent(label)}`, { method: "DELETE" }),
+
+  askAgainAbout: (label: string) =>
+    request<void>(`/folders/declined/${encodeURIComponent(label)}`, { method: "DELETE" }),
+
+  /** One file holding the journal and the vectors. Never the key. Written into
+   *  the support folder, because a journal usually lives somewhere synced and
+   *  an archive beside it would upload a second copy of everything. */
+  exportArchive: () => request<Exported>("/export", { method: "POST" }),
+
+  /** Replace this journal with the one in an archive, then stop the service.
+   *  Replaces; it does not merge. */
+  importArchive: (path: string, confirm: string) =>
+    request<Imported>("/import", {
+      method: "POST",
+      body: JSON.stringify({ path, confirm }),
+    }),
 
   tags: () => request<TagCount[]>("/tags"),
 
