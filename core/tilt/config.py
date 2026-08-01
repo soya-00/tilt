@@ -196,6 +196,30 @@ class Settings(BaseSettings):
         return self.data_dir / "agent.md"
 
     @property
+    def settings_path(self) -> Path:
+        """Model, ceiling and feeds — beside your entries, not in the support
+        directory where they started.
+
+        They were moved out when the API key was in this file in plain text.
+        That was right about the key and wrong about everything else: the feeds
+        you typed are things you authored, and a journal folder that silently
+        omitted them was not the whole journal it claimed to be."""
+        return self.data_dir / "settings.json"
+
+    @property
+    def key_path(self) -> Path:
+        """The API key, on a machine with no keychain. Its own file, outside
+        the journal, so that *nothing secret is ever written into the journal
+        folder* stays a rule with no exceptions."""
+        return self.internal_dir / "key.json"
+
+    @property
+    def legacy_settings_path(self) -> Path:
+        """Where settings lived before. Read once at boot and moved; see
+        :func:`tilt.settings_store.migrate`."""
+        return self.internal_dir / "settings.json"
+
+    @property
     def folders_path(self) -> Path:
         """Decisions you made about your folders, beside your entries.
 

@@ -21,6 +21,7 @@ from tilt.api.routes import (
     graph,
     ingest,
     library,
+    portability,
     system,
 )
 from tilt.api.routes import settings as settings_routes
@@ -29,7 +30,7 @@ from tilt.embed import build_embedder
 from tilt.jobs import Schedule
 from tilt.journal import Journal
 from tilt.persona import PersonaStore
-from tilt.settings_store import SettingsStore
+from tilt.settings_store import SettingsStore, migrate
 from tilt.store.artifacts import ArtifactStore
 from tilt.store.brief import BriefStore
 from tilt.store.index import Index
@@ -52,9 +53,21 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         # and the embedder are chosen by whether one exists — so the settings
         # file has to be consulted before either is built.
         store = SettingsStore(
-            settings.internal_dir / "settings.json",
+            settings.settings_path,
+            key_path=settings.key_path,
             ephemeral=settings.ephemeral_settings,
         )
+        # Anyone already using Tilt has feeds and a model chosen, and they live
+        # where settings used to. Losing them on upgrade would be the same bug
+        # this move fixes, only faster and aimed at the people who actually use
+        # it. Runs before the first read, and once.
+        if not settings.ephemeral_settings:
+            migrate(
+                settings.legacy_settings_path,
+                settings.settings_path,
+                settings.key_path,
+                vault=store.vault,
+            )
         runtime = store.load()
         if runtime.has_key:
             settings.gemini_api_key = runtime.gemini_api_key
@@ -146,6 +159,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(brief.router)
     app.include_router(settings_routes.router)
     app.include_router(agent.router)
+    app.include_router(portability.router)
 
     # Last, so it never shadows an API route: mounted at "/" it would otherwise
     # answer for everything.

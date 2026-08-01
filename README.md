@@ -573,6 +573,11 @@ With both processes running, open http://localhost:5173 and walk this path:
    restart, and everything comes back; the database is only a cache. That now
    includes the decisions you made about your folders, which are kept in
    `~/Tilt/folders.md` because no entry could carry them.
+10. **Take it to another machine.** Copy `~/Tilt` and point Tilt at it — your
+   entries, folders, connections, agent, feeds and model are all in there.
+   **Settings → Journal → Export** writes the same thing as one file, with the
+   vectors included because those were bought. The API key is in neither, and
+   never will be.
 
 Offline mode is lexical, not intelligent: it matches on repeated keywords, so
 tags are decent and connections are conservative. Add a Gemini key for real
@@ -620,6 +625,16 @@ The rename case was found the way these usually are — by using the app rather
 than by reading it. A folder renamed while taking screenshots was back under
 its old name after the next restart, with the renamed one standing empty
 beside it.
+
+Everything you author is in one folder, and that took two corrections to get
+right. `settings.json` was moved *out* of it when the API key was sitting in it
+in plain text — the right call about the key and the wrong one about everything
+else, because the feeds you typed and the model you chose are yours too, and a
+journal folder that silently omitted them was not the whole journal it claimed
+to be. The key is in the keychain now, so the file has come back, and the key
+has its own file in the support directory on a machine with no keychain. The
+rule keeps no exceptions: nothing secret is ever written into the journal
+folder.
 
 The pin itself lives in `folders.md`, beside your entries. A folder has no file
 of its own — it is only implied by the labels its members carry — so there was
