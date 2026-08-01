@@ -389,6 +389,9 @@ that dies with the container. It refuses to start on a non-loopback address
 without a token, so the mistake with no recovery is not one you can make by
 forgetting.
 
+**[upcoming.md](upcoming.md)** is the ledger of what is known-unfinished —
+what needs a Mac, what needs a real key, and what was decided against.
+
 **[SECURITY.md](SECURITY.md)** has the audit behind that: what was checked and
 holds, what did not and what was done about it, what the token protects and
 what it demonstrably does not once the page is served from the same process,
@@ -630,12 +633,18 @@ Reading a link — a page, or a YouTube video the model watches directly — is
 wired but needs a key: there is no page to fetch offline, and storing an empty
 source would imply something had been read.
 
-The API key lives in `~/Library/Application Support/Tilt/settings.json` at mode
-600 rather than in the macOS Keychain — moving it there means the key stops
-travelling through the settings API, which is a change to how the app is
-configured and not just to where a string is kept. It is at least no longer in
-the journal folder, so it cannot be committed to git or handed to a cloud
-provider by accident.
+The API key is in your login keychain, not in a file. Where there is no
+keychain — a container, CI, a headless Linux box — it falls back to
+`settings.json` at mode 600 and the app says which of the two is in force,
+because going from "encrypted by the OS" to "plain text on disk" without
+mentioning it is the objectionable part rather than the fallback itself.
+
+It still arrives over loopback through the settings API, and this README used
+to claim that moving to the Keychain would stop that. It does not, and the
+claim was wrong to make: closing that would mean a second owner of the key in
+the Tauri shell and a way to tell the sidecar it changed — a great deal of
+machinery for a request you made yourself, from the app's own webview, behind a
+bearer token. The plaintext file was the real exposure and it is gone.
 
 There are no system notifications, and that is now a decision rather than a gap.
 The plan had the shell raise one when a scheduled job found something; against a

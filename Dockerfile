@@ -6,7 +6,7 @@
 # nothing survives the container. See SECURITY.md, particularly the part about
 # what the token does and does not protect once the page is served from here.
 
-FROM node:20-slim AS ui
+FROM node:22-slim AS ui
 WORKDIR /ui
 # pnpm, because `pnpm-lock.yaml` is what this repo commits — `npm ci` would
 # want a package-lock.json that does not exist, and `npm install` would ignore

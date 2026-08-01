@@ -112,13 +112,16 @@ export function Settings({
               aria-label="Gemini API key"
               onChange={(e) => setKey(e.target.value)}
             />
-            {/* Two different promises, and saying the wrong one would be
-                worse than saying nothing — a file mode means nothing to
-                someone whose key is never filed. */}
+            {/* Three different promises, and saying the wrong one is worse
+                than saying nothing — a file mode means nothing to someone
+                whose key is never filed, and claiming the keychain on a
+                machine that has none would be a straight untruth. */}
             <p className="sheet__note sheet__note--quiet">
-              {status?.ephemeral
+              {status?.key_storage === "memory"
                 ? "Held in memory for this session only and never written to disk. Closing this instance forgets it."
-                : "Stored outside your journal, in Application Support and readable only by you — never in the folder you sync or put in git."}{" "}
+                : status?.key_storage === "keychain"
+                  ? "Kept in your login keychain, not in a file — encrypted by macOS and never in your journal folder."
+                  : "This machine has no keychain, so the key is in a file outside your journal, readable only by you."}{" "}
               It never leaves this machine except in calls to Google.
             </p>
 

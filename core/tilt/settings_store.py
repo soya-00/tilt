@@ -6,9 +6,14 @@ the journal — and can be edited while the service runs, so changing the API ke
 rebuilds the provider without a restart.
 
 Outside the journal deliberately. The journal folder is one you are invited to
-grep, sync and put in git, and a live credential has no business in it. The key
-is still plain text on disk, at mode 600, which is acceptable for a local app
-you run yourself; the Tauri build should move it to the macOS Keychain.
+grep, sync and put in git, and a live credential has no business in it.
+
+The key is not in this file at all where the OS offers somewhere better: it
+goes to the keychain via :mod:`tilt.secrets`, and what stays here is the model,
+the ceiling and the feed list — none of which are secret. Where there is no
+keychain the key falls back to this file at mode 600, and ``/status`` reports
+which of the two is in force, because a silent downgrade from "encrypted by the
+OS" to "plain text on disk" is worth saying out loud.
 """
 
 from __future__ import annotations
@@ -18,6 +23,8 @@ import json
 from pathlib import Path
 
 from pydantic import BaseModel, Field
+
+from tilt.secrets import Vault
 
 MAX_FEEDS = 20
 """More than anyone reads, and few enough that one pass cannot take all
@@ -84,27 +91,58 @@ class SettingsStore:
     asking a stranger to trust a file mode.
     """
 
-    def __init__(self, path: Path, *, ephemeral: bool = False) -> None:
+    def __init__(
+        self, path: Path, *, ephemeral: bool = False, vault: Vault | None = None
+    ) -> None:
         self.path = path
         self.ephemeral = ephemeral
+        # Not constructed when ephemeral: there is nothing to store, and
+        # probing a keychain would prompt on macOS for no reason.
+        self.vault = None if ephemeral else (vault or Vault())
         self._held: RuntimeSettings | None = None
+
+    @property
+    def key_is_in_the_keychain(self) -> bool:
+        """Whether the key is protected by the OS rather than by a file mode.
+
+        Reported through ``/status`` so a fallback to plain text is visible.
+        Silently downgrading how a credential is stored is exactly the kind of
+        thing someone should be told about."""
+        return bool(self.vault and self.vault.available)
 
     def load(self) -> RuntimeSettings:
         if self.ephemeral:
             return (self._held or RuntimeSettings()).model_copy(deep=True)
         try:
-            return RuntimeSettings(**json.loads(self.path.read_text(encoding="utf-8")))
+            settings = RuntimeSettings(
+                **json.loads(self.path.read_text(encoding="utf-8"))
+            )
         except (OSError, json.JSONDecodeError, ValueError):
-            return RuntimeSettings()
+            settings = RuntimeSettings()
+
+        # The keychain wins over the file. A key in both means an upgrade
+        # happened and the file's copy is the stale one.
+        if self.vault and self.vault.available:
+            settings.gemini_api_key = self.vault.get() or ""
+        return settings
 
     def save(self, settings: RuntimeSettings) -> RuntimeSettings:
         if self.ephemeral:
             self._held = settings
             return settings
+
+        stored = settings
+        key = settings.gemini_api_key.strip()
+        if self.vault and key and self.vault.set(key):
+            # Written to the file with the key removed, so an existing
+            # plaintext copy is overwritten rather than left behind.
+            stored = settings.model_copy(update={"gemini_api_key": ""})
+
         self.path.parent.mkdir(parents=True, exist_ok=True)
-        self.path.write_text(settings.model_dump_json(indent=2), encoding="utf-8")
-        # Owner-only: the file holds an API key. Best effort — some
-        # filesystems (and Windows) do not support the mode.
+        self.path.write_text(stored.model_dump_json(indent=2), encoding="utf-8")
+        # Owner-only. Still worth doing when the key is in the keychain: the
+        # ceiling and the feed list are nobody else's business either, and this
+        # is the fallback path's only protection.
         with contextlib.suppress(OSError):
             self.path.chmod(0o600)
         return settings

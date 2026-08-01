@@ -38,6 +38,7 @@ const base = {
     spend_this_month_usd: 0,
     cost_ceiling_usd: 20,
     data_dir: "/tmp/journal",
+    key_storage: "file" as const,
     ephemeral: false,
     dormant: [],
   },

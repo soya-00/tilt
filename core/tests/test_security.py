@@ -245,6 +245,102 @@ def test_a_persona_file_edited_into_nonsense_still_yields_an_agent(tmp_path: Pat
 # ---------------------------------------------------------- somebody's key
 
 
+class FakeVault:
+    """A keychain that works, so the happy path is testable off macOS."""
+
+    def __init__(self, *, works: bool = True) -> None:
+        self.available = works
+        self.held: str | None = None
+
+    def get(self) -> str | None:
+        return self.held
+
+    def set(self, value: str) -> bool:
+        if not self.available:
+            return False
+        self.held = value
+        return True
+
+    def clear(self) -> None:
+        self.held = None
+
+
+def test_the_key_goes_to_the_keychain_not_the_file(tmp_path: Path) -> None:
+    """The whole point. A plaintext credential any process running as you can
+    read was the real exposure, and this is what closes it."""
+    path = tmp_path / "settings.json"
+    vault = FakeVault()
+    store = SettingsStore(path, vault=vault)
+
+    store.update(RuntimeSettingsUpdate(gemini_api_key="AIzaSECRETVALUE"))
+
+    assert vault.held == "AIzaSECRETVALUE"
+    assert "AIzaSECRETVALUE" not in path.read_text(), "never in the file"
+    assert store.load().gemini_api_key == "AIzaSECRETVALUE", "still usable"
+    assert store.key_is_in_the_keychain is True
+
+
+def test_the_non_secrets_stay_in_the_file(tmp_path: Path) -> None:
+    """Only the key moves. The model, the ceiling and the feeds are not secret
+    and are far easier to inspect and edit as a file."""
+    path = tmp_path / "settings.json"
+    store = SettingsStore(path, vault=FakeVault())
+
+    store.update(
+        RuntimeSettingsUpdate(
+            gemini_api_key="AIzaSECRET", feeds=["https://ok.example/feed"]
+        )
+    )
+
+    written = path.read_text()
+    assert "ok.example" in written
+    assert "AIzaSECRET" not in written
+
+
+def test_upgrading_overwrites_the_plaintext_copy(tmp_path: Path) -> None:
+    """Someone with a key already in settings.json must not be left with it
+    sitting there after the key has moved to the keychain."""
+    path = tmp_path / "settings.json"
+    path.write_text('{"gemini_api_key": "AIzaOLDPLAINTEXT"}')
+    vault = FakeVault()
+
+    store = SettingsStore(path, vault=vault)
+    store.update(RuntimeSettingsUpdate(gemini_api_key="AIzaOLDPLAINTEXT"))
+
+    assert "AIzaOLDPLAINTEXT" not in path.read_text()
+    assert vault.held == "AIzaOLDPLAINTEXT"
+
+
+def test_no_keychain_falls_back_and_says_so(tmp_path: Path) -> None:
+    """A container, CI, a headless box. The fallback is fine; being quiet about
+    it is not — going from "encrypted by the OS" to "plain text on disk"
+    without telling anyone is the objectionable part."""
+    path = tmp_path / "settings.json"
+    store = SettingsStore(path, vault=FakeVault(works=False))
+
+    store.update(RuntimeSettingsUpdate(gemini_api_key="AIzaFALLBACK"))
+
+    assert store.load().gemini_api_key == "AIzaFALLBACK", "the app still works"
+    assert "AIzaFALLBACK" in path.read_text(), "written to the file instead"
+    assert store.key_is_in_the_keychain is False
+    assert path.stat().st_mode & 0o777 == 0o600
+
+
+def test_the_status_route_names_where_the_key_is(client: TestClient) -> None:
+    """So Settings can say something true rather than assume the stronger of
+    the two. This box has no keychain, which is why it reads `file`."""
+    assert client.get("/status").json()["key_storage"] in {"keychain", "file"}
+
+
+def test_ephemeral_beats_both(tmp_path: Path) -> None:
+    """A shared demo stores the key nowhere at all, and must not reach for a
+    keychain it would then be leaving somebody else's credential in."""
+    store = SettingsStore(tmp_path / "settings.json", ephemeral=True)
+
+    assert store.vault is None, "never even probed"
+    assert store.key_is_in_the_keychain is False
+
+
 def test_ephemeral_settings_never_touch_the_disk(tmp_path: Path) -> None:
     """For a demo where the person typing the key does not own the machine.
 

@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import logging
 import sqlite3
 from collections.abc import Iterator
 from contextlib import contextmanager
@@ -21,8 +22,19 @@ from pathlib import Path
 
 from pydantic import ValidationError
 
-from tilt.models import AgentRun, Entry, Link, TagCount, Theme, ThemeStatus, utcnow
+from tilt.models import (
+    AgentRun,
+    Conflict,
+    Entry,
+    Link,
+    TagCount,
+    Theme,
+    ThemeStatus,
+    utcnow,
+)
 from tilt.store import files
+
+log = logging.getLogger(__name__)
 
 SCHEMA_VERSION = 4
 
@@ -172,6 +184,9 @@ class Index:
     def __init__(self, path: Path) -> None:
         self.path = path
         self.path.parent.mkdir(parents=True, exist_ok=True)
+        # Filled by `rebuild`, the only thing that can see two files claiming
+        # one id. Empty on a healthy journal, which is almost always.
+        self.conflicts: list[Conflict] = []
         self._conn = sqlite3.connect(str(path), check_same_thread=False)
         self._conn.row_factory = sqlite3.Row
         self._conn.execute("PRAGMA journal_mode=WAL")
@@ -884,12 +899,43 @@ class Index:
 
         Themes and links are then restored from each entry's own frontmatter, so
         a genuinely empty index still comes back whole.
+
+        Two files can claim one id — a sync client's "(conflicted copy)" carries
+        the id of the file it copied. Those are recorded in :attr:`conflicts`
+        and reported rather than resolved: the newer one is indexed, because
+        picking by ``updated`` is at least a reason where sorted-path order is
+        an accident, and both paths are named so it can be settled by hand.
+        Renaming or merging somebody's files without asking is not this
+        function's business.
         """
-        parsed: list[tuple[Entry, Path]] = []
+        self.conflicts = []
+        claimed: dict[str, tuple[Entry, Path]] = {}
         for path in files.walk(entries_root):
             entry = files.parse(path)
+            held = claimed.get(entry.id)
+
+            if held is None:
+                claimed[entry.id] = (entry, path)
+                continue
+
+            held_entry, held_path = held
+            newer = (entry, path) if entry.updated > held_entry.updated else held
+            older = held if newer[1] is path else (entry, path)
+            claimed[entry.id] = newer
+
+            self.conflicts.append(
+                Conflict(entry_id=entry.id, kept=str(newer[1]), ignored=str(older[1]))
+            )
+            log.warning(
+                "two files claim entry %s: keeping %s, ignoring %s",
+                entry.id,
+                newer[1].name,
+                older[1].name,
+            )
+
+        parsed: list[tuple[Entry, Path]] = list(claimed.values())
+        for entry, path in parsed:
             self.upsert(entry, path)
-            parsed.append((entry, path))
 
         on_disk = {entry.id for entry, _ in parsed}
         stale = [
