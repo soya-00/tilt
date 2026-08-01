@@ -102,15 +102,21 @@ def main(settings: Settings | None = None, argv: list[str] | None = None) -> Non
     sock = _bind(settings.host, settings.port)
     announce(settings.host, sock.getsockname()[1])
 
+    app = create_app(settings)
     server = uvicorn.Server(
         uvicorn.Config(
-            create_app(settings),
+            app,
             # Logs go to stderr so stdout stays a clean channel for the ready
             # line — the shell parses one and shows the other.
             log_config=None,
             access_log=False,
         )
     )
+    # Handed to the app so `POST /erase` can stop the process it has just
+    # removed the files from. Only the thing that owns the server can take it
+    # down, and under a test client there is no server here at all — which is
+    # what makes that route inert in tests without anyone stubbing it.
+    app.state.server = server
     if settings.exit_with_parent:
         watch_parent(server)
     server.run(sockets=[sock])

@@ -127,6 +127,9 @@
   --accent: #0a7cff;
   --accent-ink: #ffffff;
   --focus: #0a7cff;
+  /* The one exception to "never coloured text", and it earns it: the single
+     control in the app that destroys writing. Used once, in one panel. */
+  --danger: #c8372d;
 
   --scrim: rgba(22, 24, 28, 0.18);
 }
@@ -171,6 +174,7 @@
   --line-strong: rgba(255, 255, 255, 0.22);
 
   --accent: #2f92ff;
+  --danger: #ff6a5e;
   --accent-ink: #06121f;
   --focus: #2f92ff;
 

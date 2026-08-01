@@ -1,8 +1,15 @@
-"""Health, configuration surface, and index maintenance."""
+"""Health, configuration surface, index maintenance, and erasure."""
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends
+import logging
+import shutil
+
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request
+
+# Aliased because the status *route* below is also called `status`, and the
+# route is the older name.
+from fastapi import status as codes
 from pydantic import BaseModel
 
 from tilt import __version__
@@ -18,6 +25,8 @@ from tilt.embed import DORMANT_WITHOUT_KEY
 from tilt.journal import Journal
 from tilt.models import Conflict
 from tilt.settings_store import SettingsStore
+
+log = logging.getLogger(__name__)
 
 router = APIRouter(tags=["system"])
 
@@ -117,3 +126,73 @@ def status(
 def rebuild_index(journal: Journal = Depends(get_journal)) -> dict[str, int]:
     """Discard the projection and rebuild it from Markdown on disk."""
     return {"indexed": journal.rebuild()}
+
+
+CONFIRMATION = "DELETE"
+"""The word a caller must send to erase everything.
+
+Not a checkbox and not a second click. This is the only route in the app that
+destroys writing, and it should be impossible to reach by a mis-fired request,
+a replayed one, or a UI bug that fires a handler twice."""
+
+
+class Erase(BaseModel):
+    confirm: str = ""
+
+
+@router.post("/erase")
+def erase(
+    payload: Erase,
+    request: Request,
+    background: BackgroundTasks,
+    settings: Settings = Depends(get_settings_dep),
+    journal: Journal = Depends(get_journal),
+) -> dict[str, list[str]]:
+    """Delete the journal and everything derived from it, then stop.
+
+    Stopping is not tidiness. This process is serving *out of* the directories
+    it is deleting, and unlinking a SQLite file that is still open does not
+    fail on macOS — the file lives on until the last handle closes, so the app
+    would go on answering from a database that no longer exists and recreate it
+    on the next write. Closing the stores, deleting, and exiting is the only
+    end state with nothing half-alive in it.
+
+    The shutdown runs after the response is sent, so the caller is told what
+    was removed rather than seeing the connection drop.
+    """
+    if payload.confirm != CONFIRMATION:
+        raise HTTPException(
+            codes.HTTP_400_BAD_REQUEST,
+            f"Send {CONFIRMATION!r} to confirm. Nothing has been deleted.",
+        )
+
+    journal.index.close()
+    if journal.vectors is not None:
+        journal.vectors.close()
+
+    removed = []
+    for directory in (settings.data_dir, settings.internal_dir):
+        if directory.exists():
+            shutil.rmtree(directory, ignore_errors=True)
+            removed.append(str(directory))
+    log.warning("erased %s", ", ".join(removed) or "nothing")
+
+    # Only the thing that owns the server can stop it, and under a test client
+    # there is no server at all — so this is inert in tests by construction
+    # rather than by anyone remembering to stub it out. Without one the stores
+    # are simply closed and the app is deliberately unusable until restart,
+    # which is the same end state reached a moment later.
+    server = getattr(request.app.state, "server", None)
+    if server is not None:
+        background.add_task(_stop, server)
+    return {"removed": removed}
+
+
+def _stop(server) -> None:
+    """Take the server down in order, after the response has gone out.
+
+    uvicorn's own shutdown flag rather than a signal: a signal would race the
+    background task that sets it, and this process may not be the only thing
+    the signal reaches.
+    """
+    server.should_exit = True
