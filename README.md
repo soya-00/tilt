@@ -641,7 +641,6 @@ name a folder has.
 | 4 | Constellation graph, on-demand diagrams | done |
 | 5 | Research scout, daily brief | done |
 | 6 | Folder splitting, weekly notice | done |
-| 7 | Growth timeline | designed |
 
 Some of what is designed is deliberately still open.
 
@@ -708,6 +707,13 @@ the test rather than left to be discovered, and it is why the model gets a veto
 and you get the click. What none of it proves is where a real embedder puts a
 real journal — the corpus is planted, and the honest version of that measurement
 needs a key and somebody's actual writing.
+
+There is no growth timeline, and there will not be one. It was the last thing
+on the roadmap and it is now struck off rather than deferred: a view charting
+how your thinking has developed is a progress chart, and a progress chart is
+the productivity app this is not. The weekly pass already covers the honest
+version — noticing one specific thing when there is one — and everything a
+timeline would add on top of that is a number going up.
 
 There is a weekly pass, and it does not write a weekly summary. A summary
 produced on a schedule is produced on the weeks that held nothing too, and after
