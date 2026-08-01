@@ -6,8 +6,9 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
 
 from tilt.api.deps import get_journal
+from tilt.jobs.split import apply_split
 from tilt.journal import Journal
-from tilt.models import TagCount, Theme
+from tilt.models import TagCount, Theme, ThemeSplit
 
 router = APIRouter(tags=["library"])
 
@@ -20,6 +21,44 @@ class RenameTheme(BaseModel):
 def list_themes(journal: Journal = Depends(get_journal)) -> list[Theme]:
     """Agent-discovered categories, busiest first."""
     return journal.index.themes()
+
+
+@router.get("/themes/splits", response_model=list[ThemeSplit])
+def list_splits(journal: Journal = Depends(get_journal)) -> list[ThemeSplit]:
+    """Folders the keeper thinks have become two subjects.
+
+    Declared above the `{theme_id}` routes so "splits" is never read as an id.
+    Almost always empty: the pass proposes at most one a night and only when a
+    folder measures as divided and the model agrees it is.
+    """
+    return journal.index.pending_splits()
+
+
+@router.post("/themes/splits/{split_id}", response_model=list[Theme])
+def accept_split(split_id: str, journal: Journal = Depends(get_journal)) -> list[Theme]:
+    """Carry out a split. The only thing in the app that does.
+
+    Returns the folder list rather than the two folders, because a split
+    rearranges the sidebar and the caller needs the whole of it anyway.
+    """
+    split = journal.index.get_split(split_id)
+    if split is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Proposal not found.")
+    apply_split(journal, split)
+    return journal.index.themes()
+
+
+@router.delete("/themes/splits/{split_id}", status_code=status.HTTP_204_NO_CONTENT)
+def dismiss_split(split_id: str, journal: Journal = Depends(get_journal)) -> None:
+    """Turn a split down.
+
+    Kept as a tombstone with the folder's size at the time, exactly like a
+    dismissed connection: without it the same folder is proposed again tomorrow
+    night, and a suggestion that ignores your answer is worse than one you never
+    saw. It comes back only once the folder has grown by half again.
+    """
+    if not journal.index.dismiss_split(split_id):
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Proposal not found.")
 
 
 @router.patch("/themes/{theme_id}", response_model=Theme)

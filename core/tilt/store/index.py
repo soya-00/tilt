@@ -27,8 +27,10 @@ from tilt.models import (
     Conflict,
     Entry,
     Link,
+    Notice,
     TagCount,
     Theme,
+    ThemeSplit,
     ThemeStatus,
     utcnow,
 )
@@ -36,7 +38,7 @@ from tilt.store import files
 
 log = logging.getLogger(__name__)
 
-SCHEMA_VERSION = 4
+SCHEMA_VERSION = 5
 
 
 def pair_key(a: str, b: str) -> str:
@@ -144,6 +146,41 @@ CREATE TABLE IF NOT EXISTS entry_state (
     entry_id  TEXT PRIMARY KEY REFERENCES entries(id) ON DELETE CASCADE,
     filed_at  TEXT,
     judged_at TEXT
+);
+
+-- A folder the keeper thinks has become two subjects. Never applied on its own:
+-- a wrong merge is visible and reversible, a wrong split scatters a subject and
+-- nothing looks at the halves together again.
+--
+-- One row per theme. A dismissal keeps its row rather than deleting it, with
+-- the folder's size at the time, so "no" holds until the subject has actually
+-- changed instead of until tomorrow night.
+CREATE TABLE IF NOT EXISTS theme_splits (
+    id          TEXT PRIMARY KEY,
+    theme_id    TEXT NOT NULL UNIQUE REFERENCES themes(id) ON DELETE CASCADE,
+    keep_label  TEXT NOT NULL,
+    move_label  TEXT NOT NULL,
+    keep_ids    TEXT NOT NULL DEFAULT '[]',
+    move_ids    TEXT NOT NULL DEFAULT '[]',
+    separation  REAL NOT NULL DEFAULT 0.0,
+    created     TEXT NOT NULL,
+    -- 'pending' | 'dismissed'. Accepting deletes the row: the folders are the
+    -- record of that decision, and a kept row would propose a split already made.
+    state       TEXT NOT NULL DEFAULT 'pending',
+    size_at_decision INTEGER NOT NULL DEFAULT 0
+);
+
+-- What the weekly pass noticed. Usually nothing, which is the point.
+CREATE TABLE IF NOT EXISTS notices (
+    id        TEXT PRIMARY KEY,
+    kind      TEXT NOT NULL,
+    body      TEXT NOT NULL,
+    entry_ids TEXT NOT NULL DEFAULT '[]',
+    -- The link or question the notice is about, so the same finding cannot be
+    -- raised again next week when it is still just as true.
+    subject   TEXT NOT NULL UNIQUE,
+    created   TEXT NOT NULL,
+    dismissed INTEGER NOT NULL DEFAULT 0
 );
 """
 
@@ -545,6 +582,145 @@ class Index:
             return conn.execute(
                 "DELETE FROM themes WHERE id NOT IN (SELECT theme_id FROM entry_themes)"
             ).rowcount
+
+    # --------------------------------------------------------- split proposals
+
+    def propose_split(self, split: ThemeSplit, *, members: int) -> ThemeSplit:
+        """Record a split for the writer to decide on. Never applies anything.
+
+        Replaces any pending proposal for the same folder — the newer reading of
+        it is the better one, and two proposals for one folder is a question
+        nobody asked to be asked twice.
+        """
+        with self.tx() as conn:
+            conn.execute(
+                "INSERT INTO theme_splits (id, theme_id, keep_label, move_label,"
+                " keep_ids, move_ids, separation, created, state, size_at_decision)"
+                " VALUES (?,?,?,?,?,?,?,?,'pending',?)"
+                " ON CONFLICT(theme_id) DO UPDATE SET"
+                "  id=excluded.id, keep_label=excluded.keep_label,"
+                "  move_label=excluded.move_label, keep_ids=excluded.keep_ids,"
+                "  move_ids=excluded.move_ids, separation=excluded.separation,"
+                "  created=excluded.created, state='pending',"
+                "  size_at_decision=excluded.size_at_decision",
+                (
+                    split.id,
+                    split.theme_id,
+                    split.keep_label,
+                    split.move_label,
+                    json.dumps(split.keep_ids),
+                    json.dumps(split.move_ids),
+                    split.separation,
+                    split.created.isoformat(),
+                    members,
+                ),
+            )
+        return split
+
+    def pending_splits(self) -> list[ThemeSplit]:
+        rows = self._conn.execute(
+            "SELECT s.*, t.label AS theme_label FROM theme_splits s"
+            " JOIN themes t ON t.id = s.theme_id"
+            " WHERE s.state = 'pending' ORDER BY s.separation DESC"
+        )
+        return [_row_to_split(r) for r in rows]
+
+    def get_split(self, split_id: str) -> ThemeSplit | None:
+        row = self._conn.execute(
+            "SELECT s.*, t.label AS theme_label FROM theme_splits s"
+            " JOIN themes t ON t.id = s.theme_id WHERE s.id = ?",
+            (split_id,),
+        ).fetchone()
+        return _row_to_split(row) if row else None
+
+    def dismiss_split(self, split_id: str) -> bool:
+        """Turn a proposal down, and remember the folder's size at the time.
+
+        Kept rather than deleted, exactly like a dismissed connection: without
+        the tombstone the same folder is proposed again tomorrow night, and a
+        suggestion that ignores your answer is worse than one you never saw.
+        """
+        with self.tx() as conn:
+            return (
+                conn.execute(
+                    "UPDATE theme_splits SET state='dismissed',"
+                    " size_at_decision=(SELECT COUNT(*) FROM entry_themes"
+                    "  WHERE theme_id = theme_splits.theme_id)"
+                    " WHERE id = ? AND state = 'pending'",
+                    (split_id,),
+                ).rowcount
+                > 0
+            )
+
+    def clear_split(self, theme_id: str) -> None:
+        """Forget a folder's proposal outright. For when it has been applied —
+        the two folders are now the record of that decision."""
+        with self.tx() as conn:
+            conn.execute("DELETE FROM theme_splits WHERE theme_id = ?", (theme_id,))
+
+    def split_settled(self, theme_id: str, *, members: int, growth: float) -> bool:
+        """Whether this folder has already been ruled on and has not changed since.
+
+        A dismissal holds until the folder has grown by ``growth`` — a folder
+        that has gained half again as many entries is arguably a different
+        folder, and asking once more about it is not nagging. Anything less is.
+        """
+        row = self._conn.execute(
+            "SELECT state, size_at_decision FROM theme_splits WHERE theme_id = ?",
+            (theme_id,),
+        ).fetchone()
+        if row is None:
+            return False
+        if row["state"] == "pending":
+            return True
+        return members < row["size_at_decision"] * growth
+
+    # ------------------------------------------------------------------ notices
+
+    def add_notice(self, notice: Notice) -> bool:
+        """Raise a notice, unless this exact finding has been raised before.
+
+        Returns whether it was new. The weekly pass would otherwise report the
+        same contradiction every Sunday for as long as it remains true, which is
+        forever.
+        """
+        with self.tx() as conn:
+            return (
+                conn.execute(
+                    "INSERT INTO notices (id, kind, body, entry_ids, subject, created,"
+                    " dismissed) VALUES (?,?,?,?,?,?,0)"
+                    " ON CONFLICT(subject) DO NOTHING",
+                    (
+                        notice.id,
+                        notice.kind,
+                        notice.body,
+                        json.dumps(notice.entry_ids),
+                        notice.subject,
+                        notice.created.isoformat(),
+                    ),
+                ).rowcount
+                > 0
+            )
+
+    def open_notices(self) -> list[Notice]:
+        rows = self._conn.execute(
+            "SELECT * FROM notices WHERE dismissed = 0 ORDER BY created DESC"
+        )
+        return [_row_to_notice(r) for r in rows]
+
+    def get_notice(self, notice_id: str) -> Notice | None:
+        row = self._conn.execute("SELECT * FROM notices WHERE id = ?", (notice_id,)).fetchone()
+        return _row_to_notice(row) if row else None
+
+    def dismiss_notice(self, notice_id: str) -> bool:
+        with self.tx() as conn:
+            return (
+                conn.execute(
+                    "UPDATE notices SET dismissed = 1 WHERE id = ? AND dismissed = 0",
+                    (notice_id,),
+                ).rowcount
+                > 0
+            )
 
     # ------------------------------------------------------------------- tags
 
@@ -1010,6 +1186,35 @@ def _row_to_theme(row: sqlite3.Row) -> Theme:
         status=row["status"],
         count=row["count"] if "count" in columns else 0,
         last_active=row["last_active"] if "last_active" in columns else None,
+    )
+
+
+def _row_to_split(row: sqlite3.Row) -> ThemeSplit:
+    # Bound first for the same reason as in `_row_to_theme`: `in row` iterates a
+    # sqlite3.Row's values rather than its column names.
+    columns = row.keys()
+    return ThemeSplit(
+        id=row["id"],
+        theme_id=row["theme_id"],
+        theme_label=row["theme_label"] if "theme_label" in columns else "",
+        keep_label=row["keep_label"],
+        move_label=row["move_label"],
+        keep_ids=json.loads(row["keep_ids"]),
+        move_ids=json.loads(row["move_ids"]),
+        separation=row["separation"],
+        created=row["created"],
+    )
+
+
+def _row_to_notice(row: sqlite3.Row) -> Notice:
+    return Notice(
+        id=row["id"],
+        kind=row["kind"],
+        body=row["body"],
+        entry_ids=json.loads(row["entry_ids"]),
+        subject=row["subject"],
+        created=row["created"],
+        dismissed=bool(row["dismissed"]),
     )
 
 
