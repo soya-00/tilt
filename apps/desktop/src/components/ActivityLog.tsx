@@ -4,10 +4,23 @@ import { api } from "../lib/api";
 import { stamp } from "../lib/time";
 import type { AgentRun } from "../lib/types";
 
-/** Jobs the agent runs on its own, and what pressing them means. */
+/** Jobs the agent runs on its own, and what pressing them means.
+ *
+ * All five, not the two that happened to be wired first. A scheduled job you
+ * cannot trigger is one whose behaviour you can only learn by waiting up for
+ * it — and the weekly pass in particular is designed to say nothing most of the
+ * time, which is indistinguishable from a job that has quietly stopped unless
+ * you can press it and watch it say so. */
 const JOBS = [
   { name: "sweep", label: "Catch up", hint: "File and connect anything missed" },
   { name: "themes", label: "Tidy folders", hint: "Merge duplicates, retire quiet ones" },
+  { name: "vectors", label: "Embed", hint: "Place recent entries by meaning. Needs a key" },
+  { name: "scout", label: "Look outward", hint: "Read your feeds for something worth your time" },
+  {
+    name: "week",
+    label: "Look back",
+    hint: "Anything from this week worth a second look. Usually nothing, and costs nothing",
+  },
 ] as const;
 
 /**
@@ -18,8 +31,9 @@ const JOBS = [
  * up long after it stopped. Every run leaves a row here whether it succeeded,
  * failed, or stopped at the spending ceiling.
  *
- * Both jobs are also runnable from here. Waiting until the small hours to learn
- * whether a scheduled job works is not a way to build one.
+ * Every job is also runnable from here. Waiting until the small hours to learn
+ * whether a scheduled job works is not a way to build one — and a job whose
+ * correct answer is silence needs this more than the others, not less.
  */
 export function ActivityLog() {
   const [runs, setRuns] = useState<AgentRun[]>([]);

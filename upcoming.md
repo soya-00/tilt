@@ -56,9 +56,6 @@ itself.
   the first place from vectors rather than one entry at a time does not. The
   same asymmetry applies and more sharply — a from-scratch clustering proposes
   a whole structure at once, and there is no obvious way to accept part of one.
-- **A growth timeline.** Phase 7, and undesigned on purpose: it was worth
-  waiting to see whether the weekly notice finds anything real before building
-  a view on top of the same idea.
 - **Audio and video transcription.** Locally that means MLX: Apple-Silicon-only
   and about a gigabyte of native libraries in the bundle. Dropping an `.mp3`
   currently says so rather than failing.
@@ -69,6 +66,11 @@ itself.
 
 ## Decided, and recorded so they are not reopened
 
+- **No growth timeline.** Struck off rather than deferred. A view charting how
+  your thinking has developed is a progress chart, and a progress chart is the
+  productivity app this is not. The weekly notice is the honest version of the
+  same idea: it says one specific thing when there is one to say, rather than
+  drawing a line that always goes somewhere.
 - **No accounts, and no hosted sync.** The journal is local, file-based
   Markdown and that is the product rather than a stage before a server. See
   SECURITY.md.
@@ -92,6 +94,20 @@ itself.
   two things you wrote, and an old question this week came near. That is a
   deliberately short list, and whether it is too short is a question a few
   months of real weeks will answer better than more design.
+
+## Surfaces the API has and the interface does not
+
+Both found by running the app rather than by reading it, and they are the same
+mistake twice: an endpoint that works, a client method that calls it, and no
+component that ever renders the result.
+
+- **Saved diagrams.** `GET /diagrams` and `DELETE /diagrams/{id}` exist and
+  `api.diagrams()` is in the client. Nothing reads either. A diagram is drawn,
+  written to `artifacts/diagrams/`, and is unreachable the moment the sheet is
+  closed — you can only draw it again, which costs another model call.
+- **Diagram this** has no button anywhere. It is reachable only from the command
+  palette, and only when a folder or a search is open. Discoverable by accident
+  or not at all.
 
 ## Loose ends worth knowing
 
