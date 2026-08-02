@@ -1,6 +1,6 @@
 # Tilt
 
-A thinking instrument for macOS, not a productivity tool.
+A thinking instrument for macOS.
 
 Tilt is a journal that notices things. You write into a single stream with no
 folders and no filing, and the app's job is to give you back understanding —
