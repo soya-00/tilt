@@ -71,6 +71,31 @@ export async function openExternal(url: string): Promise<void> {
   await invoke("plugin:opener|open_url", { url });
 }
 
+/**
+ * Quit the application, after the journal underneath it has gone.
+ *
+ * Erasing and importing both stop the service on purpose — the next start has
+ * to read a directory that is no longer the one this process opened. Until now
+ * the window stayed up over nothing, and the panel said to quit by hand.
+ *
+ * Failure is deliberately silent, and the panels are written so that it costs
+ * nothing: each already shows "quit and reopen", which is exactly right if this
+ * does not land. Nobody can verify it without a Mac, so it is built to be
+ * harmless when wrong.
+ *
+ * `quit_app` is a command the shell declares itself rather than the process
+ * plugin, which would be a dependency and a capability entry for one call.
+ */
+export async function quitShell(): Promise<void> {
+  if (!inShell()) return;
+  try {
+    const { invoke } = await import("@tauri-apps/api/core");
+    await invoke("quit_app");
+  } catch {
+    /* The instruction on screen stands. */
+  }
+}
+
 export async function announceCapture(): Promise<void> {
   if (!inShell()) return;
   const { emit } = await import("@tauri-apps/api/event");

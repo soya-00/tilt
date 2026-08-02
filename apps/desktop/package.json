@@ -1,6 +1,6 @@
 {
   "name": "tilt-desktop",
-  "version": "0.3.0",
+  "version": "1.0.0",
   "private": true,
   "//packageManager": "Pinned because its absence let three environments disagree: corepack pulled pnpm 11 everywhere, which does not run on Node 20, so CI failed where a Node 22 laptop passed.",
   "packageManager": "pnpm@11.18.0",

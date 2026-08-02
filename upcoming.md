@@ -16,6 +16,12 @@ unverified. Each fails visibly rather than silently — a button that does
 nothing, a `/status` that still reports a key — which is the only reason they
 ship at all. The dead opener is what taught that distinction.
 
+`./scripts/install.sh` is the shortest path through all of them: it builds and
+installs in one command, so checking this list is four clicks in a real app
+rather than an afternoon of setup. **v1.0.0 is tagged with every item below
+still open** — the tag marks the code as finished against its roadmap, not the
+build as verified on a Mac, and it says so in its release notes.
+
 - **The Tauri opener.** External links were dead in the packaged app — the
   webview never created the window and the CSP had no `navigate-to`, so a link
   that worked perfectly in `npm run dev` did nothing at all in the `.dmg`.
@@ -31,10 +37,12 @@ ship at all. The dead opener is what taught that distinction.
   tests; whether `keyring.delete_password` reaches the login keychain from a
   frozen sidecar is not. Settings → Danger → Forget it, then check `/status`.
 - **Quitting after an erase or an import.** Both routes stop the service and
-  expect the shell to follow. `core:app:allow-exit` is not in
-  `src-tauri/capabilities/default.json` yet; until it is, the window stays open
-  on a journal that is gone and the interface says to quit and reopen. One line,
-  and only a Mac can say whether it works.
+  expect the shell to follow, and the shell now has a `quit_app` command the
+  panels call. A command the app declares itself rather than the process plugin
+  on purpose: a capability whose identifier is wrong fails the *build*, and the
+  build is the thing that cannot be checked here. It compiles; whether it quits
+  is a Mac question. Failure is silent by design — both panels still say to quit
+  and reopen, which is exactly right if the call does nothing.
 
 ## Needs a real key
 

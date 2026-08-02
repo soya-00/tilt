@@ -1,6 +1,7 @@
 import { useState } from "react";
 
 import { api } from "../../lib/api";
+import { quitShell } from "../../lib/shell";
 import type { Status } from "../../lib/types";
 
 interface Props {
@@ -55,6 +56,10 @@ export function Danger({ status, onForgetKey }: Props) {
     try {
       await api.erase(WORD);
       setErased(true);
+      // The service has stopped and the journal is gone; there is nothing left
+      // for this window to be a window onto. In a browser this does nothing and
+      // the sentence below is the whole answer.
+      void quitShell();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Nothing was deleted.");
     } finally {

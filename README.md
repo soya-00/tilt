@@ -469,6 +469,36 @@ See `core/.env.example` for the full set.
 > On Windows the venv paths are `.venv\Scripts\python` instead of
 > `.venv/bin/python`.
 
+## Installing it
+
+One command, on the Mac you intend to run it on:
+
+```bash
+./scripts/install.sh
+```
+
+That checks the tools it needs and names the fix for any that are missing,
+builds the interface, freezes the Python service into the bundle, compiles the
+shell, and copies `Tilt.app` into `/Applications`. Add `--build-only` to stop
+before the last step and keep the bundle in `target/`.
+
+The first run takes a while — most of it is compiling Rust — and later runs
+reuse the cache. If Tilt is already installed and running, the script quits it
+first: replacing the bundle underneath a running app is how you end up with one
+that reports one version and behaves like another.
+
+It requires **macOS**, Xcode command line tools, [Rust](https://rustup.rs),
+Node 22+, and Python 3.11+.
+
+### Why it does not just download
+
+There is no signed build to download, because notarising one requires a paid
+Apple Developer membership and this is an app one person wrote for themselves.
+Building on the machine you run it on is what makes that a non-event rather
+than a problem: nothing is downloaded, so nothing is quarantined, and Gatekeeper
+never gets a say. See **Installing a build you made** below for the case where a
+`.dmg` does move between machines.
+
 ## Running it as a Mac app
 
 The two-terminal setup above is the browser path. The desktop shell wraps the
