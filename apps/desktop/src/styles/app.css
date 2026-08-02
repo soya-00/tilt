@@ -1256,9 +1256,38 @@
   color: var(--ink-secondary);
 }
 
+.decision__what {
+  min-width: 0;
+}
+
 .decision__what strong {
   color: var(--ink);
   font-weight: var(--w-medium);
+}
+
+/* A refused move quotes the entry's opening, which runs to two hundred
+   characters. The quote gives up whatever room the rest of the sentence needs
+   and truncates, rather than the line wrapping: the folder it is staying out of
+   is the only part that is not decoration, and it sits at the end.
+   Declared after `.decision__what` because the two have equal specificity and
+   the later one wins — a rule this file has already been bitten by once. */
+.decision__what--quoted {
+  display: flex;
+  align-items: baseline;
+  gap: 0.3em;
+}
+
+.decision__quote {
+  flex: 0 1 auto;
+  min-width: 4ch;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--ink);
+}
+
+.decision__tail {
+  flex: none;
 }
 
 .decision__undo {

@@ -340,6 +340,11 @@ class Journal:
         # exist, and they keep turning up as neighbours of the ones that do.
         if self.vectors is not None:
             self.vectors.forget(entry_id)
+        # And `folders.md` accumulates refusals about entries nobody can reach.
+        # It is a file the app invites you to read and edit, so a line naming an
+        # id with nothing behind it is worse there than a stale row would be in
+        # a cache.
+        self.folders.forget_entry(entry_id)
         return True
 
     # ---------------------------------------------------------------- reading

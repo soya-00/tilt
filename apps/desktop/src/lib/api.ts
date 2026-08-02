@@ -141,7 +141,7 @@ export const api = {
   /** Leave it where it is. Remembered against that destination only. */
   dismissMove: (id: string) => request<void>(`/moves/${id}`, { method: "DELETE" }),
 
-  /** Pinned names and refused splits — what you told the keeper. */
+  /** Pinned names, refused splits, and refused moves — what you told the keeper. */
   folderDecisions: () => request<Decisions>("/folders"),
 
   unpinFolder: (label: string) =>
@@ -149,6 +149,14 @@ export const api = {
 
   askAgainAbout: (label: string) =>
     request<void>(`/folders/declined/${encodeURIComponent(label)}`, { method: "DELETE" }),
+
+  /** Let the keeper suggest this move again. The destination is part of the
+   *  key: you refused one folder, not every folder. */
+  reconsiderMove: (entryId: string, to: string) =>
+    request<void>(
+      `/folders/refused/${encodeURIComponent(entryId)}?to=${encodeURIComponent(to)}`,
+      { method: "DELETE" },
+    ),
 
   /** One file holding the journal and the vectors. Never the key. Written into
    *  the support folder, because a journal usually lives somewhere synced and
