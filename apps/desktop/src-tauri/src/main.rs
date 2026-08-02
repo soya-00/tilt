@@ -20,8 +20,26 @@ fn capture_shortcut() -> Shortcut {
     Shortcut::new(Some(Modifiers::ALT), Code::Space)
 }
 
+/// Quit, because the journal underneath the window has gone.
+///
+/// Erasing and importing both stop the service on purpose: the next start has
+/// to read a directory that is not the one this process opened. Until now the
+/// window stayed up over nothing and the panel asked you to quit by hand.
+///
+/// A command of the app's own rather than the process plugin. The plugin would
+/// be a dependency and a capability entry for one call, and a capability whose
+/// identifier is wrong fails the build rather than the feature — on the one
+/// platform that cannot be checked here. Commands declared in `invoke_handler`
+/// need no ACL entry, and `app.exit` runs `ExitRequested` on the way out, which
+/// is what stops the core.
+#[tauri::command]
+fn quit_app(app: tauri::AppHandle) {
+    app.exit(0);
+}
+
 fn main() {
     let app = tauri::Builder::default()
+        .invoke_handler(tauri::generate_handler![quit_app])
         .plugin(tauri_plugin_opener::init())
         .plugin(
             tauri_plugin_global_shortcut::Builder::new()

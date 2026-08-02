@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 
 import { api } from "../../lib/api";
+import { quitShell } from "../../lib/shell";
 import type { Decisions, Status } from "../../lib/types";
 
 interface Props {
@@ -59,6 +60,9 @@ export function Journal({ status }: Props) {
     try {
       await api.importArchive(source.trim(), WORD);
       setImported(true);
+      // Same as an erase: the service has stopped, and what is on disk now is
+      // not what this process opened.
+      void quitShell();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Nothing was replaced.");
     } finally {

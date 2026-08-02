@@ -1,6 +1,6 @@
 [project]
 name = "tilt-core"
-version = "0.3.0"
+version = "1.0.0"
 description = "Tilt core — journal store, index, and agent layer"
 requires-python = ">=3.11"
 dependencies = [
