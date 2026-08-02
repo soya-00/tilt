@@ -58,6 +58,33 @@ NODE_MAJOR="$(node -p 'process.versions.node.split(".")[0]')"
 # that out on a commit that passed on somebody's laptop.
 [ "$NODE_MAJOR" -ge 22 ] || die "Node $NODE_MAJOR is too old — the pinned pnpm needs Node 22 or newer."
 
+# How to run pnpm, resolved once and checked here rather than discovered
+# halfway through the build.
+#
+# This used to be `corepack enable || true` followed by a bare `pnpm`, which is
+# two mistakes in one line: `corepack enable` writes shims into the directory
+# holding the `node` binary and fails when that is not writable or not on PATH,
+# and `|| true` then threw away the only evidence of it. The next line died with
+# `pnpm: command not found`, naming the symptom and hiding the cause.
+#
+# `corepack pnpm` needs no shims and no write access. It reads the
+# `packageManager` field in package.json and fetches exactly that pnpm, which is
+# the version CI uses, so it is the more correct answer as well as the more
+# reliable one.
+if command -v pnpm >/dev/null 2>&1; then
+  PNPM=(pnpm)
+elif command -v corepack >/dev/null 2>&1; then
+  PNPM=(corepack pnpm)
+  # Corepack asks before its first download. Nothing here is interactive.
+  export COREPACK_ENABLE_DOWNLOAD_PROMPT=0
+else
+  die "Neither pnpm nor corepack is available, and the lockfile is pnpm's.
+Corepack ships with Node and is the shortest route:
+  corepack enable
+Or install pnpm directly:
+  npm install -g pnpm@11"
+fi
+
 command -v python3 >/dev/null 2>&1 || die "Python 3.11 or newer is missing."
 
 python3 - <<'PY' || die "Python 3.11 or newer is required."
@@ -78,16 +105,15 @@ fi
 
 say "preparing the interface"
 cd "$DESKTOP"
-corepack enable >/dev/null 2>&1 || true
 # --ignore-scripts matches CI and the image. pnpm 10+ exits non-zero when it
 # skips a dependency's install script, so this is not only a hardening choice.
-pnpm install --frozen-lockfile --ignore-scripts
+"${PNPM[@]}" install --frozen-lockfile --ignore-scripts
 
 say "building the app — this takes a while the first time"
 # beforeBuildCommand freezes the Python core into the bundle, so there is no
 # separate step to forget. Forgetting it used to produce an app that looked new
 # and reported the previous version in Settings.
-pnpm tauri build
+"${PNPM[@]}" tauri build
 
 APP="$BUNDLE/macos/$NAME"
 [ -d "$APP" ] || die "The build finished but produced no $NAME.

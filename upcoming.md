@@ -18,9 +18,12 @@ ship at all. The dead opener is what taught that distinction.
 
 `./scripts/install.sh` is the shortest path through all of them: it builds and
 installs in one command, so checking this list is four clicks in a real app
-rather than an afternoon of setup. **v1.0.0 is tagged with every item below
-still open** — the tag marks the code as finished against its roadmap, not the
-build as verified on a Mac, and it says so in its release notes.
+rather than an afternoon of setup.
+
+The version is 1.0.0, and that number says one thing only: the code is finished
+against the roadmap it was written to — phases 0 through 6, no phase 7. It says
+nothing about the build being verified on a Mac, which is what everything below
+is still waiting on.
 
 - **The Tauri opener.** External links were dead in the packaged app — the
   webview never created the window and the CSP had no `navigate-to`, so a link
