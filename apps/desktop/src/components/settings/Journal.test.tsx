@@ -11,6 +11,7 @@ vi.mock("../../lib/api", () => ({
     folderDecisions: vi.fn(),
     unpinFolder: vi.fn(),
     askAgainAbout: vi.fn(),
+    reconsiderMove: vi.fn(),
     exportArchive: vi.fn(),
     importArchive: vi.fn(),
   },
@@ -19,9 +20,10 @@ vi.mock("../../lib/api", () => ({
 const status = { data_dir: "/Users/me/Tilt", key_storage: "keychain" } as Status;
 
 beforeEach(() => {
-  vi.mocked(api.folderDecisions).mockResolvedValue({ pinned: [], declined: [] });
+  vi.mocked(api.folderDecisions).mockResolvedValue({ pinned: [], declined: [], refused: [] });
   vi.mocked(api.unpinFolder).mockResolvedValue(undefined);
   vi.mocked(api.askAgainAbout).mockResolvedValue(undefined);
+  vi.mocked(api.reconsiderMove).mockResolvedValue(undefined);
   vi.mocked(api.exportArchive).mockResolvedValue({
     path: "/support/tilt-2026-08-01-1130.zip",
     entries: 12,
@@ -81,6 +83,7 @@ describe("Journal", () => {
     vi.mocked(api.folderDecisions).mockResolvedValue({
       pinned: ["Attention"],
       declined: [{ folder: "Reading", at: 24 }],
+      refused: [],
     });
     const user = userEvent.setup();
     render(<Journal status={status} />);
@@ -93,6 +96,37 @@ describe("Journal", () => {
 
     await user.click(screen.getByRole("button", { name: /ask me again/i }));
     await waitFor(() => expect(api.askAgainAbout).toHaveBeenCalledWith("Reading"));
+  });
+
+  it("shows a refused move as the entry, not as an id", async () => {
+    // The store keys these on an entry id and a folder, which is what the
+    // keeper needs and nothing anyone could recognise in a list.
+    vi.mocked(api.folderDecisions).mockResolvedValue({
+      pinned: [],
+      declined: [],
+      refused: [{ entry: "e-9", to: "Sleep", opening: "Slept badly; everything was slower." }],
+    });
+    render(<Journal status={status} />);
+
+    expect(await screen.findByText(/Slept badly/)).toBeInTheDocument();
+    expect(screen.getByText("Sleep")).toBeInTheDocument();
+    expect(screen.queryByText(/e-9/)).not.toBeInTheDocument();
+  });
+
+  it("takes back one refusal without touching the others", async () => {
+    // Keyed on the pair, exactly as the refusal was: "ask me about Sleep
+    // again" is a narrower thing to say than "ask me about everything again".
+    vi.mocked(api.folderDecisions).mockResolvedValue({
+      pinned: [],
+      declined: [],
+      refused: [{ entry: "e-9", to: "Sleep", opening: "Slept badly." }],
+    });
+    const user = userEvent.setup();
+    render(<Journal status={status} />);
+
+    await user.click(await screen.findByRole("button", { name: /ask me again/i }));
+
+    await waitFor(() => expect(api.reconsiderMove).toHaveBeenCalledWith("e-9", "Sleep"));
   });
 
   it("says an empty list is normal rather than showing nothing", async () => {

@@ -159,14 +159,36 @@ class FolderStore:
         self.save(decisions)
 
     def forget(self, label: str) -> None:
-        """Drop every decision about a folder that no longer exists."""
+        """Drop every decision about a folder that no longer exists.
+
+        Refusals included, and that is not tidiness for its own sake: a refusal
+        names its destination, so one pointing at a deleted folder can never
+        match anything again. Left behind it would sit in the list of decisions
+        you can review, describing a choice about a folder that is gone.
+        """
         decisions = self.load()
-        before = (len(decisions.pinned), len(decisions.declined))
+        before = decisions.model_dump()
         decisions.pinned = [p for p in decisions.pinned if p.casefold() != label.casefold()]
         decisions.declined = [
             d for d in decisions.declined if d.folder.casefold() != label.casefold()
         ]
-        if (len(decisions.pinned), len(decisions.declined)) != before:
+        decisions.refused = [
+            r for r in decisions.refused if r.to.casefold() != label.casefold()
+        ]
+        if decisions.model_dump() != before:
+            self.save(decisions)
+
+    def forget_entry(self, entry_id: str) -> None:
+        """Drop every refusal about an entry that no longer exists.
+
+        The other half of the same problem. `folders.md` is meant to be read and
+        edited by hand, and an entry id with nothing behind it is the one thing
+        in it nobody can act on.
+        """
+        decisions = self.load()
+        keep = [r for r in decisions.refused if r.entry != entry_id]
+        if len(keep) != len(decisions.refused):
+            decisions.refused = keep
             self.save(decisions)
 
     def decline(self, label: str, *, members: int) -> None:
@@ -193,6 +215,22 @@ class FolderStore:
             return
         decisions.refused.append(Refused(entry=entry_id, to=to_label))
         self.save(decisions)
+
+    def allow_move(self, entry_id: str, to_label: str) -> None:
+        """Take one refusal back, so the keeper may raise that move again.
+
+        Nothing is moved by this. A refusal is the reason a proposal stops being
+        made; dropping it restores the question, not an answer to it.
+        """
+        decisions = self.load()
+        keep = [
+            r
+            for r in decisions.refused
+            if not (r.entry == entry_id and r.to.casefold() == to_label.casefold())
+        ]
+        if len(keep) != len(decisions.refused):
+            decisions.refused = keep
+            self.save(decisions)
 
     def accepted(self, label: str) -> None:
         """A split that happened settles the question; the refusal is spent."""

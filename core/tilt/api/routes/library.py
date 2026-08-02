@@ -6,8 +6,8 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
 
 from tilt.api.deps import get_journal
-from tilt.folders import Decisions
-from tilt.jobs.misfiled import apply_move
+from tilt.folders import Declined
+from tilt.jobs.misfiled import apply_move, opening
 from tilt.jobs.split import apply_split
 from tilt.journal import Journal
 from tilt.models import Misfiled, TagCount, Theme, ThemeSplit, Thread
@@ -17,6 +17,32 @@ router = APIRouter(tags=["library"])
 
 class RenameTheme(BaseModel):
     label: str = Field(min_length=1, max_length=40)
+
+
+class RefusedMove(BaseModel):
+    """A refiling you turned down, with enough of the entry to recognise it.
+
+    `folders.md` stores an entry id and a destination, which is what the keeper
+    needs and nothing a person can read. The opening line is joined on here
+    rather than written into the file, because it is a copy of something you
+    wrote and would go stale the moment you edited the entry.
+    """
+
+    entry: str
+    to: str
+    opening: str
+
+
+class Rulings(BaseModel):
+    """Every decision you have made about your folders, ready to be read back.
+
+    Shaped like `Decisions` in `folders.md` except for the openings above. The
+    store keeps what survives a rebuild; this is what a person can act on.
+    """
+
+    pinned: list[str] = Field(default_factory=list)
+    declined: list[Declined] = Field(default_factory=list)
+    refused: list[RefusedMove] = Field(default_factory=list)
 
 
 @router.get("/themes", response_model=list[Theme])
@@ -134,16 +160,29 @@ def dismiss_move(move_id: str, journal: Journal = Depends(get_journal)) -> None:
     journal.index.clear_move(move.entry_id)
 
 
-@router.get("/folders", response_model=Decisions)
-def folder_decisions(journal: Journal = Depends(get_journal)) -> Decisions:
+@router.get("/folders", response_model=Rulings)
+def folder_decisions(journal: Journal = Depends(get_journal)) -> Rulings:
     """What you have told the keeper about your folders.
 
-    A name you pinned by renaming, and a split you turned down. Both are kept
-    in `folders.md` beside your entries, and both were previously invisible —
-    you could accumulate them for months with no way to see what you had said
-    or to take any of it back.
+    A name you pinned by renaming, a split you turned down, and an entry you
+    told it to leave where it is. All three are kept in `folders.md` beside your
+    entries, and all three were invisible — you could accumulate them for months
+    with no way to see what you had said or to take any of it back.
+
+    A refusal whose entry is gone is left out rather than shown as an id nobody
+    can place. Deleting an entry drops its refusals, so this is the case where
+    the file was edited by hand or the entry's Markdown was removed from under
+    the app — real, rare, and not worth a row that cannot be acted on.
     """
-    return journal.folders.load()
+    decisions = journal.folders.load()
+    refused = []
+    for item in decisions.refused:
+        entry = journal.index.get(item.entry)
+        if entry is not None:
+            refused.append(
+                RefusedMove(entry=item.entry, to=item.to, opening=opening(entry))
+            )
+    return Rulings(pinned=decisions.pinned, declined=decisions.declined, refused=refused)
 
 
 @router.delete("/folders/pinned/{label}", status_code=status.HTTP_204_NO_CONTENT)
@@ -167,6 +206,23 @@ def ask_again(label: str, journal: Journal = Depends(get_journal)) -> None:
     )
     if theme is not None:
         journal.index.clear_split(theme.id)
+
+
+@router.delete("/folders/refused/{entry_id}", status_code=status.HTTP_204_NO_CONTENT)
+def reconsider_move(
+    entry_id: str, to: str, journal: Journal = Depends(get_journal)
+) -> None:
+    """Drop a refusal, so the keeper may suggest that move again.
+
+    Nothing moves. A refusal is only the reason a suggestion stops being made,
+    and taking it back restores the question rather than answering it.
+
+    The destination is a query parameter where the other two routes here take a
+    path segment, because this one is keyed on a pair: an entry and the folder
+    it declined to go to. Reaching that with a second path segment would put a
+    label somebody typed where a `/` changes the route.
+    """
+    journal.folders.allow_move(entry_id, to)
 
 
 @router.get("/tags", response_model=list[TagCount])

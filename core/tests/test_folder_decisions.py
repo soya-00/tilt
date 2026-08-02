@@ -197,6 +197,68 @@ def test_a_split_that_happened_clears_the_refusal(app: Restartable) -> None:
     assert app.journal.folders.load().declined == []
 
 
+# ------------------------------------------------------------- a refused move
+
+
+def test_a_refusal_can_be_taken_back(app: Restartable) -> None:
+    """The point of showing these at all. A decision you cannot see is bad; one
+    you can see and cannot undo is worse, because now you know it is there."""
+    app.journal.folders.refuse_move("e1", "Sleep")
+    app.journal.folders.allow_move("e1", "Sleep")
+
+    assert app.journal.folders.load().refused == []
+
+
+def test_taking_one_back_leaves_the_others(app: Restartable) -> None:
+    """Keyed on the pair, exactly as the refusal was. "Ask me about Sleep
+    again" is not "ask me about everything again"."""
+    app.journal.folders.refuse_move("e1", "Sleep")
+    app.journal.folders.refuse_move("e1", "Reading")
+    app.journal.folders.refuse_move("e2", "Sleep")
+
+    app.journal.folders.allow_move("e1", "Sleep")
+
+    assert {(r.entry, r.to) for r in app.journal.folders.load().refused} == {
+        ("e1", "Reading"),
+        ("e2", "Sleep"),
+    }
+
+
+def test_deleting_a_folder_drops_refusals_pointing_at_it(app: Restartable) -> None:
+    """A refusal names its destination, so one aimed at a folder that no longer
+    exists can never match anything again. Left behind it is a line in a file
+    you are invited to read, describing a choice about nothing."""
+    app.filed("Slept badly.", "Sleep")
+    app.journal.folders.refuse_move("e1", "Sleep")
+
+    app.journal.delete_theme(app.theme("Sleep").id)
+
+    assert app.journal.folders.load().refused == []
+
+
+def test_deleting_the_entry_drops_its_refusals(app: Restartable) -> None:
+    """The other half. An id with nothing behind it is the one thing in this
+    file nobody can act on — not the keeper, and not a person reading it."""
+    entry = app.filed("Slept badly; everything was slower.", "Attention")
+    app.journal.folders.refuse_move(entry.id, "Sleep")
+
+    app.journal.delete(entry.id)
+
+    assert app.journal.folders.load().refused == []
+
+
+def test_a_refusal_about_another_entry_is_untouched(app: Restartable) -> None:
+    """The cascade has to be about the entry that went, and nothing else."""
+    gone = app.filed("Slept badly.", "Attention")
+    kept = app.filed("Also about sleep.", "Attention")
+    app.journal.folders.refuse_move(gone.id, "Sleep")
+    app.journal.folders.refuse_move(kept.id, "Sleep")
+
+    app.journal.delete(gone.id)
+
+    assert [r.entry for r in app.journal.folders.load().refused] == [kept.id]
+
+
 # -------------------------------------------------- the file is not load-bearing
 
 

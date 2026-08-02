@@ -14,6 +14,7 @@ from datetime import timedelta
 import pytest
 from fastapi.testclient import TestClient
 
+from tilt.folders import FolderStore
 from tilt.jobs import misfiled
 from tilt.jobs.split import normalise
 from tilt.journal import Journal
@@ -291,3 +292,40 @@ def test_the_routes_are_there_and_quiet(client: TestClient) -> None:
     assert client.get("/moves").json() == []
     assert client.post("/moves/nope").status_code == 404
     assert client.delete("/moves/nope").status_code == 404
+
+
+def test_a_refusal_can_be_read_back_as_a_sentence(client: TestClient, settings) -> None:
+    """What `folders.md` stores is an id and a folder name, which is what the
+    keeper needs and nothing anyone can recognise. The panel that lists your
+    decisions has to show the entry."""
+    entry = client.post(
+        "/entries", json={"body": "Slept badly; everything was slower."}
+    ).json()["entry"]
+    FolderStore(settings.data_dir / "folders.md").refuse_move(entry["id"], "Sleep")
+
+    [refusal] = client.get("/folders").json()["refused"]
+
+    assert refusal["to"] == "Sleep"
+    assert refusal["opening"] == "Slept badly; everything was slower."
+
+
+def test_a_refusal_whose_entry_is_gone_is_not_listed(client: TestClient, settings) -> None:
+    """Deleting an entry drops its refusals, so this is the leftover case — a
+    hand-edited file, or Markdown removed from under the app. A row nobody can
+    place is worse than no row."""
+    FolderStore(settings.data_dir / "folders.md").refuse_move("not-an-entry", "Sleep")
+
+    assert client.get("/folders").json()["refused"] == []
+
+
+def test_asking_again_is_one_request(client: TestClient, settings) -> None:
+    """And it restores the question rather than answering it: nothing moves."""
+    entry = client.post("/entries", json={"body": "Slept badly."}).json()["entry"]
+    store = FolderStore(settings.data_dir / "folders.md")
+    store.refuse_move(entry["id"], "Sleep")
+
+    response = client.delete(f"/folders/refused/{entry['id']}", params={"to": "Sleep"})
+
+    assert response.status_code == 204
+    assert store.load().refused == []
+    assert client.get(f"/entries/{entry['id']}").json()["themes"] == []

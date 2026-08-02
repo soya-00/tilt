@@ -163,8 +163,8 @@ export function Journal({ status }: Props) {
       </section>
 
       <section className="sheet__section">
-        <h3 className="sheet__label">Folders you have ruled on</h3>
-        {decisions?.pinned.length || decisions?.declined.length ? (
+        <h3 className="sheet__label">What you have ruled on</h3>
+        {decisions?.pinned.length || decisions?.declined.length || decisions?.refused.length ? (
           <ul className="decisions">
             {decisions.pinned.map((label) => (
               <li key={`pin-${label}`} className="decision">
@@ -192,11 +192,30 @@ export function Journal({ status }: Props) {
                 </button>
               </li>
             ))}
+            {/* The entry rather than its id, because a refusal is the only one
+                of these three that is about something you wrote. An id here
+                would be a row nobody could place. */}
+            {decisions.refused.map((item) => (
+              <li key={`move-${item.entry}-${item.to}`} className="decision">
+                <span className="decision__what decision__what--quoted">
+                  <span className="decision__quote">{`“${item.opening}”`}</span>
+                  <span className="decision__tail">
+                    stays out of <strong>{item.to}</strong>
+                  </span>
+                </span>
+                <button
+                  className="decision__undo"
+                  onClick={() => void api.reconsiderMove(item.entry, item.to).then(load)}
+                >
+                  ask me again
+                </button>
+              </li>
+            ))}
           </ul>
         ) : (
           <p className="sheet__note sheet__note--quiet">
             Nothing yet, which is the normal state. Renaming a folder pins its name here, and
-            turning down a proposed split is remembered here too.
+            turning down a proposed split or a proposed move is remembered here too.
           </p>
         )}
       </section>

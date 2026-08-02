@@ -123,6 +123,16 @@ export interface Decisions {
   /** Folders you renamed. The agent will not rename them back. */
   pinned: string[];
   declined: Declined[];
+  refused: Refused[];
+}
+
+/** A refiling you turned down. `folders.md` holds the id and the destination;
+ *  the opening line is joined on by the API, because a copy of your own words
+ *  in a decisions file would go stale the moment you edited the entry. */
+export interface Refused {
+  entry: string;
+  to: string;
+  opening: string;
 }
 
 export interface Declined {
