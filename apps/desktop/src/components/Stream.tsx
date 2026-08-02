@@ -1,8 +1,15 @@
 import { useMemo } from "react";
 
 import { dayHeading, dayKey } from "../lib/time";
-import type { Notice, Scope, Thread } from "../lib/types";
-import { ConnectionRow, DatePill, EntryRow, NoticeRow, ReplyRow } from "./Thread";
+import type { Misfiled, Notice, Scope, Thread } from "../lib/types";
+import {
+  ConnectionRow,
+  DatePill,
+  EntryRow,
+  MisfiledRow,
+  NoticeRow,
+  ReplyRow,
+} from "./Thread";
 
 interface Props {
   threads: Thread[];
@@ -12,6 +19,10 @@ interface Props {
   notices: Notice[];
   /** Notice ids with a synthesis in flight. */
   synthesising: Set<string>;
+  /** Entries the filing pass thinks are in the wrong folder. Usually empty. */
+  moves: Misfiled[];
+  /** Move ids being carried out. */
+  moving: Set<string>;
   freshReplies: Set<string>;
   onReflect: (id: string) => void;
   onUpdate: (id: string, body: string) => void;
@@ -21,6 +32,8 @@ interface Props {
   onScope: (scope: Scope) => void;
   onSynthesise: (noticeId: string) => void;
   onDismissNotice: (noticeId: string) => void;
+  onAcceptMove: (moveId: string) => void;
+  onDismissMove: (moveId: string) => void;
 }
 
 interface DayGroup {
@@ -53,9 +66,15 @@ export function Stream({
   scope,
   notices,
   synthesising,
+  moves,
+  moving,
   freshReplies,
   ...on
 }: Props) {
+  // Keyed by entry so a thread can find its own without scanning. Almost always
+  // empty: filing is right most of the time, and this exists for the entries
+  // written before the better folder existed.
+  const misfiled = new Map(moves.map((m) => [m.entry_id, m]));
   const groups = useMemo(() => groupByDay(threads), [threads]);
 
   if (loading) return <div className="stream" aria-busy="true" />;
@@ -103,6 +122,14 @@ export function Stream({
                     connected={thread.links.length + i < below - 1}
                   />
                 ))}
+                {misfiled.has(thread.entry.id) && (
+                  <MisfiledRow
+                    move={misfiled.get(thread.entry.id)!}
+                    busy={moving.has(misfiled.get(thread.entry.id)!.id)}
+                    onAccept={on.onAcceptMove}
+                    onDismiss={on.onDismissMove}
+                  />
+                )}
                 {/* Said rather than hidden. The rest of the source is still
                     indexed and still turns up in search — this is the app
                     admitting it filtered, not pretending it didn't. */}

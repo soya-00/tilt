@@ -33,6 +33,8 @@ const handlers = {
   scope: { type: "all" } as const,
   notices: [],
   synthesising: new Set<string>(),
+  moves: [],
+  moving: new Set<string>(),
   freshReplies: new Set<string>(),
   onReflect: vi.fn(),
   onUpdate: vi.fn(),
@@ -42,6 +44,8 @@ const handlers = {
   onScope: vi.fn(),
   onSynthesise: vi.fn(),
   onDismissNotice: vi.fn(),
+  onAcceptMove: vi.fn(),
+  onDismissMove: vi.fn(),
 };
 
 describe("Stream", () => {
@@ -162,5 +166,92 @@ describe("the weekly notice", () => {
     );
 
     expect(screen.queryByText(/pull against each other/i)).not.toBeInTheDocument();
+  });
+});
+
+describe("a mis-filed entry", () => {
+  const move = {
+    id: "m1",
+    entry_id: "e1",
+    opening: "Slept badly; everything was slower.",
+    from_id: "t1",
+    from_label: "Attention",
+    to_id: "t2",
+    to_label: "Sleep",
+    margin: 0.42,
+    created: "2026-08-01T09:00:00Z",
+  };
+
+  const withEntry = () => thread({ entry: { ...entry(), id: "e1" } });
+
+  it("names both folders under the entry it is about", () => {
+    // Under the entry, because "this sits closer to Sleep" is not a claim you
+    // can judge from a list.
+    render(<Stream {...handlers} threads={[withEntry()]} moves={[move]} />);
+
+    const row = screen.getByText(/sits closer to/i);
+    expect(row).toHaveTextContent("Attention");
+    expect(row).toHaveTextContent("Sleep");
+  });
+
+  it("moves nothing until asked", async () => {
+    const user = userEvent.setup();
+    const onAcceptMove = vi.fn();
+    render(
+      <Stream
+        {...handlers}
+        threads={[withEntry()]}
+        moves={[move]}
+        onAcceptMove={onAcceptMove}
+      />,
+    );
+
+    expect(onAcceptMove).not.toHaveBeenCalled();
+    await user.click(screen.getByRole("button", { name: /move to sleep/i }));
+    expect(onAcceptMove).toHaveBeenCalledWith("m1");
+  });
+
+  it("can be left alone", async () => {
+    const user = userEvent.setup();
+    const onDismissMove = vi.fn();
+    render(
+      <Stream
+        {...handlers}
+        threads={[withEntry()]}
+        moves={[move]}
+        onDismissMove={onDismissMove}
+      />,
+    );
+
+    await user.click(screen.getByRole("button", { name: /leave it/i }));
+    expect(onDismissMove).toHaveBeenCalledWith("m1");
+  });
+
+  it("stays put while the refiling runs", () => {
+    // Refiling rewrites the entry's frontmatter, which takes long enough that a
+    // row vanishing on click would read as nothing having happened.
+    render(
+      <Stream
+        {...handlers}
+        threads={[withEntry()]}
+        moves={[move]}
+        moving={new Set(["m1"])}
+      />,
+    );
+
+    expect(screen.getByRole("button", { name: /moving/i })).toBeDisabled();
+  });
+
+  it("appears on its own entry and no other", () => {
+    const other = thread({ entry: { ...entry(), id: "e2" } });
+    render(<Stream {...handlers} threads={[withEntry(), other]} moves={[move]} />);
+
+    expect(screen.getAllByText(/sits closer to/i)).toHaveLength(1);
+  });
+
+  it("shows nothing on a well-filed journal", () => {
+    render(<Stream {...handlers} threads={[withEntry()]} />);
+
+    expect(screen.queryByText(/sits closer to/i)).not.toBeInTheDocument();
   });
 });

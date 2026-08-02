@@ -65,8 +65,19 @@ export default function App() {
   const [seenConflicts, setSeenConflicts] = useState(false);
   const atBottom = useRef(true);
 
-  const { scope, setScope, themes, splits, notices, tags, status, persona, settings, threads } =
-    journal;
+  const {
+    scope,
+    setScope,
+    themes,
+    splits,
+    notices,
+    moves,
+    tags,
+    status,
+    persona,
+    settings,
+    threads,
+  } = journal;
 
   const focusComposer = useCallback(() => composer.current?.focus(), []);
 
@@ -302,6 +313,8 @@ export default function App() {
               scope={scope}
               notices={notices}
               synthesising={journal.synthesising}
+              moves={moves}
+              moving={journal.moving}
               freshReplies={journal.freshReplies}
               onReflect={journal.reflect}
               onUpdate={journal.update}
@@ -311,6 +324,8 @@ export default function App() {
               onScope={setScope}
               onSynthesise={journal.reflectOnNotice}
               onDismissNotice={journal.dismissNotice}
+              onAcceptMove={journal.acceptMove}
+              onDismissMove={journal.dismissMove}
             />
           </div>
         </div>

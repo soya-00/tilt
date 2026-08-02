@@ -54,6 +54,11 @@ itself.
 - **The embedding path has never run against a real key.** `bridges to` depends
   on it, and bridge recall was measured on a planted corpus rather than on
   anything anyone wrote.
+- **Both measured thresholds, on a real journal.** `SEPARATION` for splitting
+  and `MARGIN` for refiling were each measured on planted vectors and each
+  separate cleanly there. What a real embedder does to a real set of folders is
+  unmeasured for both. The number to watch is the same: not how often something
+  is proposed, but how often a proposal is dismissed.
 - **The split threshold on a real journal.** `SEPARATION = 0.15` separates one
   subject from two by roughly a factor of four on planted vectors, and the
   planting is the part that needs replacing: what a real embedder does to a real
@@ -62,10 +67,11 @@ itself.
 
 ## Wanted, not started
 
-- **Clustering from scratch.** Splitting exists now; discovering the folders in
-  the first place from vectors rather than one entry at a time does not. The
-  same asymmetry applies and more sharply — a from-scratch clustering proposes
-  a whole structure at once, and there is no obvious way to accept part of one.
+- **Clustering from scratch.** Ruled out rather than pending. It proposes a
+  whole sidebar at once with no way to accept part of it, cannot respect a name
+  you typed, and needs a `k` nobody has measured. The useful half of it —
+  finding the entries that incremental filing got wrong — is built, per entry
+  and one click each. See `jobs/misfiled.py`.
 - **Audio and video transcription.** Locally that means MLX: Apple-Silicon-only
   and about a gigabyte of native libraries in the bundle. Dropping an `.mp3`
   currently says so rather than failing.

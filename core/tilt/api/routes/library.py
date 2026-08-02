@@ -7,9 +7,10 @@ from pydantic import BaseModel, Field
 
 from tilt.api.deps import get_journal
 from tilt.folders import Decisions
+from tilt.jobs.misfiled import apply_move
 from tilt.jobs.split import apply_split
 from tilt.journal import Journal
-from tilt.models import TagCount, Theme, ThemeSplit
+from tilt.models import Misfiled, TagCount, Theme, ThemeSplit, Thread
 
 router = APIRouter(tags=["library"])
 
@@ -94,6 +95,43 @@ def delete_theme(theme_id: str, journal: Journal = Depends(get_journal)) -> None
     """
     if not journal.delete_theme(theme_id):
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Theme not found.")
+
+
+@router.get("/moves", response_model=list[Misfiled])
+def list_moves(journal: Journal = Depends(get_journal)) -> list[Misfiled]:
+    """Entries the filing pass thinks are in the wrong folder.
+
+    Usually empty. Filing is right most of the time; this exists for the entries
+    written before the better folder existed.
+    """
+    return journal.index.pending_moves()
+
+
+@router.post("/moves/{move_id}", response_model=Thread)
+def accept_move(move_id: str, journal: Journal = Depends(get_journal)) -> Thread:
+    """Refile the entry. Returns its thread, because that is what the row that
+    offered this is sitting inside."""
+    move = journal.index.get_move(move_id)
+    if move is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Suggestion not found.")
+    if not apply_move(journal, move):
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "That entry is gone.")
+    return journal.thread(move.entry_id)
+
+
+@router.delete("/moves/{move_id}", status_code=status.HTTP_204_NO_CONTENT)
+def dismiss_move(move_id: str, journal: Journal = Depends(get_journal)) -> None:
+    """Leave the entry where it is.
+
+    Written to `folders.md` as well as the index, and keyed on the destination:
+    "not that folder" is a narrower answer than "never mention this entry
+    again", and the narrower one is what was actually said.
+    """
+    move = journal.index.get_move(move_id)
+    if move is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Suggestion not found.")
+    journal.folders.refuse_move(move.entry_id, move.to_label)
+    journal.index.clear_move(move.entry_id)
 
 
 @router.get("/folders", response_model=Decisions)

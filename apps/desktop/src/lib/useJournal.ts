@@ -17,6 +17,7 @@ import type {
   Entry,
   Persona,
   PublicSettings,
+  Misfiled,
   Notice,
   Scope,
   Status,
@@ -37,6 +38,10 @@ export interface JournalState {
   splits: ThemeSplit[];
   /** What the weekly pass noticed. Empty most weeks, deliberately. */
   notices: Notice[];
+  /** Entries the filing pass thinks are in the wrong folder. Usually empty. */
+  moves: Misfiled[];
+  /** Move ids being carried out. */
+  moving: Set<string>;
   tags: TagCount[];
   status: Status | null;
   persona: Persona | null;
@@ -64,6 +69,8 @@ export interface JournalState {
   acceptSplit: (splitId: string) => Promise<void>;
   dismissSplit: (splitId: string) => Promise<void>;
   dismissNotice: (noticeId: string) => Promise<void>;
+  acceptMove: (moveId: string) => Promise<void>;
+  dismissMove: (moveId: string) => Promise<void>;
   reflectOnNotice: (noticeId: string) => Promise<void>;
   savePersona: (payload: Partial<Persona>) => Promise<void>;
   saveSettings: (payload: {
@@ -100,6 +107,8 @@ export function useJournal(): JournalState {
   const [themes, setThemes] = useState<Theme[]>([]);
   const [splits, setSplits] = useState<ThemeSplit[]>([]);
   const [notices, setNotices] = useState<Notice[]>([]);
+  const [moves, setMoves] = useState<Misfiled[]>([]);
+  const [moving, setMoving] = useState<Set<string>>(new Set());
   const [tags, setTags] = useState<TagCount[]>([]);
   const [status, setStatus] = useState<Status | null>(null);
   const [persona, setPersona] = useState<Persona | null>(null);
@@ -150,6 +159,7 @@ export function useJournal(): JournalState {
         nextSettings,
         nextSplits,
         nextNotices,
+        nextMoves,
       ] = await Promise.all([
         api.themes(),
         api.tags(),
@@ -158,11 +168,13 @@ export function useJournal(): JournalState {
         api.settings(),
         api.splits(),
         api.notices(),
+        api.moves(),
       ]);
       if (!mounted.current) return;
       setThemes(nextThemes);
       setSplits(nextSplits);
       setNotices(nextNotices);
+      setMoves(nextMoves);
       setTags(nextTags);
       setStatus(nextStatus);
       setPersona(nextPersona);
@@ -426,6 +438,46 @@ export function useJournal(): JournalState {
     [refresh, refreshLibrary],
   );
 
+  const acceptMove = useCallback(
+    async (moveId: string) => {
+      // The row stays put while it runs, saying so. Refiling rewrites the
+      // entry's frontmatter, which takes long enough that a row vanishing on
+      // click would look like nothing happened.
+      setMoving((prev) => new Set(prev).add(moveId));
+      try {
+        const thread = await api.acceptMove(moveId);
+        setMoves((prev) => prev.filter((m) => m.id !== moveId));
+        // The entry's folder chips changed, so fold the fresh thread in rather
+        // than refetching the whole stream for one row.
+        setThreads((prev) => prev.map((t) => (t.entry.id === thread.entry.id ? thread : t)));
+        await refreshLibrary();
+      } catch (err) {
+        setError(describe(err));
+        await refreshLibrary();
+      } finally {
+        setMoving((prev) => {
+          const next = new Set(prev);
+          next.delete(moveId);
+          return next;
+        });
+      }
+    },
+    [refreshLibrary],
+  );
+
+  const dismissMove = useCallback(
+    async (moveId: string) => {
+      setMoves((prev) => prev.filter((m) => m.id !== moveId));
+      try {
+        await api.dismissMove(moveId);
+      } catch (err) {
+        setError(describe(err));
+        await refreshLibrary();
+      }
+    },
+    [refreshLibrary],
+  );
+
   const savePersona = useCallback(
     async (payload: Partial<Persona>) => {
       try {
@@ -484,6 +536,8 @@ export function useJournal(): JournalState {
     themes,
     splits,
     notices,
+    moves,
+    moving,
     tags,
     status,
     persona,
@@ -508,6 +562,8 @@ export function useJournal(): JournalState {
     dismissSplit,
     dismissNotice,
     reflectOnNotice,
+    acceptMove,
+    dismissMove,
     savePersona,
     saveSettings,
     ingest,

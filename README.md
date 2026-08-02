@@ -331,7 +331,7 @@ process behind them.
 |---|---|---|
 | **Sweep** | every 15 min | Files and connects entries the interface never got to |
 | **Vectors** | hourly | Embeds what has been written since the last pass |
-| **Theme-keeper** | nightly, 03:17 | Merges duplicate folders, retires quiet ones, drops empty ones, and proposes a split when one has become two |
+| **Theme-keeper** | nightly, 03:17 | Merges duplicate folders, retires quiet ones, drops empty ones, and proposes a split when one has become two or a move when an entry is in the wrong one |
 | **Scout** | daily, 06:41 | Looks through your feeds and proposes at most two things to read |
 | **Week** | Sundays, 18:53 | Notices at most one thing worth a second look, and usually nothing |
 
@@ -722,6 +722,29 @@ the test rather than left to be discovered, and it is why the model gets a veto
 and you get the click. What none of it proves is where a real embedder puts a
 real journal — the corpus is planted, and the honest version of that measurement
 needs a key and somebody's actual writing.
+
+Filing gets a second look, one entry at a time. Categorising happens as you
+write, which is the right shape — cheap, immediate, never asks you anything —
+but it is path dependent: the first entries create the vocabulary and everything
+after gets bent towards it, so an entry written before a subject had a folder
+lands in whichever folder was nearest that week and stays there.
+
+The nightly keeper now compares each entry against the centre of every folder,
+leaving the entry out of its own folder's average so it is not measured against
+a position it is helping to define. An entry that sits closer somewhere else
+gets a row under it in the Stream saying so, with two buttons.
+
+That threshold was measured too, and it separates further than the split one:
+a correctly filed entry does not merely score low, it scores *negative*, because
+being inside a subject and outside it are opposite signs of the same quantity.
+Worst correctly-filed score −0.12, weakest mis-filed +0.17, threshold 0.10. It
+costs nothing to run and buys no model call, because a wrong move relocates one
+entry and costs one dismissal — where a wrong split is unrecoverable, which is
+what the veto there is paying for.
+
+This is the useful half of what full re-clustering would do, without the part
+that makes re-clustering a bad fit: there is no reviewable unit in a proposal
+that changes your whole sidebar at once.
 
 There is no growth timeline, and there will not be one. It was the last thing
 on the roadmap and it is now struck off rather than deferred: a view charting

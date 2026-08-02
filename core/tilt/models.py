@@ -284,6 +284,33 @@ class ThemeSplit(BaseModel):
     created: datetime
 
 
+class Misfiled(BaseModel):
+    """An entry that sits closer to a folder it is not in.
+
+    Filing happens one entry at a time and is therefore path dependent: an entry
+    written before a subject had a folder lands in whichever folder was nearest
+    that week and stays there. This is the repair, and like every other repair
+    in this app that changes what you wrote, it is offered rather than done.
+
+    Cheaper to be wrong about than a split — it relocates one entry, keeps its
+    other folders, and costs one dismissal — which is why it does not buy a
+    model call to check itself.
+    """
+
+    id: str
+    entry_id: str
+    opening: str = ""
+    """The entry's first line, so the proposal reads without a second query."""
+    from_id: str
+    from_label: str
+    to_id: str
+    to_label: str
+    margin: float = 0.0
+    """How much closer the other folder measured. Kept so a proposal can be
+    argued with rather than only accepted or refused."""
+    created: datetime
+
+
 class Notice(BaseModel):
     """Something worth a second look, found without spending anything.
 
