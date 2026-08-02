@@ -8,11 +8,16 @@ what you were actually circling, where today echoes something from March, what
 you now contradict. There are no todos, no boards, and no due dates anywhere in
 it, by design.
 
-> Status: early but real. Writing, categorising, connecting, distilling sources,
-> the constellation and on-demand diagrams all work end to end, offline, with no
-> API key, and the agent keeps working on a schedule after you close the window.
-> One capability needs a key and always will — see below. The research scout and
-> weekly synthesis are designed but unbuilt; see the roadmap.
+> Status: early but real, and feature-complete against the roadmap it was
+> written to. Writing, categorising, connecting, distilling sources, the
+> constellation, on-demand diagrams, the research scout and the weekly notice
+> all work end to end, offline, with no API key, and the agent keeps working on
+> a schedule after you close the window. One capability needs a key and always
+> will — see below.
+>
+> What is *not* done is distribution. There is no signed build and no installer:
+> the `.dmg` is something you compile on your own Mac, and the container is how
+> you would give it to anyone else. See **Installing a build you made**.
 
 ---
 
@@ -74,9 +79,23 @@ Five loops are in: **inputting, categorising, connecting, distilling, seeing.**
   connects anything the interface missed, and a nightly pass merges folders that
   drifted into duplicates and retires ones that have gone quiet. Both are
   runnable on the spot from Settings, and every run leaves a record there.
+- **Upkeep you are asked about rather than told about** — the same nightly pass
+  proposes splitting a folder that has become two subjects, and moving an entry
+  that sits closer to a folder it is not in. Both arrive as a line where they
+  belong, with two buttons, and neither happens until you click. What you turn
+  down is remembered in `folders.md` beside your entries, and can be taken back
+  from Settings.
+- **The week, when there is something to say** — on Sundays two free queries ask
+  whether you contradicted yourself this week, or came near a question you left
+  open a month ago. Most weeks that finds nothing and the interface is
+  unchanged; the synthesis is a button on what it found, not a scheduled essay.
 - **Cost ledger** — every model call is priced and recorded; spend is always
   visible in the status bar. Unattended work stops at 80% of your ceiling;
   anything you asked for yourself always proceeds.
+- **Settings, in six parts** — agent, reading, journal, appearance, activity,
+  and a danger zone. The last one is the honest one: forget the API key, erase
+  everything, or export the whole journal as an archive that another machine can
+  import. Moving to a new laptop is two clicks and a file, not a migration.
 
 Your journal is a folder of Markdown files, and it holds only what you wrote:
 entries, the brief, diagrams, and your agent's name and manner. What the machine
@@ -408,7 +427,11 @@ and why the spending ceiling still exempts anything you asked for yourself.
 
 ## Running it
 
-Requires Python 3.11+ and Node 20+. Nothing else — no `uv`, no global installs.
+Requires Python 3.11+ and Node 22+. Nothing else — no `uv`, no global installs.
+
+> Node **22**, not 20. `apps/desktop/package.json` pins `pnpm@11`, which does
+> not run on Node 20 — which is how CI found out, on a commit that passed on a
+> Node 22 laptop.
 
 **Terminal 1 — the service**
 
@@ -480,6 +503,36 @@ thought you had replaced.
 > tools have no equivalent elsewhere, so there is no cross-compile: the two
 > commands above must run on the Mac the app is for.
 
+### Installing a build you made
+
+The build is **unsigned and unnotarised**, and that is a standing decision
+rather than an oversight. Notarisation requires a paid Apple Developer
+membership, and buying one to distribute an app nobody has asked for yet is the
+wrong order to do things in.
+
+The consequence is specific. macOS quarantines anything downloaded, and refuses
+to open a quarantined app it cannot attribute to a developer. Building on the
+machine you run it on avoids that entirely — nothing downloaded, nothing
+quarantined. If you move a `.dmg` between your own machines, clear the flag
+yourself:
+
+```bash
+xattr -dr com.apple.quarantine /Applications/Tilt.app
+```
+
+Do that only for a build you made. The correct response to being told an app
+cannot be verified is usually to believe it, and turning Gatekeeper off system
+wide — which some projects suggest — is never the answer to this. If clearing
+one attribute on one app is more than you want to explain to someone, give them
+a container instead; see **Running it somewhere other than your machine**. It
+serves the same interface from the same service, and asks nothing of Apple.
+
+One thing to expect on an unsigned build: keychain permissions are granted to a
+code signature, and an unsigned binary's changes with every compile. macOS may
+therefore ask again for keychain access after each rebuild. Annoying rather than
+broken, and `/status` always reports whether the key is in the keychain or in a
+file at mode 600.
+
 ### What the shell adds
 
 | | |
@@ -529,9 +582,13 @@ Then restart whatever you were running: both terminals, or `npm run tauri dev`.
 > the app you are looking at is not the checkout you pulled into.
 
 Your journal needs nothing. The index migrates itself on first boot, adding
-columns rather than rebuilding, because a rebuild would discard every folder
-name you have pinned by renaming it — that lives in the database and nowhere
-else. Entries, folders, and connections are untouched.
+columns rather than rebuilding. Entries, folders, and connections are untouched.
+
+A rebuild used to be the one operation this README called costless that could
+still lose something: a folder name you had pinned by renaming lived in the
+database and nowhere else. It now lives in `folders.md` beside your entries,
+along with every split and move you have turned down, so the index is once again
+a cache in the way the rest of this document claims it is.
 
 One thing does not fix itself. v0.2 corrected the offline provider's stopword
 list, which had been letting words like "than" become tags and folder names.
@@ -591,7 +648,7 @@ cd apps/desktop && npm test && npm run typecheck && npm run build
 cd apps/desktop/src-tauri && cargo build
 ```
 
-270 tests: 194 backend, 76 frontend.
+654 tests: 470 backend, 184 frontend.
 
 The load-bearing one writes entries, deletes the database, rebuilds from disk,
 and asserts nothing was lost — that guarantee is what the file-as-truth design
@@ -656,6 +713,15 @@ name a folder has.
 | 4 | Constellation graph, on-demand diagrams | done |
 | 5 | Research scout, daily brief | done |
 | 6 | Folder splitting, weekly notice | done |
+
+**There is no phase 7, and that is a state rather than an omission.** Every
+phase this app was planned to have is built, and the last item that was pencilled
+in past phase 6 — a growth timeline — is struck off below rather than deferred.
+What remains is not a phase: it is a handful of measurements that need a real
+key and a real journal, a build that needs a Mac, and whatever a few months of
+actual use turns out to demand. All of it is written down in `upcoming.md`,
+which exists so that none of it lives in a pull request body or in somebody's
+head.
 
 Some of what is designed is deliberately still open.
 
@@ -772,10 +838,10 @@ place is everything the measurement needs: dismissals are kept as tombstones
 rather than deleted, so the rate per link kind is recoverable from the index
 whenever there is a corpus worth measuring.
 
-Phase 5 sits on its own branch and stays there until it has earned a merge. The
-concern is recorded rather than argued away: a brief is the closest thing in
-this app to a queue, and the way to find out whether it is one is to use it for
-a while, not to reason about it harder. Offline, the loop does close — the scout
+Phase 5 is merged, and the concern that held it on a branch is recorded rather
+than argued away: a brief is the closest thing in this app to a queue, and the
+way to find out whether it is one is to use it for a while, not to reason about
+it harder. Offline, the loop does close — the scout
 picked a paper because of a question written nine days earlier, and after
 distillation the sweep linked one of its ideas back to that question without
 being asked. That proves the plumbing, not the judgement: offline both the pick
