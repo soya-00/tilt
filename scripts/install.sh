@@ -14,7 +14,7 @@
 # the machine you run it on is what makes that a non-event: nothing is
 # downloaded, so nothing is quarantined, and Gatekeeper never gets a say. Moving
 # the .dmg to another machine is the case that needs an attribute cleared by
-# hand — see the README.
+# hand — see docs/install.md.
 
 set -euo pipefail
 
@@ -42,8 +42,8 @@ die() {
 
 [ "$(uname -s)" = "Darwin" ] || die "This builds a Mac app, and it has to run on the Mac.
 Apple's linker and bundling tools have no equivalent elsewhere — there is no
-cross-compile. To run Tilt on this machine instead, see 'Running it' in the
-README, or use the container."
+cross-compile. To run Tilt on this machine instead, see 'Running it' in
+docs/install.md, or use the container."
 
 xcode-select -p >/dev/null 2>&1 || die "Xcode command line tools are missing.
   xcode-select --install"
@@ -161,7 +161,7 @@ if ! codesign -v "$APPS/$NAME" >/dev/null 2>&1; then
   echo
   echo "Note: the bundle has no valid signature, which is expected — this build is"
   echo "unsigned. It runs here because you built it here. Copying it to another"
-  echo "machine needs the quarantine attribute cleared by hand; see the README."
+  echo "machine needs the quarantine attribute cleared by hand; see docs/install.md."
 fi
 echo
 echo "Open it from Spotlight or the Applications folder. Your journal lives in"
