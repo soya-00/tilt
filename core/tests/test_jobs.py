@@ -435,7 +435,10 @@ async def test_the_schedule_can_be_started_and_stopped(
     try:
         assert schedule._scheduler is not None
         jobs = {job.id for job in schedule._scheduler.get_jobs()}
-        assert jobs == {"sweep", "themes", "vectors", "scout", "week"}
+        # `overdue` is the watchdog over the three crons. It is here rather
+        # than beside them because a cron only fires if the process is alive at
+        # that minute, and on a laptop that sleeps at night none of them did.
+        assert jobs == {"sweep", "themes", "vectors", "scout", "week", "overdue"}
     finally:
         schedule.shutdown()
 
@@ -451,7 +454,7 @@ async def test_starting_twice_does_not_double_the_jobs(
     schedule.start()
     schedule.start()
     try:
-        assert len(schedule._scheduler.get_jobs()) == 5
+        assert len(schedule._scheduler.get_jobs()) == 6
     finally:
         schedule.shutdown()
 
