@@ -1166,6 +1166,27 @@ class Index:
                 ),
             )
 
+    def last_run(self, job: str) -> datetime | None:
+        """When this job last started, successfully or not.
+
+        Errors count, and that is the point rather than an oversight. A job
+        failing every night is a different problem from one that has never been
+        reached, and treating a failure as "never ran" would turn the first into
+        a model call every fifteen minutes for as long as the app is open.
+        """
+        row = self._conn.execute(
+            "SELECT started FROM agent_runs WHERE job = ? ORDER BY started DESC LIMIT 1",
+            (job,),
+        ).fetchone()
+        if row is None:
+            return None
+        try:
+            return datetime.fromisoformat(row["started"])
+        except ValueError:
+            # A row this cannot read came from a build that wrote them
+            # differently. "Never run" is the safe answer: it runs the job once.
+            return None
+
     def runs(self, *, limit: int = 50) -> list[dict]:
         rows = self._conn.execute(
             "SELECT * FROM agent_runs ORDER BY started DESC LIMIT ?", (limit,)
