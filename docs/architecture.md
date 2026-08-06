@@ -39,8 +39,26 @@ process behind them.
 | **Theme-keeper** | nightly, 03:17 | Merges duplicate folders, retires quiet ones, drops empty ones, and proposes a split when one has become two or a move when an entry is in the wrong one |
 | **Scout** | daily, 06:41 | Looks through your feeds and proposes at most two things to read |
 | **Week** | Sundays, 18:53 | Notices at most one thing worth a second look, and usually nothing |
+| **Overdue** | every 15 min | Runs whichever of the three crons above the machine was asleep for |
 
-They are shaped differently on purpose. A backlog can appear at any hour — a
+The last one exists because the other three were never running. A cron only
+fires if the process is alive at that minute, and the machine this app is for is
+a laptop: shut at 03:17, shut at 06:41, opened at nine. APScheduler then
+schedules the *next* 03:17, which is tomorrow, which is also a night the laptop
+was shut. The keeper, the scout and the weekly pass had therefore never run
+once — and every symptom of that looks like something else, because an empty
+brief reads as "the scout found nothing" and a sidebar nobody proposes splitting
+reads as "my folders are fine".
+
+`misfire_grace_time` does not cover it: that governs a fire time that passed
+while the scheduler was alive, and says nothing about the hours the process did
+not exist for. What covers it is asking a different question — not "did the
+moment arrive" but "has it been long enough since this last ran", which the
+index can answer because every run leaves a row there. On the sweep's interval,
+so it inherits the recovery property the crons lack, and it costs one indexed
+query per job.
+
+The rest are shaped differently on purpose. A backlog can appear at any hour — a
 thought caught with `⌥Space` while the window was closed, one written when a
 call failed — so the sweep is an interval, cheap enough to run constantly
 because it costs one indexed query when there is nothing waiting. The

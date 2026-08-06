@@ -12,6 +12,10 @@ someone is looking at it is disorienting. Overnight it is.
 The weekly look back is a cron for a third reason again: it is about a period
 rather than about a backlog, and running it more often would mean reporting on
 a week that has barely changed since the last report.
+
+And a fourth job watches the three crons, because a cron only fires if the
+process is alive at that minute. On a laptop that sleeps at night, none of them
+ever did. See :mod:`tilt.jobs.overdue`.
 """
 
 from __future__ import annotations
@@ -24,6 +28,7 @@ from apscheduler.triggers.interval import IntervalTrigger
 
 from tilt.agents.ledger import MeteredProvider
 from tilt.config import Settings
+from tilt.jobs.overdue import catch_up
 from tilt.jobs.runner import run_job
 from tilt.journal import Journal
 
@@ -63,6 +68,11 @@ class Schedule:
                 # A laptop that was asleep for two days must not wake up and run
                 # forty missed sweeps. Coalesce them into one, and let a run that
                 # is more than a few minutes late simply not happen.
+                #
+                # For the crons that is not a policy, it is a hole: this setting
+                # only governs a fire time that passed while the scheduler was
+                # alive, and says nothing about the hours the process did not
+                # exist for. The `overdue` job below is what covers those.
                 "coalesce": True,
                 "max_instances": 1,
                 "misfire_grace_time": 300,
@@ -74,6 +84,17 @@ class Schedule:
             args=["sweep"],
             id="sweep",
             name="Catch up on unfiled entries",
+        )
+        # The three jobs below are crons, and a cron only fires if the process
+        # is alive at that minute. On a laptop that sleeps at night and opens in
+        # the morning, none of them had ever run. This ticks on the sweep's
+        # interval — the property the crons lack — and asks the index whether
+        # each is overdue. See :mod:`tilt.jobs.overdue`.
+        scheduler.add_job(
+            self._catch_up,
+            IntervalTrigger(minutes=self._settings.sweep_interval_minutes),
+            id="overdue",
+            name="Run what the schedule missed",
         )
         scheduler.add_job(
             self._run,
@@ -124,6 +145,12 @@ class Schedule:
             self._settings.theme_keeper_hour,
             KEEPER_MINUTE,
         )
+
+    async def _catch_up(self) -> None:
+        try:
+            await catch_up(self._journal, self._provider)
+        except Exception:
+            log.exception("the overdue check failed")
 
     async def _run(self, name: str) -> None:
         # Nothing is waiting on the result and there is no one to show an error
