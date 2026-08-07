@@ -15,16 +15,28 @@ from __future__ import annotations
 
 import re
 
+PLACEHOLDER = "[redacted]"
+
 _PATTERNS = (
     # Google API keys are a fixed, recognisable shape.
-    re.compile(r"AIza[0-9A-Za-z_\-]{10,}"),
+    (re.compile(r"AIza[0-9A-Za-z_\-]{10,}"), PLACEHOLDER),
     # Anything passed as a query parameter, whatever the SDK calls it.
-    re.compile(r"(?i)\b(key|api_key|apikey|access_token|token)=[^&\s\"']+"),
+    (re.compile(r"(?i)\b(key|api_key|apikey|access_token|token)=[^&\s\"']+"), PLACEHOLDER),
+    # The same names as a JSON field, which is how an SDK that echoes back the
+    # request body it sent will spell them. The query-parameter pattern above
+    # requires an `=` and so matches none of these.
+    #
+    # The field name is kept and only the value replaced: "which credential was
+    # rejected" is the diagnostic this whole file exists to preserve.
+    (
+        re.compile(
+            r"(?i)([\"'](?:key|api_key|apikey|access_token|token)[\"']\s*:\s*)[\"'][^\"']*[\"']"
+        ),
+        rf'\1"{PLACEHOLDER}"',
+    ),
     # A bearer token in a header echoed back inside an error.
-    re.compile(r"(?i)bearer\s+[A-Za-z0-9._\-]{12,}"),
+    (re.compile(r"(?i)bearer\s+[A-Za-z0-9._\-]{12,}"), PLACEHOLDER),
 )
-
-PLACEHOLDER = "[redacted]"
 
 
 def redact(text: str) -> str:
@@ -36,6 +48,6 @@ def redact(text: str) -> str:
     at all — costs the user the only diagnostic they get when their own key is
     rejected.
     """
-    for pattern in _PATTERNS:
-        text = pattern.sub(PLACEHOLDER, text)
+    for pattern, replacement in _PATTERNS:
+        text = pattern.sub(replacement, text)
     return text

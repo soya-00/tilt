@@ -80,8 +80,11 @@ class GeminiEmbedder:
                 ),
             )
         except Exception as exc:  # noqa: BLE001 - surface as one failure mode
-            log.exception("embedding failed")
-            raise EmbeddingError(f"Embedding failed: {redact(str(exc))}") from exc
+            # Redacted before it is logged as well as before it is relayed —
+            # see the note in agents/gemini.py. The log was the weaker path.
+            safe = redact(str(exc))
+            log.error("embedding failed: %s", safe)
+            raise EmbeddingError(f"Embedding failed: {safe}") from exc
 
         vectors = [list(e.values or []) for e in (response.embeddings or [])]
         if len(vectors) != len(texts):

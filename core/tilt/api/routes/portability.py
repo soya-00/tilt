@@ -9,6 +9,7 @@ turns "you can copy the folder" into something a person can actually do.
 from __future__ import annotations
 
 import logging
+import zipfile
 from pathlib import Path
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request, status
@@ -50,12 +51,17 @@ def export(
     settings: Settings = Depends(get_settings_dep),
     journal: Journal = Depends(get_journal),
 ) -> Exported:
-    """Write one file holding the journal and the vectors. Never the key."""
+    """Write one file holding the journal and the vectors. Never the key.
+
+    Written outside the directories ``/erase`` removes, because the sequence
+    this exists to support is export and then erase, and writing the archive
+    into the support folder meant erasing deleted it.
+    """
     entries = journal.index.count(authored_only=True)
     written = archive.build(
         data_dir=settings.data_dir,
         vectors=settings.vectors_path,
-        destination=settings.internal_dir / archive.name_for(),
+        destination=settings.archive_dir / archive.name_for(),
         entries=entries,
     )
     return Exported(path=str(written), entries=entries)
@@ -106,6 +112,20 @@ def restore(
         # The stores are shut either way, so this is not a state to keep
         # serving from. Say what happened and stop, rather than pretend.
         raise HTTPException(status.HTTP_400_BAD_REQUEST, str(exc)) from exc
+    except (OSError, zipfile.BadZipFile) as exc:
+        # A corrupt member, a full disk, a permission the archive did not
+        # anticipate. `BadZipFile` is listed explicitly because it descends from
+        # Exception rather than OSError, and it is the likeliest of the three.
+        #
+        # `restore` stages the extraction, so the journal is still the one that
+        # was there — worth saying, because this used to be a bare 500 arriving
+        # after the journal had already been deleted.
+        log.exception("import failed")
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST,
+            f"That archive could not be unpacked ({exc.__class__.__name__}). "
+            "Your journal has not been changed.",
+        ) from exc
 
     server = getattr(request.app.state, "server", None)
     if server is not None:

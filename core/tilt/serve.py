@@ -23,10 +23,59 @@ from pathlib import Path
 import uvicorn
 
 from tilt.api.app import create_app
+from tilt.api.limits import check_exposure
 from tilt.config import Settings, get_settings
+
+log = logging.getLogger(__name__)
 
 READY_PREFIX = "TILT_READY "
 """What the shell greps stdout for. Everything after it is one line of JSON."""
+
+
+def hold_journal(settings: Settings):
+    """Take an exclusive claim on this journal, or refuse to start.
+
+    Two Tilts on one directory is not a hypothetical: the installed app hides
+    rather than quits when its window closes, and ``npm run tauri dev`` reads the
+    same ``~/Tilt`` by default, so the ordinary way to try a change runs a second
+    copy over the first. SQLite arbitrates its own writers, so the damage is not
+    a corrupt database — it is two schedulers doing the same unattended work
+    twice, and an entry's frontmatter being read-modify-written by both, where
+    one of the two writes is simply lost.
+
+    An advisory ``flock`` rather than a pid file, because the kernel drops it
+    when the holder dies however it dies. A crashed Tilt leaves nothing to clean
+    up and nothing to explain.
+
+    Lives here rather than in ``create_app`` on purpose: the test suite builds
+    hundreds of apps against temporary directories, and a lock taken there would
+    be a lock the suite takes against itself.
+
+    Returns the open file object, which the caller must keep — closing it
+    releases the claim. ``None`` where the platform has no ``fcntl``, which is
+    Windows; there the risk stands, and saying so is better than a lock that
+    silently is not one.
+    """
+    try:
+        import fcntl
+    except ImportError:  # pragma: no cover - POSIX in every supported build
+        log.warning("no fcntl on this platform; not claiming %s", settings.data_dir)
+        return None
+
+    settings.internal_dir.mkdir(parents=True, exist_ok=True)
+    handle = (settings.internal_dir / "tilt.lock").open("w")
+    try:
+        fcntl.flock(handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except OSError:
+        handle.close()
+        raise SystemExit(
+            f"Another Tilt is already using {settings.data_dir}.\n"
+            "Two copies sharing one journal overwrite each other's edits, so "
+            "this one is stopping.\n"
+            "Quit the running Tilt — closing its window only hides it — and "
+            "start this again."
+        ) from None
+    return handle
 
 
 def _bind(host: str, port: int) -> socket.socket:
@@ -99,7 +148,16 @@ def main(settings: Settings | None = None, argv: list[str] | None = None) -> Non
     # worst version of this failure, so make sure the reason reaches the parent.
     logging.basicConfig(stream=sys.stderr, level=logging.INFO, format="%(levelname)s %(message)s")
 
+    # Held for the life of the process: the claim ends when this file object is
+    # collected, so it has to outlive everything below it.
+    claim = hold_journal(settings)  # noqa: F841 - the handle is the lock
+
     sock = _bind(settings.host, settings.port)
+    # The address the socket actually got, not the one that was asked for. The
+    # check at app construction reads configuration, which is the same thing
+    # only as long as nobody passes a host on the command line — and the
+    # container's uvicorn does exactly that.
+    check_exposure(sock.getsockname()[0], settings.auth_token)
     announce(settings.host, sock.getsockname()[1])
 
     app = create_app(settings)

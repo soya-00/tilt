@@ -113,10 +113,14 @@ export function Journal({ status }: Props) {
       <section className="sheet__section">
         <h3 className="sheet__label">Take it with you</h3>
         <p className="sheet__note">
-          Writes one file holding the journal and the vectors — never the key. It goes in the
-          support folder rather than beside your journal, because journals usually live
+          Writes one file holding the journal and the vectors — never the key. It goes to your
+          Downloads folder rather than beside your journal, because journals usually live
           somewhere synced and an archive next to one would quietly upload a second copy of
           everything.
+        </p>
+        <p className="sheet__note sheet__note--quiet">
+          Outside both folders Tilt owns, so <em>Delete everything</em> leaves it alone. That is
+          the point of it.
         </p>
         <div className="panel__actions">
           <button className="ghost-btn" onClick={() => void runExport()} disabled={exporting}>

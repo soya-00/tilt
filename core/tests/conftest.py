@@ -21,6 +21,10 @@ def settings(tmp_path: Path) -> Settings:
         # this every test would share one database in the real user's
         # Application Support directory.
         support_dir=tmp_path / "support",
+        # Exports default to the real Downloads folder, deliberately outside
+        # everything the app owns. Without this every export test would leave an
+        # archive in the Downloads of whoever ran the suite.
+        export_dir=tmp_path / "exports",
         provider="echo",
         monthly_cost_ceiling_usd=1.0,
         # Tests drive the jobs directly. A live scheduler would fire the sweep

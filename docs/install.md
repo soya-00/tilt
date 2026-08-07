@@ -171,6 +171,21 @@ Then restart whatever you were running: both terminals, or `npm run tauri dev`.
 > This is the likeliest reason Settings still shows the version you replaced:
 > the app you are looking at is not the checkout you pulled into.
 
+> **Quit Tilt before running it from the checkout.** `npm run tauri dev` reads
+> the same `~/Tilt` the installed app does, and closing that app's window hides
+> it rather than quitting it — so the ordinary way to try a change used to run
+> a second copy over the first. Two schedulers then do the same unattended work
+> twice, and an entry's frontmatter is read-modify-written by both with one
+> write silently lost.
+>
+> The second one now refuses to start and says which journal is taken. Quit
+> Tilt from the menu bar and start it again. The claim is released however the
+> holder exits, so a crash leaves nothing to clean up.
+>
+> The two-terminal setup at the top of this document runs `uvicorn` directly
+> and is outside that guard, so it is on you not to point two of those at one
+> journal.
+
 Your journal needs nothing. The index migrates itself on first boot, adding
 columns rather than rebuilding. Entries, folders, and connections are untouched.
 

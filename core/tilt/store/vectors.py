@@ -42,8 +42,22 @@ def pack(vector: list[float]) -> bytes:
 
 
 def unpack(blob: bytes) -> list[float]:
+    """A stored blob back into floats, or nothing if it is not one.
+
+    This database can arrive from an imported archive, so the bytes are not
+    necessarily ones this app wrote. A length that is not a multiple of the item
+    size raises out of ``frombytes``, and from inside :meth:`VectorStore.nearest`
+    that took down search and neighbours until the file was deleted by hand.
+
+    An unreadable vector is a cache miss, which is a thing this store already
+    knows how to be: :meth:`nearest` skips any vector whose length does not
+    match, so returning nothing here rejoins that path.
+    """
     out = array("f")
-    out.frombytes(blob)
+    try:
+        out.frombytes(blob)
+    except ValueError:
+        return []
     return out.tolist()
 
 

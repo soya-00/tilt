@@ -22,11 +22,43 @@ fi
 # a browser cannot attach an Authorization header to a document request. The
 # perimeter in this topology is whatever authenticates the visitor in front of
 # this container. See SECURITY.md.
+#
+# Done in Python rather than with `sed`, for two reasons that both bite.
+# `sed -i "s|<head>|<head>${BRIDGE}|"` interpolates the token into the
+# expression, so an operator-supplied TILT_AUTH_TOKEN containing `&`, `|` or a
+# backslash is either mangled or is markup injected into the page. And the
+# guard that skipped the rewrite when `__TILT__` was already present meant a
+# mounted or reused `static` volume kept serving a previous container's token.
+# Replacing any existing bridge is both correct and idempotent.
 INDEX="${TILT_STATIC_DIR:-/app/static}/index.html"
-if [ -f "$INDEX" ] && ! grep -q "__TILT__" "$INDEX"; then
-  BRIDGE="<script>window.__TILT__={baseUrl:location.origin,token:\"${TILT_AUTH_TOKEN}\"};</script>"
-  # Before any module script runs, so the api client sees it on first import.
-  sed -i "s|<head>|<head>${BRIDGE}|" "$INDEX"
+if [ -f "$INDEX" ]; then
+  TILT_INDEX="$INDEX" python - <<'PY'
+import json
+import os
+import re
+
+path = os.environ["TILT_INDEX"]
+token = os.environ["TILT_AUTH_TOKEN"]
+
+with open(path, encoding="utf-8") as handle:
+    page = handle.read()
+
+# Any bridge from a previous container goes, whatever token it carried.
+page = re.sub(r"<script>window\.__TILT__=.*?</script>", "", page, flags=re.S)
+
+# json.dumps escapes the token for a JS string literal; the closing tag is
+# split so a token containing "</script>" cannot end the block early.
+bridge = (
+    "<script>window.__TILT__={baseUrl:location.origin,token:"
+    + json.dumps(token).replace("</", "<\\/")
+    + "};</script>"
+)
+# Before any module script runs, so the api client sees it on first import.
+page = page.replace("<head>", "<head>" + bridge, 1)
+
+with open(path, "w", encoding="utf-8") as handle:
+    handle.write(page)
+PY
 fi
 
 exec python -m uvicorn tilt.api.app:app \

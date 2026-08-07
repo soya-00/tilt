@@ -13,13 +13,16 @@ find everything still there.
 from __future__ import annotations
 
 import json
+import zipfile
 from pathlib import Path
 
 from fastapi.testclient import TestClient
 
 from tilt.api.app import create_app
+from tilt.archive import MANIFEST, _safe
 from tilt.config import Settings
 from tilt.settings_store import SettingsStore, migrate
+from tilt.store.index import SCHEMA_VERSION
 
 
 class FakeVault:
@@ -210,16 +213,37 @@ def test_an_archive_round_trips(client: TestClient, settings: Settings) -> None:
         assert after.get("/settings").json()["feeds"] == ["https://example.com/feed.xml"]
 
 
-def test_the_archive_is_written_outside_the_journal(
+def test_the_archive_is_written_outside_every_folder_tilt_owns(
     client: TestClient, settings: Settings
 ) -> None:
     """Beside the journal was the obvious choice and the wrong one: journals
     live in synced folders, and an archive dropped next to one uploads a second
-    complete copy of everything without saying so."""
+    complete copy of everything without saying so.
+
+    The support folder was the second wrong one, for a worse reason — see the
+    test below."""
     written = Path(client.post("/export").json()["path"])
 
-    assert settings.internal_dir in written.parents
     assert settings.data_dir not in written.parents
+    assert settings.internal_dir not in written.parents
+
+
+def test_an_export_survives_erasing_everything(
+    client: TestClient, settings: Settings
+) -> None:
+    """The sequence export exists for, which used to destroy its own output.
+
+    Archives were written into the support directory and `/erase` removes that
+    directory, so exporting and then erasing — the careful order, the one the
+    danger panel invites — deleted the backup along with the journal."""
+    written = Path(client.post("/export").json()["path"])
+    assert written.exists()
+
+    client.post("/erase", json={"confirm": "DELETE"})
+
+    assert not settings.data_dir.exists()
+    assert not settings.internal_dir.exists()
+    assert written.exists(), "erasing deleted the archive that was made to survive it"
 
 
 def test_no_key_is_ever_in_an_archive(client: TestClient, settings: Settings) -> None:
@@ -299,3 +323,67 @@ def test_a_member_that_climbs_out_of_the_folder_is_dropped(tmp_path: Path) -> No
     assert (data_dir / "entries" / "fine.md").exists()
     assert not (tmp_path.parent / "escaped.md").exists()
     assert not (tmp_path / "escaped.md").exists()
+
+
+def test_a_broken_archive_leaves_the_journal_alone(
+    client: TestClient, settings: Settings
+) -> None:
+    """Import deleted the journal and then extracted, so an archive that failed
+    halfway left no journal, no replacement, and nothing to roll back to.
+
+    The manifest is valid here — it has to be, or the refusal happens before
+    anything is touched and proves nothing. The failure is in a member, which
+    is where a truncated download or a bad disk actually shows up."""
+    client.post("/entries", json={"body": "a thought I would rather not lose"})
+    client.post("/entries", json={"body": "and a second one"})
+    before = sorted(p.name for p in settings.entries_dir.rglob("*.md"))
+    assert len(before) == 2
+
+    payload = b"---\nid: planted\ncreated: 2026-08-07T12:00:00+00:00\n---\nbody\n"
+    broken = settings.export_dir / "broken.zip"
+    broken.parent.mkdir(parents=True, exist_ok=True)
+    with zipfile.ZipFile(broken, "w", zipfile.ZIP_STORED) as archive:
+        archive.writestr(
+            MANIFEST, f'{{"tilt": "1.0.0", "schema": {SCHEMA_VERSION}, "entries": 1}}'
+        )
+        archive.writestr("journal/entries/2026/08/2026-08-07T120000Z-planted.md", payload)
+    raw = bytearray(broken.read_bytes())
+    at = raw.find(payload)
+    raw[at : at + 3] = b"ZZZ"  # the stored bytes no longer match the recorded CRC
+    broken.write_bytes(bytes(raw))
+
+    response = client.post("/import", json={"path": str(broken), "confirm": "REPLACE"})
+
+    assert response.status_code == 400
+    assert "not been changed" in response.json()["detail"]
+    after = sorted(p.name for p in settings.entries_dir.rglob("*.md"))
+    assert after == before
+
+
+def test_a_member_named_with_a_backslash_is_refused() -> None:
+    """`Path.parts` does not split on a backslash under POSIX, so `a\\..\\..\\b`
+    arrives as one innocent component here and traverses once it is unpacked
+    somewhere that treats it as a separator."""
+    assert _safe("journal/a\\..\\..\\evil.md", "journal") is None
+    assert _safe("journal/../evil.md", "journal") is None
+    assert _safe("journal/entries/fine.md", "journal") == "entries/fine.md"
+
+
+def test_an_archive_does_not_follow_a_link_out_of_the_journal(
+    client: TestClient, settings: Settings, tmp_path: Path
+) -> None:
+    """The journal folder is one people are invited to edit and fill by hand,
+    so a link in it may point anywhere. The archive carries what the journal
+    contains, and a link is not contents."""
+    client.post("/entries", json={"body": "something of my own"})
+
+    secret = tmp_path / "elsewhere" / "id_rsa"
+    secret.parent.mkdir(parents=True, exist_ok=True)
+    secret.write_text("-----BEGIN OPENSSH PRIVATE KEY-----\nnot-really\n")
+    (settings.data_dir / "notes.md").symlink_to(secret)
+
+    written = Path(client.post("/export").json()["path"])
+    with zipfile.ZipFile(written) as archive:
+        names = archive.namelist()
+        assert not any(name.endswith("notes.md") for name in names)
+        assert not any(b"OPENSSH" in archive.read(name) for name in names)

@@ -8,6 +8,7 @@ the next desk, or make the service fetch something it should not.
 
 from __future__ import annotations
 
+from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
@@ -17,11 +18,14 @@ from tilt.agents.redact import redact
 from tilt.api.app import create_app
 from tilt.api.limits import MAX_REQUEST_BYTES, is_loopback
 from tilt.config import Settings
+from tilt.journal import Journal
 from tilt.models import MAX_BODY
+from tilt.serve import hold_journal
 from tilt.settings_store import RuntimeSettingsUpdate, SettingsStore
 from tilt.store.artifacts import ArtifactStore
 from tilt.store.brief import BriefStore
-from tilt.store.files import contained
+from tilt.store.files import contained, path_for
+from tilt.store.index import Index
 
 # ------------------------------------------------------------------ exposure
 
@@ -408,3 +412,283 @@ def test_a_key_never_reaches_the_client_through_an_error() -> None:
 def test_redaction_leaves_an_ordinary_message_alone() -> None:
     message = "Gemini returned an empty response."
     assert redact(message) == message
+
+
+# ------------------------------------------------------- identity as a path
+
+
+def test_an_id_that_is_not_a_filename_is_refused(tmp_path: Path) -> None:
+    """The sink. An entry's id arrives from frontmatter — an import, a synced
+    folder, a hand edit — and `path_for` interpolates it into a path, so an id
+    carrying separators escapes the directory the write was meant for."""
+    created = datetime(2026, 8, 7, 12, tzinfo=UTC)
+    root = tmp_path / "entries"
+
+    for hostile in ("../../../../../../evil", "a/b", "a\\b", "..", "", ".hidden"):
+        with pytest.raises(ValueError):
+            path_for(hostile, created, root)
+
+    ordinary = path_for("01KZDYVGAFGA8J1R2X5159C5QZ", created, root)
+    assert ordinary.resolve().is_relative_to(root.resolve())
+
+
+def test_a_planted_id_costs_the_id_and_not_the_thought(tmp_path: Path) -> None:
+    """The boundary, and the promise that survives it.
+
+    Refusing to load the file would let anyone who can drop one into a synced
+    folder hide an entry. It is indexed under its filename instead, and the
+    substitution is reported the way two files claiming one id already are."""
+    settings = Settings(
+        data_dir=tmp_path / "journal",
+        support_dir=tmp_path / "support",
+        export_dir=tmp_path / "exports",
+        provider="echo",
+        schedule_enabled=False,
+    )
+    settings.ensure_dirs()
+    entries = settings.entries_dir
+    (entries / "2026" / "08").mkdir(parents=True)
+    (entries / "2026" / "08" / "2026-08-07T120000Z-planted.md").write_text(
+        "---\n"
+        "id: '../../../../../../escaped'\n"
+        "created: 2026-08-07T12:00:00+00:00\n"
+        "updated: 2026-08-07T12:00:00+00:00\n"
+        "kind: note\n"
+        "provenance: self\n"
+        "---\n"
+        "a thought that must survive its own broken id\n",
+        encoding="utf-8",
+    )
+
+    index = Index(settings.index_path)
+    journal = Journal(settings.data_dir, index)
+    try:
+        assert journal.rebuild() == 1
+
+        assert [r.declared for r in index.renamed_ids] == ["../../../../../../escaped"]
+        used = index.renamed_ids[0].used
+        assert index.get(used) is not None
+        assert "must survive" in index.get(used).body
+
+        # The unattended path: this is what the nightly folder pass calls, and
+        # it is what used to land a file outside the journal.
+        journal.set_themes(used, ["Somewhere"])
+
+        outside = [
+            p for p in tmp_path.rglob("*escaped*") if not p.is_relative_to(settings.data_dir)
+        ]
+        assert outside == []
+    finally:
+        index.close()
+
+
+def test_a_source_id_cannot_name_a_file_outside_the_journal(tmp_path: Path) -> None:
+    """`source_text_path` is the other interpolation, and it is both written
+    and unlinked."""
+    settings = Settings(
+        data_dir=tmp_path / "journal",
+        support_dir=tmp_path / "support",
+        export_dir=tmp_path / "exports",
+        provider="echo",
+        schedule_enabled=False,
+    )
+    settings.ensure_dirs()
+    index = Index(settings.index_path)
+    journal = Journal(settings.data_dir, index)
+    try:
+        with pytest.raises(ValueError):
+            journal.source_text_path("../../../../escaped")
+        # Reading is an absence rather than an error, matching the other stores.
+        assert journal.read_source_text("../../../../escaped") is None
+    finally:
+        index.close()
+
+
+# ------------------------------------------- the gate and what it exempts
+
+
+def test_a_suffix_does_not_open_the_gate(tmp_path: Path) -> None:
+    """The exemption asks the static mount what it owns. It used to match on
+    how the URL was spelled, so every route ending in a caller-supplied
+    segment could be handed a `.png` and walk through."""
+    with TestClient(create_app(interface(tmp_path))) as client:
+        for path in (
+            "/folders/pinned/anything.png",
+            "/folders/declined/anything.svg",
+            "/folders/refused/someid.svg?to=Elsewhere",
+            "/entries/01KZDYVGAFGA8J1R2X5159C5QZ.png",
+            "/nothing-of-the-sort.html",
+        ):
+            assert client.delete(path).status_code == 401, path
+            assert client.get(path).status_code == 401, path
+
+        # And the files the mount really has are still open, which is the
+        # whole reason the exemption exists.
+        assert client.get("/index.html").status_code == 200
+        assert client.get("/assets/app.js").status_code == 200
+
+
+def test_an_unauthenticated_caller_is_not_told_the_body_limit(tmp_path: Path) -> None:
+    """The body limit sits inside the gate. Added the other way round it ran
+    first, so an oversized request from nobody in particular was answered with
+    a 413 naming the limit rather than a 401."""
+    with TestClient(create_app(interface(tmp_path))) as client:
+        response = client.post(
+            "/entries",
+            json={"body": "x"},
+            headers={"Content-Length": str(MAX_REQUEST_BYTES + 1)},
+        )
+        assert response.status_code == 401
+
+
+def test_only_a_real_preflight_skips_the_gate(tmp_path: Path) -> None:
+    """Preflight carries no Authorization header by specification, so it has to
+    be exempt. An ordinary OPTIONS is not a preflight and is not exempt."""
+    with TestClient(create_app(interface(tmp_path))) as client:
+        preflight = client.options(
+            "/entries",
+            headers={
+                "Origin": "http://localhost:5173",
+                "Access-Control-Request-Method": "POST",
+            },
+        )
+        assert preflight.status_code == 200
+        assert client.options("/entries").status_code == 401
+
+
+def test_the_served_page_carries_a_policy(tmp_path: Path) -> None:
+    """The CSP in tauri.conf.json governs the webview. A browser loading the
+    same page in the container got no policy at all, and could be framed."""
+    with TestClient(create_app(interface(tmp_path))) as client:
+        headers = client.get("/").headers
+        assert "default-src 'self'" in headers["Content-Security-Policy"]
+        assert "frame-ancestors 'none'" in headers["Content-Security-Policy"]
+        assert headers["X-Frame-Options"] == "DENY"
+        assert headers["X-Content-Type-Options"] == "nosniff"
+
+
+def test_the_desktop_app_is_not_given_page_headers(tmp_path: Path) -> None:
+    """Nothing renders these there — the webview enforces its own policy — and
+    a header on an API is noise that later reads as protection."""
+    settings = Settings(
+        data_dir=tmp_path,
+        support_dir=tmp_path / "support",
+        export_dir=tmp_path / "exports",
+        auth_token="secret",
+        schedule_enabled=False,
+    )
+    with TestClient(create_app(settings)) as client:
+        response = client.get("/status", headers={"Authorization": "Bearer secret"})
+        assert "Content-Security-Policy" not in response.headers
+
+
+# ------------------------------------------------- what the key is told about
+
+
+def test_a_keychain_that_refuses_is_reported_as_a_file(tmp_path: Path) -> None:
+    """The case the report exists for, and the one it used to get wrong.
+
+    `key_is_in_the_keychain` answered from the presence of a backend, while
+    `save` falls back to the file whenever the keychain *refuses* — locked,
+    prompt dismissed, ACL denied. So a downgrade to a file mode was invisible,
+    which is the opposite of what reporting it is for."""
+    path = tmp_path / "settings.json"
+    key_path = tmp_path / "support" / "key.json"
+    vault = FakeVault(works=False)  # present, and refusing
+    assert vault.available is False
+
+    # A keychain that is there but says no on write.
+    vault.available = True
+    vault.set = lambda _value: False  # type: ignore[assignment]
+    vault.get = lambda: None  # type: ignore[assignment]
+
+    store = SettingsStore(path, key_path=key_path, vault=vault)
+    store.update(RuntimeSettingsUpdate(gemini_api_key="AIzaREFUSEDBYKEYCHAIN"))
+
+    assert key_path.exists(), "the key went to the file, as save intends"
+    assert store.key_is_in_the_keychain is False, "and /status must say so"
+    # And it must still be readable, rather than silently reading as empty and
+    # dropping the app to offline.
+    assert store.load().gemini_api_key == "AIzaREFUSEDBYKEYCHAIN"
+
+
+def test_the_key_file_is_never_briefly_world_readable(tmp_path: Path) -> None:
+    """The mode is the only thing protecting this file, so it is created at 600
+    rather than created and then chmodded to it."""
+    key_path = tmp_path / "support" / "key.json"
+    store = SettingsStore(
+        tmp_path / "settings.json", key_path=key_path, vault=FakeVault(works=False)
+    )
+    store.update(RuntimeSettingsUpdate(gemini_api_key="AIzaFILEMODE"))
+
+    assert key_path.stat().st_mode & 0o777 == 0o600
+
+
+def test_a_credential_spelled_as_a_field_is_redacted_too() -> None:
+    """The denylist matched `key=` query parameters. An SDK that echoes back
+    the body it sent spells the same thing as a JSON field."""
+    leaky = '{"model": "gemini-3-flash", "api_key": "AIzaSyC7fake_KEY_material99"}'
+
+    clean = redact(leaky)
+
+    assert "AIzaSyC7fake_KEY_material99" not in clean
+    # Which credential was rejected is the diagnostic worth keeping.
+    assert "api_key" in clean
+    assert "gemini-3-flash" in clean
+
+
+# ------------------------------------------------- one journal, one instance
+
+
+def test_a_second_instance_is_refused(tmp_path: Path) -> None:
+    """Two Tilts on one journal is not hypothetical: the installed app hides
+    rather than quits, and `tauri dev` reads the same folder, so the ordinary
+    way to try a change runs a second copy over the first.
+
+    SQLite arbitrates its own writers, so the damage is not a corrupt database
+    — it is two schedulers doing the same unattended work, and an entry's
+    frontmatter read-modify-written by both with one write simply lost."""
+    settings = Settings(
+        data_dir=tmp_path / "journal",
+        support_dir=tmp_path / "support",
+        export_dir=tmp_path / "exports",
+        provider="echo",
+        schedule_enabled=False,
+    )
+    settings.ensure_dirs()
+
+    first = hold_journal(settings)
+    assert first is not None, "POSIX, so there is a lock to take"
+
+    with pytest.raises(SystemExit) as refused:
+        hold_journal(settings)
+    assert str(settings.data_dir) in str(refused.value)
+
+    # Released when the holder goes, which is why this is a lock and not a pid
+    # file: a Tilt that crashed leaves nothing to clean up.
+    first.close()
+    second = hold_journal(settings)
+    assert second is not None
+    second.close()
+
+
+def test_a_different_journal_is_not_blocked(tmp_path: Path) -> None:
+    """The claim is on a journal, not on the application."""
+    def settings_for(name: str) -> Settings:
+        return Settings(
+            data_dir=tmp_path / name,
+            support_dir=tmp_path / f"{name}-support",
+            export_dir=tmp_path / "exports",
+            provider="echo",
+            schedule_enabled=False,
+        )
+
+    one, two = settings_for("first"), settings_for("second")
+    one.ensure_dirs()
+    two.ensure_dirs()
+
+    held_one = hold_journal(one)
+    held_two = hold_journal(two)
+    assert held_one is not None and held_two is not None
+    held_one.close()
+    held_two.close()

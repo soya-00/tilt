@@ -61,6 +61,19 @@ export async function dismiss(): Promise<void> {
  * this needs exactly one call, so the npm package would be a second copy of the
  * same thing.
  */
+/**
+ * The URL if it is safe to put in an `href`, otherwise nothing.
+ *
+ * `openExternal` guards the click, but a click handler is not the only way a
+ * link is followed: middle-click and the context menu fire `auxclick`, which
+ * never reaches `onClick`, and follow whatever the attribute says. The brief's
+ * URLs arrive from feeds, which is to say from strangers, so the attribute
+ * itself has to be safe rather than the handler in front of it.
+ */
+export function safeHref(url: string | null | undefined): string | undefined {
+  return url && /^https?:\/\//i.test(url) ? url : undefined;
+}
+
 export async function openExternal(url: string): Promise<void> {
   if (!/^https?:\/\//i.test(url)) return;
   if (!inShell()) {

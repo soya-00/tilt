@@ -21,7 +21,7 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react
 
 import { api } from "../lib/api";
 import { compose, findUrl } from "../lib/compose";
-import { openExternal } from "../lib/shell";
+import { openExternal, safeHref } from "../lib/shell";
 import { tagStyle } from "../lib/tagColor";
 import { stamp } from "../lib/time";
 import type { BriefItem, Scope } from "../lib/types";
@@ -186,7 +186,9 @@ export function Brief({ open, onClose, onRead, onScope }: Props) {
                     <p className="brief__title">
                       {item.url ? (
                         <a
-                          href={item.url}
+                          // Filtered rather than passed through: middle-click
+                          // and "open in new tab" never reach onClick.
+                          href={safeHref(item.url)}
                           onClick={(e) => {
                             e.preventDefault();
                             void openExternal(item.url ?? "");

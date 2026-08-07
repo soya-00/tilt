@@ -35,6 +35,23 @@ entry."""
 
 MAX_CARDS = 12
 
+MAX_SUMMARY = 2_000
+"""How long a source's description may be.
+
+Generous for the two or three lines this asks for. The point is that there is a
+ceiling at all: everything else the model returns here is clipped, and these
+fields were the exception — bounded only from below, by a minimum length.
+
+The text being bounded is the model's, and the model has been reading a page
+chosen by whoever wrote the feed. An unbounded field is a page's budget for
+writing into someone's journal."""
+
+MAX_IDEA = 1_000
+"""How long one extracted idea may be. A card is a thought, not a chapter."""
+
+MAX_QUESTION = 500
+"""How long an open question may be."""
+
 SYSTEM = """You distil source material for a private journal called Tilt.
 
 {persona}
@@ -194,7 +211,7 @@ async def distill(
     payload = extract_json(completion.text)
     data = payload if isinstance(payload, dict) else {}
 
-    summary = str(data.get("summary") or "").strip()
+    summary = str(data.get("summary") or "").strip()[:MAX_SUMMARY]
     label = title.strip() or "Untitled source"
     header = label + (f"\n\n{origin_url}" if origin_url else "")
     source = journal.create(
@@ -223,7 +240,7 @@ async def distill(
         for card in cards[:MAX_CARDS]:
             if not isinstance(card, dict):
                 continue
-            idea = " ".join(str(card.get("idea", "")).split()).strip()
+            idea = " ".join(str(card.get("idea", "")).split()).strip()[:MAX_IDEA]
             if len(idea) < 8:
                 continue
             verdict = card.get("relevant")
@@ -245,7 +262,7 @@ async def distill(
     questions = data.get("questions")
     if isinstance(questions, list):
         for question in questions[:3]:
-            text_q = " ".join(str(question).split()).strip()
+            text_q = " ".join(str(question).split()).strip()[:MAX_QUESTION]
             if len(text_q) > 8:
                 journal.add_card(source_id=source.id, body=text_q, card_kind="question")
 

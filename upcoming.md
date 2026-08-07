@@ -121,6 +121,18 @@ itself.
   two things you wrote, and an old question this week came near. That is a
   deliberately short list, and whether it is too short is a question a few
   months of real weeks will answer better than more design.
+- **Reading a link hands the model a fetch tool and your recent entries in the
+  same prompt.** `url_context` is what lets Gemini read the page rather than
+  reason about the URL, and it is not scoped to the URL you asked about, while
+  `_context()` puts excerpts of your own writing alongside it as context. A
+  hostile page that gets itself into your brief and then gets read can
+  therefore try to have your writing fetched back out to an address it picks.
+  Nothing downstream catches it, because it would happen during the model turn
+  and not in the JSON that comes back.
+
+  Left open on purpose. The two ways to close it are giving up reading articles
+  or scoping the tool to a single URL, and both are decisions about what the
+  app is for rather than patches. See [SECURITY.md](SECURITY.md).
 
 ## Surfaces the API has and the interface does not
 
