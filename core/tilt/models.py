@@ -253,6 +253,27 @@ class Conflict(BaseModel):
     """The file that was not. Still on disk, untouched."""
 
 
+class RenamedId(BaseModel):
+    """A file whose frontmatter ``id`` could not be used as a filename.
+
+    The id reaches the app from whatever wrote the file — an imported archive, a
+    synced folder, a hand edit — and it is interpolated into a path. One carrying
+    a separator would escape the journal, so it is replaced with an id derived
+    from the filename and the substitution reported here.
+
+    Reported rather than resolved, for the same reason :class:`Conflict` is: the
+    entry is intact and readable, but its identity is not the one written in the
+    file, and anything linking to the old id will not find it.
+    """
+
+    declared: str
+    """The id as written in the file, rejected."""
+    used: str
+    """The id the entry was indexed under instead."""
+    path: str
+    """The file it came from. Still on disk, untouched."""
+
+
 class ThemeSplit(BaseModel):
     """A folder that has turned into two subjects, offered rather than applied.
 

@@ -121,17 +121,36 @@ def check(path: Path) -> dict:
     return manifest
 
 
+MAX_MEMBERS = 100_000
+"""How many files an archive may carry.
+
+Not a guess at a real journal's size — it is orders of magnitude above one — but
+a bound on what a hostile zip can make this loop do."""
+
+MAX_MEMBER_BYTES = 500_000_000
+"""How large any single member may claim to be, uncompressed.
+
+A source transcript is generous at a few megabytes. This is the line past which
+a member is a decompression bomb rather than a file."""
+
+
 def _safe(name: str, prefix: str) -> str | None:
     """The path inside ``prefix`` this member unpacks to, or ``None``.
 
     An archive is an untrusted file that arrived from somewhere. A member named
     ``../../.ssh/authorized_keys`` is the oldest trick there is, and refusing by
     construction is cheaper than remembering to check.
+
+    Backslash is rejected alongside the obvious cases because ``Path.parts`` does
+    not split on it under POSIX: ``a\\..\\..\\b`` arrives here as a single
+    innocent-looking component and traverses once it reaches Windows.
     """
     if not name.startswith(f"{prefix}/") or name.endswith("/"):
         return None
     relative = name[len(prefix) + 1 :]
-    if not relative or relative.startswith("/") or ".." in Path(relative).parts:
+    if not relative or relative.startswith("/") or "\\" in relative:
+        return None
+    if ".." in Path(relative).parts:
         return None
     return relative
 
@@ -148,25 +167,67 @@ def restore(path: Path, *, data_dir: Path, vectors: Path | None) -> dict:
 
     with zipfile.ZipFile(path) as archive:
         members = archive.namelist()
+        if len(members) > MAX_MEMBERS:
+            raise ArchiveError(
+                f"That archive holds {len(members):,} files, more than the "
+                f"{MAX_MEMBERS:,} this will unpack."
+            )
+
         journal = [(name, _safe(name, JOURNAL)) for name in members]
         journal = [(name, rel) for name, rel in journal if rel]
         if not journal:
             raise ArchiveError("That archive has no journal in it.")
 
-        if data_dir.exists():
-            shutil.rmtree(data_dir)
-        data_dir.mkdir(parents=True)
+        for name, _ in journal:
+            declared = archive.getinfo(name).file_size
+            if declared > MAX_MEMBER_BYTES:
+                raise ArchiveError(
+                    f"{name} unpacks to {declared:,} bytes, more than the "
+                    f"{MAX_MEMBER_BYTES:,} this will write."
+                )
 
-        for name, relative in journal:
-            target = data_dir / relative
-            target.parent.mkdir(parents=True, exist_ok=True)
-            with archive.open(name) as source, target.open("wb") as out:
-                shutil.copyfileobj(source, out)
+        # Everything lands in a staging directory first, and the journal is only
+        # replaced once every member is on disk. Extracting over the real
+        # directory is how an archive that fails halfway — a bad CRC, a full
+        # disk — used to leave no journal and no replacement, with nothing to
+        # roll back to. Beside `data_dir` rather than in a temp directory so the
+        # swap is a rename on one filesystem rather than a copy across two.
+        staging = data_dir.parent / f".{data_dir.name}.incoming"
+        displaced = data_dir.parent / f".{data_dir.name}.replaced"
+        for leftover in (staging, displaced):
+            if leftover.exists():
+                shutil.rmtree(leftover)
 
-        if vectors is not None and VECTORS in members:
-            vectors.parent.mkdir(parents=True, exist_ok=True)
-            with archive.open(VECTORS) as source, vectors.open("wb") as out:
-                shutil.copyfileobj(source, out)
+        try:
+            staging.mkdir(parents=True)
+            for name, relative in journal:
+                target = staging / relative
+                target.parent.mkdir(parents=True, exist_ok=True)
+                with archive.open(name) as source, target.open("wb") as out:
+                    shutil.copyfileobj(source, out)
+
+            staged_vectors = None
+            if vectors is not None and VECTORS in members:
+                staged_vectors = staging.parent / f".{data_dir.name}.vectors"
+                with archive.open(VECTORS) as source, staged_vectors.open("wb") as out:
+                    shutil.copyfileobj(source, out)
+
+            # The point of no return, and the only place the real journal moves.
+            if data_dir.exists():
+                data_dir.replace(displaced)
+            staging.replace(data_dir)
+            if staged_vectors is not None:
+                vectors.parent.mkdir(parents=True, exist_ok=True)
+                staged_vectors.replace(vectors)
+        except BaseException:
+            # Nothing has moved unless the swap above completed, so cleaning up
+            # staging is the whole rollback.
+            shutil.rmtree(staging, ignore_errors=True)
+            if displaced.exists() and not data_dir.exists():
+                displaced.replace(data_dir)
+            raise
+        finally:
+            shutil.rmtree(displaced, ignore_errors=True)
 
     log.warning("restored %s from %s", data_dir, path)
     return manifest

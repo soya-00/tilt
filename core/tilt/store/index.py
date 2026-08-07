@@ -30,6 +30,7 @@ from tilt.models import (
     Link,
     Misfiled,
     Notice,
+    RenamedId,
     TagCount,
     Theme,
     ThemeSplit,
@@ -240,6 +241,9 @@ class Index:
         # Filled by `rebuild`, the only thing that can see two files claiming
         # one id. Empty on a healthy journal, which is almost always.
         self.conflicts: list[Conflict] = []
+        # Likewise, and for the same reason it is reported rather than fixed:
+        # a file whose frontmatter id could not be used as a filename.
+        self.renamed_ids: list[RenamedId] = []
         self._conn = sqlite3.connect(str(path), check_same_thread=False)
         self._conn.row_factory = sqlite3.Row
         self._conn.execute("PRAGMA journal_mode=WAL")
@@ -1220,11 +1224,31 @@ class Index:
         an accident, and both paths are named so it can be settled by hand.
         Renaming or merging somebody's files without asking is not this
         function's business.
+
+        An id that cannot be a filename is handled the same way: the entry is
+        indexed under one derived from its filename and the substitution is
+        recorded in :attr:`renamed_ids`, because an entry whose identity quietly
+        changed is exactly as confusing as two files sharing one.
         """
         self.conflicts = []
+        self.renamed_ids = []
         claimed: dict[str, tuple[Entry, Path]] = {}
         for path in files.walk(entries_root):
-            entry = files.parse(path)
+            rejected: list[str] = []
+            # `into` binds the sink per iteration rather than closing over it,
+            # which is the same thing here — parse calls back before returning —
+            # but says so to the reader and to the linter.
+            entry = files.parse(path, on_anomaly=lambda bad, _p, into=rejected: into.append(bad))
+            if rejected:
+                self.renamed_ids.append(
+                    RenamedId(declared=rejected[0], used=entry.id, path=str(path))
+                )
+                log.warning(
+                    "entry %s declares an id that cannot name a file (%r); using %r",
+                    path.name,
+                    rejected[0],
+                    entry.id,
+                )
             held = claimed.get(entry.id)
 
             if held is None:

@@ -9,6 +9,7 @@ turns "you can copy the folder" into something a person can actually do.
 from __future__ import annotations
 
 import logging
+import zipfile
 from pathlib import Path
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request, status
@@ -106,6 +107,20 @@ def restore(
         # The stores are shut either way, so this is not a state to keep
         # serving from. Say what happened and stop, rather than pretend.
         raise HTTPException(status.HTTP_400_BAD_REQUEST, str(exc)) from exc
+    except (OSError, zipfile.BadZipFile) as exc:
+        # A corrupt member, a full disk, a permission the archive did not
+        # anticipate. `BadZipFile` is listed explicitly because it descends from
+        # Exception rather than OSError, and it is the likeliest of the three.
+        #
+        # `restore` stages the extraction, so the journal is still the one that
+        # was there — worth saying, because this used to be a bare 500 arriving
+        # after the journal had already been deleted.
+        log.exception("import failed")
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST,
+            f"That archive could not be unpacked ({exc.__class__.__name__}). "
+            "Your journal has not been changed.",
+        ) from exc
 
     server = getattr(request.app.state, "server", None)
     if server is not None:

@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import os
 import tempfile
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from datetime import datetime
 from pathlib import Path
 
@@ -44,6 +44,31 @@ def new_id() -> str:
     return str(ULID())
 
 
+def usable_id(raw: str) -> bool:
+    """Whether this id can be interpolated into a filename safely.
+
+    An entry's id arrives from frontmatter, which means it arrives from whatever
+    wrote the file — an import, a folder sync, a hand edit. :func:`path_for` puts
+    it straight into a path, so an id carrying a separator escapes the directory
+    and the write lands wherever it points.
+
+    Deliberately a check on the *id* rather than only on the resulting path,
+    because the id is also an identity: it keys the index, names source text, and
+    is what a link points at. One that cannot be a filename is not one this app
+    can carry, whatever the path happens to resolve to today.
+
+    Backslash is rejected alongside ``/`` because ``Path.parts`` does not split
+    on it under POSIX, so ``a\\..\\b`` reads as one innocent component here and
+    traverses on Windows.
+    """
+    if not raw or raw in {".", ".."}:
+        return False
+    if "/" in raw or "\\" in raw or "\x00" in raw:
+        return False
+    # A leading dot hides the file from the folder the user is invited to read.
+    return not raw.startswith(".")
+
+
 def contained(root: Path, name: str) -> Path:
     """``root/name.md``, or a refusal if that lands outside ``root``.
 
@@ -70,7 +95,22 @@ def _slug_time(dt: datetime) -> str:
 
 
 def path_for(entry_id: str, created: datetime, root: Path) -> Path:
-    return root / f"{created:%Y}" / f"{created:%m}" / f"{_slug_time(created)}-{entry_id}.md"
+    """Where an entry with this id and timestamp belongs.
+
+    Asserts containment rather than trusting the id, for the same reason
+    :func:`contained` does and with the same failure mode if it does not: the id
+    comes from frontmatter, and a rewrite triggered by unattended work would
+    otherwise write wherever that id pointed.
+
+    Not :func:`contained` itself — that composes ``root/name.md`` and this
+    composes a dated directory beneath it — but the assertion is the same one.
+    """
+    if not usable_id(entry_id):
+        raise ValueError(f"{entry_id!r} cannot name an entry file.")
+    path = root / f"{created:%Y}" / f"{created:%m}" / f"{_slug_time(created)}-{entry_id}.md"
+    if not path.resolve().is_relative_to(root.resolve()):
+        raise ValueError(f"{entry_id!r} does not name a file in {root}.")
+    return path
 
 
 def _as_datetime(value: object, fallback: datetime | None) -> datetime | None:
@@ -84,11 +124,18 @@ def _as_datetime(value: object, fallback: datetime | None) -> datetime | None:
     return fallback
 
 
-def parse(path: Path) -> Entry:
+def parse(path: Path, *, on_anomaly: Callable[[str, Path], None] | None = None) -> Entry:
     """Read one Markdown file into an :class:`Entry`.
 
     Tolerant by design: a file hand-edited into a partially invalid state still
-    loads, because losing a thought to a schema error is unacceptable.
+    loads, because losing a thought to a schema error is unacceptable. That
+    tolerance is why the id is checked here rather than being allowed to fail
+    later — an id that cannot be a filename is replaced with one derived from the
+    filename, so the entry survives and only its identity changes.
+
+    ``on_anomaly`` is called with the rejected id and the path when that happens.
+    Rebuilding passes a collector so the substitution is reported rather than
+    made silently; a caller that does not care may omit it.
     """
     post = frontmatter.load(path)
     meta = post.metadata
@@ -118,8 +165,20 @@ def parse(path: Path) -> Entry:
             except Exception:  # noqa: BLE001 - one bad link must not lose the entry
                 continue
 
+    # The filename already ends in the id it was written with, so it is the
+    # natural fallback — and it is a real path component, so it is safe by
+    # construction in a way the frontmatter is not.
+    from_name = path.stem.split("-")[-1]
+    declared = str(meta.get("id") or from_name)
+    if usable_id(declared):
+        entry_id = declared
+    else:
+        entry_id = from_name if usable_id(from_name) else new_id()
+        if on_anomaly is not None:
+            on_anomaly(declared, path)
+
     return Entry(
-        id=str(meta.get("id") or path.stem.split("-")[-1]),
+        id=entry_id,
         created=created,
         updated=_as_datetime(meta.get("updated"), created),
         kind=_enum(EntryKind, "kind", EntryKind.NOTE),
@@ -194,7 +253,19 @@ def write(entry: Entry, root: Path, *, preserve_extra_from: Path | None = None) 
 
 
 def walk(root: Path) -> Iterator[Path]:
-    """Yield every entry file, oldest path first."""
+    """Yield every entry file, oldest path first.
+
+    Symlinks are skipped rather than followed. The journal is a folder people are
+    invited to edit and sync, so a link in it may point anywhere on the disk, and
+    following one would read a file the journal does not contain — indexing its
+    contents as though the writer had authored them.
+    """
     if not root.exists():
         return
-    yield from sorted(root.rglob("*.md"))
+    resolved_root = root.resolve()
+    for path in sorted(root.rglob("*.md")):
+        if path.is_symlink():
+            continue
+        if not path.resolve().is_relative_to(resolved_root):
+            continue
+        yield path

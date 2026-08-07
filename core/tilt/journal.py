@@ -7,6 +7,7 @@ loses an index row (rebuildable) rather than a thought (not).
 
 from __future__ import annotations
 
+import contextlib
 from pathlib import Path
 
 from tilt.embed import Embedder
@@ -167,7 +168,18 @@ class Journal:
         return entry
 
     def source_text_path(self, source_id: str) -> Path:
-        return self.data_dir / "sources" / f"{source_id}.txt"
+        """Where a source's untruncated text lives.
+
+        Contained for the same reason entry paths are: `source_id` reaches here
+        from an entry's frontmatter, and this path is both written and unlinked.
+        """
+        if not files.usable_id(source_id):
+            raise ValueError(f"{source_id!r} cannot name a source file.")
+        root = self.data_dir / "sources"
+        path = root / f"{source_id}.txt"
+        if not path.resolve().is_relative_to(root.resolve()):
+            raise ValueError(f"{source_id!r} does not name a file in {root}.")
+        return path
 
     def write_source_text(self, source_id: str, text: str) -> Path:
         """Keep the untruncated source beside the journal.
@@ -181,7 +193,13 @@ class Journal:
         return path
 
     def read_source_text(self, source_id: str) -> str | None:
-        path = self.source_text_path(source_id)
+        # An id that cannot name a file names no file, which is the same answer
+        # as one whose file is missing — the translation the artifact and brief
+        # stores already make.
+        try:
+            path = self.source_text_path(source_id)
+        except ValueError:
+            return None
         return path.read_text(encoding="utf-8") if path.exists() else None
 
     def _from_disk(self, entry_id: str) -> Entry | None:
@@ -335,7 +353,10 @@ class Journal:
         # A source keeps its untruncated text in a second file. Leaving that
         # behind would hoard a transcript nothing can reach or show again.
         if entry is not None and entry.kind is EntryKind.SOURCE:
-            self.source_text_path(entry_id).unlink(missing_ok=True)
+            # An unusable id has no source file to remove, and refusing to
+            # finish the delete over it would strand the entry half-removed.
+            with contextlib.suppress(ValueError):
+                self.source_text_path(entry_id).unlink(missing_ok=True)
         # Otherwise the store accumulates vectors for thoughts that no longer
         # exist, and they keep turning up as neighbours of the ones that do.
         if self.vectors is not None:

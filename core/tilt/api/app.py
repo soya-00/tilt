@@ -128,19 +128,29 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         lifespan=lifespan,
     )
 
+    # One question, asked once: is this process serving the interface? The auth
+    # gate and the mount below must agree, and deriving them separately is how
+    # they came apart — the gate relaxed for a directory the mount refused.
+    interface_dir = (
+        settings.static_dir if settings.static_dir and settings.static_dir.is_dir() else None
+    )
+
     # Order matters: middleware added last runs outermost, and a 401 that never
     # passes back through CORS reaches the webview as an unreadable network
     # error instead of a message.
+    #
+    # BodyLimit is added *first* so it ends up innermost — inside the auth gate.
+    # Added after, it runs before the token check and answers an unauthenticated
+    # caller with a 413 naming the limit, which is both a disclosure and the
+    # opposite of what the comment here used to claim.
+    app.add_middleware(BodyLimitMiddleware)
+
     if settings.auth_token:
         app.add_middleware(
             TokenAuthMiddleware,
             token=settings.auth_token,
-            serving_interface=bool(settings.static_dir),
+            static_dir=interface_dir,
         )
-
-    # Inside the auth gate: an unauthenticated caller should be turned away by
-    # the token check rather than told how large a body this accepts.
-    app.add_middleware(BodyLimitMiddleware)
 
     app.add_middleware(
         CORSMiddleware,
@@ -163,10 +173,10 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     # Last, so it never shadows an API route: mounted at "/" it would otherwise
     # answer for everything.
-    if settings.static_dir and settings.static_dir.is_dir():
+    if interface_dir is not None:
         app.mount(
             "/",
-            StaticFiles(directory=settings.static_dir, html=True),
+            StaticFiles(directory=interface_dir, html=True),
             name="interface",
         )
     return app

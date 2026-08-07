@@ -23,7 +23,7 @@ from tilt.api.deps import (
 from tilt.config import Settings
 from tilt.embed import DORMANT_WITHOUT_KEY
 from tilt.journal import Journal
-from tilt.models import Conflict
+from tilt.models import Conflict, RenamedId
 from tilt.settings_store import SettingsStore
 
 log = logging.getLogger(__name__)
@@ -70,6 +70,14 @@ class Status(BaseModel):
     Empty on a healthy journal. Not empty means a sync client made a
     "(conflicted copy)" and one of the two is not being indexed — which is
     invisible otherwise, because both files look fine sitting there."""
+    renamed_ids: list[RenamedId] = []
+    """Entries whose declared id could not be used as a filename.
+
+    Empty on a journal this app wrote every file of. Not empty means something
+    else authored one — an imported archive, a synced folder, a hand edit — with
+    an id that would have escaped the journal directory, so the entry was indexed
+    under its filename instead. The thought is intact; anything pointing at the
+    old id is not."""
     dormant: list[Dormant] = []
     """What is asleep for want of a key, and why.
 
@@ -114,6 +122,7 @@ def status(
         ),
         ephemeral=settings.ephemeral_settings,
         conflicts=journal.index.conflicts,
+        renamed_ids=journal.index.renamed_ids,
         dormant=(
             [Dormant(capability=name, why=why) for name, why in DORMANT_WITHOUT_KEY]
             if offline
