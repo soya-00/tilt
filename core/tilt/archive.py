@@ -74,9 +74,19 @@ def build(
     try:
         with zipfile.ZipFile(staging, "w", zipfile.ZIP_DEFLATED) as archive:
             archive.writestr(MANIFEST, json.dumps(manifest, indent=2))
+            root = data_dir.resolve()
             for path in sorted(data_dir.rglob("*")):
-                if path.is_file():
-                    archive.write(path, f"{JOURNAL}/{path.relative_to(data_dir)}")
+                # `is_file()` follows symlinks and `write` reads through them,
+                # so a link in the journal folder — which people are invited to
+                # edit and fill by hand — put whatever it pointed at into the
+                # archive under an innocent journal-relative name. The archive
+                # carries what the journal contains, and a link is not contents.
+                if path.is_symlink() or not path.is_file():
+                    continue
+                if not path.resolve().is_relative_to(root):
+                    log.warning("skipping %s: it resolves outside the journal", path)
+                    continue
+                archive.write(path, f"{JOURNAL}/{path.relative_to(data_dir)}")
             # Bought from a hosted model, so worth carrying even though it is
             # derived — the index is not, because it rebuilds for nothing.
             if vectors is not None and vectors.exists():

@@ -24,9 +24,14 @@ log = logging.getLogger(__name__)
 
 ATOM = "{http://www.w3.org/2005/Atom}"
 
-ARXIV_API = "http://export.arxiv.org/api/query"
+ARXIV_API = "https://export.arxiv.org/api/query"
 """arXiv's own interface, which returns Atom and asks for no key. Queried by
-subject rather than scraped."""
+subject rather than scraped.
+
+HTTPS because this is the one feed every user has without choosing it, and what
+it returns goes into a model prompt and then into the brief. Over cleartext,
+anyone on the path chooses that content — which is the delivery step for every
+prompt-injection concern below."""
 
 TIMEOUT = 15.0
 
@@ -272,6 +277,18 @@ def _complete(title: str, url: str, summary: str, source: str) -> bool:
     looks identical to a feed that is down, and the two want different fixes.
     """
     if not (title and url):
+        return False
+    # The one place every finding passes through, so the one place worth
+    # checking the scheme. A feed chooses this string, it is stored in the
+    # brief, and it ends up in an anchor's href — where `javascript:` or
+    # `data:` is a link the interface would otherwise render.
+    if not url.lower().startswith(("http://", "https://")):
+        log.debug(
+            "skipping %r from %s: %r is not a web address",
+            title[:60],
+            source or "?",
+            url[:40],
+        )
         return False
     if len(summary) < MIN_SUMMARY:
         log.debug("skipping %r from %s: no description", title[:60], source or "?")

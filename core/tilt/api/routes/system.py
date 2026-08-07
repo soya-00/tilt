@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import contextlib
+import json
 import logging
 import shutil
 
@@ -24,7 +26,7 @@ from tilt.config import Settings
 from tilt.embed import DORMANT_WITHOUT_KEY
 from tilt.journal import Journal
 from tilt.models import Conflict, RenamedId
-from tilt.settings_store import SettingsStore
+from tilt.settings_store import SettingsStore, write_key_file
 
 log = logging.getLogger(__name__)
 
@@ -179,11 +181,26 @@ def erase(
     if journal.vectors is not None:
         journal.vectors.close()
 
+    # The key is not this button's business — "Forget the API key" is, and the
+    # two are separate on purpose. But the fallback key file lives inside the
+    # support directory, so erasing took it on a machine with no keychain while
+    # a keychain entry survived untouched. The same action deleting your
+    # credential or not, depending on a storage detail nobody chose and
+    # `/status` does not always report correctly, is not a decision anyone made.
+    # Held across the delete so both machines behave the way the button says.
+    held_key = ""
+    if settings.key_path.exists():
+        with contextlib.suppress(OSError, ValueError):
+            held_key = str(json.loads(settings.key_path.read_text()).get("gemini_api_key") or "")
+
     removed = []
     for directory in (settings.data_dir, settings.internal_dir):
         if directory.exists():
             shutil.rmtree(directory, ignore_errors=True)
             removed.append(str(directory))
+
+    if held_key:
+        write_key_file(settings.key_path, held_key)
     log.warning("erased %s", ", ".join(removed) or "nothing")
 
     # Only the thing that owns the server can stop it, and under a test client

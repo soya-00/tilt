@@ -30,6 +30,7 @@ from __future__ import annotations
 
 import contextlib
 import json
+import os
 from pathlib import Path
 
 from pydantic import BaseModel, Field
@@ -103,6 +104,30 @@ class PublicSettings(BaseModel):
     ones the scout watches."""
 
 
+def write_key_file(path: Path, key: str) -> None:
+    """Write the fallback key file, created at mode 600 rather than chmodded to it.
+
+    The mode is the only thing protecting this file. Writing it and then
+    changing the mode leaves it readable at the process umask for the width of
+    a write — brief, but it is the whole protection, absent, on the one file
+    that has nothing else.
+
+    Shared by the store and by :func:`migrate` because both write this file and
+    both got it wrong the same way.
+    """
+    path.parent.mkdir(parents=True, exist_ok=True)
+    payload = json.dumps({"gemini_api_key": key})
+    # O_TRUNC rather than O_EXCL: replacing a key is ordinary, and refusing
+    # because one is already there would make it impossible.
+    fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    with os.fdopen(fd, "w", encoding="utf-8") as handle:
+        handle.write(payload)
+    # For a file that already existed at a wider mode, which the mode argument
+    # to O_CREAT does not touch.
+    with contextlib.suppress(OSError):
+        path.chmod(0o600)
+
+
 class SettingsStore:
     """Runtime settings, on disk or only in memory.
 
@@ -137,8 +162,19 @@ class SettingsStore:
 
         Reported through ``/status`` so a fallback to plain text is visible.
         Silently downgrading how a credential is stored is exactly the kind of
-        thing someone should be told about."""
-        return bool(self.vault and self.vault.available)
+        thing someone should be told about — which is what this used to do.
+
+        It answered from ``vault.available``, the presence of a backend, while
+        :meth:`save` falls back to the file whenever ``vault.set`` *fails*. A
+        keychain that is present and refuses — locked, prompt dismissed, ACL
+        denied — put the key in a file and left this saying ``keychain``. So it
+        answers from the file instead: the fallback exists exactly when the
+        keychain did not take it, and that is a fact on disk rather than a
+        guess about a backend.
+        """
+        if not (self.vault and self.vault.available):
+            return False
+        return not self.key_path.exists()
 
     def load(self) -> RuntimeSettings:
         if self.ephemeral:
@@ -151,7 +187,13 @@ class SettingsStore:
 
         if self.vault and self.vault.available:
             settings.gemini_api_key = self.vault.get() or ""
-        else:
+        # The file is consulted whenever the keychain did not answer, not only
+        # when there is no keychain. `Vault.get` returns None for a locked
+        # keychain or a dismissed prompt, and `save` writes the file in exactly
+        # those cases — so reading only the vault here meant a key that was
+        # sitting right there read as empty and the app dropped to offline
+        # without saying why.
+        if not settings.gemini_api_key:
             settings.gemini_api_key = str(_read(self.key_path).get("gemini_api_key") or "")
         return settings
 
@@ -186,15 +228,18 @@ class SettingsStore:
         return settings
 
     def _write_key(self, key: str) -> None:
-        """The fallback home, at mode 600, outside the journal."""
+        """The fallback home, at mode 600, outside the journal.
+
+        Created *at* 600 rather than created and then chmodded. The mode is the
+        only thing protecting this file, and the previous order left it readable
+        at the process umask for the width of a write — brief, but the whole
+        protection, absent, on the one file that has nothing else.
+        """
         if not key:
             with contextlib.suppress(OSError):
                 self.key_path.unlink()
             return
-        self.key_path.parent.mkdir(parents=True, exist_ok=True)
-        self.key_path.write_text(json.dumps({"gemini_api_key": key}), encoding="utf-8")
-        with contextlib.suppress(OSError):
-            self.key_path.chmod(0o600)
+        write_key_file(self.key_path, key)
 
     def update(self, payload: RuntimeSettingsUpdate) -> RuntimeSettings:
         current = self.load()
@@ -243,10 +288,7 @@ def migrate(legacy: Path, path: Path, key_path: Path, *, vault: Vault | None = N
     path.write_text(json.dumps(data, indent=2), encoding="utf-8")
 
     if key and not (vault and vault.available and vault.set(key)):
-        key_path.parent.mkdir(parents=True, exist_ok=True)
-        key_path.write_text(json.dumps({"gemini_api_key": key}), encoding="utf-8")
-        with contextlib.suppress(OSError):
-            key_path.chmod(0o600)
+        write_key_file(key_path, key)
 
     with contextlib.suppress(OSError):
         legacy.unlink()

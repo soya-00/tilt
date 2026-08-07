@@ -63,12 +63,18 @@ class GeminiProvider:
                 return await self._generate(candidate, prompt, system, reference)
             except Exception as exc:  # noqa: BLE001 - fall back, then surface
                 if candidate == (self.fallback_model or self.model):
-                    # Relayed to the browser as a 502 body, so it goes through
-                    # redact first: an SDK exception can carry the request that
-                    # produced it, and under bring-your-own-key that credential
-                    # belongs to somebody else. The unredacted text is logged.
-                    log.exception("gemini request failed")
-                    raise AgentError(f"Gemini request failed: {redact(str(exc))}") from exc
+                    # Redacted for both destinations. An SDK exception can carry
+                    # the request that produced it, and under bring-your-own-key
+                    # that credential belongs to somebody else.
+                    #
+                    # The log used to get the unredacted text, which made it the
+                    # weaker of the two paths: stderr is captured by the desktop
+                    # shell and goes wherever that stream goes, so a key ended up
+                    # somewhere nobody was watching. Losing a little diagnostic
+                    # fidelity is the right side of that trade.
+                    safe = redact(str(exc))
+                    log.error("gemini request failed: %s", safe)
+                    raise AgentError(f"Gemini request failed: {safe}") from exc
         raise AgentError("No Gemini model configured.")
 
     def _contents(self, prompt: str, reference: Reference | None):

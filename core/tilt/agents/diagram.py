@@ -30,6 +30,13 @@ picture of an argument and becomes a second, worse constellation."""
 MAX_CHARS = 600
 """Per entry. A diagram is drawn from claims, not from prose."""
 
+MAX_SOURCE = 20_000
+"""How large the returned diagram may be.
+
+Everything else the model sends back here is filtered, and the source itself was
+the one part with no ceiling — handed whole to a renderer that has to parse it
+and lay it out. Far above any real diagram of forty entries."""
+
 KINDS = (
     "flowchart",
     "graph",
@@ -124,6 +131,11 @@ def extract_mermaid(text: str) -> str:
         raise DiagramError(
             "That did not come back as a diagram. "
             f"It began {first[:40]!r} rather than with a diagram keyword."
+        )
+    if len(body) > MAX_SOURCE:
+        raise DiagramError(
+            f"That diagram came back at {len(body):,} characters, past the "
+            f"{MAX_SOURCE:,} this will render."
         )
     return body
 
