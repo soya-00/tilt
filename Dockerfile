@@ -59,6 +59,15 @@ ENV TILT_PORT=8765
 ENV TILT_PROVIDER=auto
 # The visitor brings their own key, so it is never written to disk.
 ENV TILT_EPHEMERAL_SETTINGS=true
+# No cross-origin caller here: the page and the API are one process on one
+# origin. The default list carries the Vite dev origin, which in this topology
+# would let a page on localhost:5173 read index.html — and index.html is where
+# the entrypoint stamps the session token.
+ENV TILT_CORS_ORIGINS=[]
+# Exports go to the home directory of the runtime user rather than Downloads,
+# which does not exist here. Stated rather than left to the fallback so the
+# path in the interface is a real one.
+ENV TILT_EXPORT_DIR=/home/tilt
 
 EXPOSE 8765
 ENTRYPOINT ["docker-entrypoint.sh"]

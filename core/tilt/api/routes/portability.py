@@ -51,12 +51,17 @@ def export(
     settings: Settings = Depends(get_settings_dep),
     journal: Journal = Depends(get_journal),
 ) -> Exported:
-    """Write one file holding the journal and the vectors. Never the key."""
+    """Write one file holding the journal and the vectors. Never the key.
+
+    Written outside the directories ``/erase`` removes, because the sequence
+    this exists to support is export and then erase, and writing the archive
+    into the support folder meant erasing deleted it.
+    """
     entries = journal.index.count(authored_only=True)
     written = archive.build(
         data_dir=settings.data_dir,
         vectors=settings.vectors_path,
-        destination=settings.internal_dir / archive.name_for(),
+        destination=settings.archive_dir / archive.name_for(),
         entries=entries,
     )
     return Exported(path=str(written), entries=entries)

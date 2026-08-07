@@ -38,6 +38,13 @@ class Settings(BaseSettings):
     data_dir: Path = Field(default=Path.home() / "Tilt")
     """Root of the journal. Markdown here is the source of truth."""
 
+    export_dir: Path | None = None
+    """Where exported archives are written. Defaults to Downloads, then home.
+
+    Overridable because the default is deliberately outside every directory this
+    app owns — which is the point of it, and also means a test that exported
+    without this would drop archives in whoever ran it's Downloads folder."""
+
     support_dir: Path | None = None
     """Where the index, the vectors and the API key live. Defaults per platform.
 
@@ -205,6 +212,24 @@ class Settings(BaseSettings):
         you typed are things you authored, and a journal folder that silently
         omitted them was not the whole journal it claimed to be."""
         return self.data_dir / "settings.json"
+
+    @property
+    def archive_dir(self) -> Path:
+        """Where an exported archive goes — outside everything ``/erase`` removes.
+
+        It used to be written into the support directory, which erasing deletes.
+        So the careful sequence, export and then erase, destroyed the archive it
+        had just made: the one file whose whole purpose is to survive that.
+
+        Downloads because it is what a Mac already means by "a file I asked for
+        and will do something with", and because an archive nobody can find is
+        not a backup either. Home when there is no Downloads, which is the
+        container and anything headless.
+        """
+        if self.export_dir is not None:
+            return self.export_dir
+        downloads = Path.home() / "Downloads"
+        return downloads if downloads.is_dir() else Path.home()
 
     @property
     def key_path(self) -> Path:

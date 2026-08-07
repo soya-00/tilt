@@ -210,16 +210,37 @@ def test_an_archive_round_trips(client: TestClient, settings: Settings) -> None:
         assert after.get("/settings").json()["feeds"] == ["https://example.com/feed.xml"]
 
 
-def test_the_archive_is_written_outside_the_journal(
+def test_the_archive_is_written_outside_every_folder_tilt_owns(
     client: TestClient, settings: Settings
 ) -> None:
     """Beside the journal was the obvious choice and the wrong one: journals
     live in synced folders, and an archive dropped next to one uploads a second
-    complete copy of everything without saying so."""
+    complete copy of everything without saying so.
+
+    The support folder was the second wrong one, for a worse reason — see the
+    test below."""
     written = Path(client.post("/export").json()["path"])
 
-    assert settings.internal_dir in written.parents
     assert settings.data_dir not in written.parents
+    assert settings.internal_dir not in written.parents
+
+
+def test_an_export_survives_erasing_everything(
+    client: TestClient, settings: Settings
+) -> None:
+    """The sequence export exists for, which used to destroy its own output.
+
+    Archives were written into the support directory and `/erase` removes that
+    directory, so exporting and then erasing — the careful order, the one the
+    danger panel invites — deleted the backup along with the journal."""
+    written = Path(client.post("/export").json()["path"])
+    assert written.exists()
+
+    client.post("/erase", json={"confirm": "DELETE"})
+
+    assert not settings.data_dir.exists()
+    assert not settings.internal_dir.exists()
+    assert written.exists(), "erasing deleted the archive that was made to survive it"
 
 
 def test_no_key_is_ever_in_an_archive(client: TestClient, settings: Settings) -> None:

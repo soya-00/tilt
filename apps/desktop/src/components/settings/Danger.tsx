@@ -120,7 +120,18 @@ export function Danger({ status, onForgetKey }: Props) {
         <h3 className="sheet__label sheet__label--danger">Delete everything</h3>
         <p className="sheet__note">
           Every entry, folder, connection, diagram and saved reading, plus the database and the
-          settings. This cannot be undone and there is no copy anywhere else.
+          settings. This cannot be undone, and nothing here is recoverable afterwards.
+        </p>
+        {/* Named rather than implied. This sentence used to say there was no
+            copy anywhere else, which was false in exactly the case someone
+            careful would be in: exports were written into the support folder,
+            so erasing deleted the archive that had just been made to survive
+            it. They are written outside now, and this says so — an export is
+            the only thing that comes through this, and it is worth knowing
+            before rather than after. */}
+        <p className="sheet__note">
+          An archive you exported is not touched — it lives outside both folders. If you want one,
+          export it first.
         </p>
         {/* The path, because the folder may be in Dropbox, iCloud or a git
             repository — in which case this deletes it there too, and the only

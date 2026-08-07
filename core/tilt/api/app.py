@@ -12,7 +12,7 @@ from tilt import __version__
 from tilt.agents import build_provider
 from tilt.agents.ledger import MeteredProvider
 from tilt.api.auth import TokenAuthMiddleware
-from tilt.api.limits import BodyLimitMiddleware, check_exposure
+from tilt.api.limits import BodyLimitMiddleware, PageHeadersMiddleware, check_exposure
 from tilt.api.routes import (
     agent,
     brief,
@@ -144,6 +144,11 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     # caller with a 413 naming the limit, which is both a disclosure and the
     # opposite of what the comment here used to claim.
     app.add_middleware(BodyLimitMiddleware)
+
+    # Only where a browser is what loads the page. Added before the auth gate so
+    # it runs inside it and stamps every response the mount serves.
+    if interface_dir is not None:
+        app.add_middleware(PageHeadersMiddleware)
 
     if settings.auth_token:
         app.add_middleware(

@@ -47,6 +47,46 @@ class BodyLimitMiddleware(BaseHTTPMiddleware):
         return await call_next(request)
 
 
+PAGE_CSP = (
+    "default-src 'self'; "
+    "style-src 'self' 'unsafe-inline'; "
+    "img-src 'self' data:; "
+    "connect-src 'self'; "
+    "frame-ancestors 'none'; "
+    "base-uri 'none'; "
+    "form-action 'none'"
+)
+"""What the page may load when a browser is the thing loading it.
+
+Deliberately close to the shell's policy in ``tauri.conf.json`` — the same app
+is being described — with ``connect-src`` narrowed to ``'self'`` because in this
+topology the API is the same origin, and no loopback port needs naming.
+
+``unsafe-inline`` for styles only, which mermaid needs and which is the same
+concession the shell makes. Scripts get no such allowance, which is what makes
+this a real backstop under the rendered SVG."""
+
+
+class PageHeadersMiddleware(BaseHTTPMiddleware):
+    """Security headers for the topology where a browser loads the page.
+
+    Only added when this process serves the interface. Under the desktop shell
+    the webview enforces the CSP in ``tauri.conf.json`` and these would be
+    headers on an API nothing renders — but a container's page had no policy at
+    all, and no ``frame-ancestors``, so it could be framed by anything.
+    """
+
+    async def dispatch(self, request: Request, call_next: RequestResponseEndpoint) -> Response:
+        response = await call_next(request)
+        response.headers.setdefault("Content-Security-Policy", PAGE_CSP)
+        response.headers.setdefault("X-Content-Type-Options", "nosniff")
+        # Redundant beside frame-ancestors for a current browser, and the answer
+        # for anything older that only knows this one.
+        response.headers.setdefault("X-Frame-Options", "DENY")
+        response.headers.setdefault("Referrer-Policy", "no-referrer")
+        return response
+
+
 def is_loopback(host: str) -> bool:
     """Whether binding here means "this machine only".
 
